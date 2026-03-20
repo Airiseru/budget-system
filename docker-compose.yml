@@ -23,6 +23,7 @@ services:
     build: 
       context: .
       dockerfile: Dockerfile
+    restart: unless-stopped
     container_name: budget_web
     ports:
       - "3000:3000"
