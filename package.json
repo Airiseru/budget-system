@@ -7,9 +7,10 @@
     "build": "next build",
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
-    "migrate": "tsx src/db/migrate.ts"
+    "migrate": "cross-env NODE_ENV=development tsx src/db/migrate.ts"
   },
   "dependencies": {
+    "@next/env": "^16.2.0",
     "@prisma/client": "^7.3.0",
     "kysely": "^0.28.13",
     "next": "16.1.6",
@@ -24,6 +25,7 @@
     "@types/pg": "^8.18.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "postcss": "^8.5.8",

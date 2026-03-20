@@ -4,7 +4,10 @@ import {
 } from 'kysely'
 import { Pool } from 'pg'
 import { Database } from './types'
-import 'dotenv/config'
+import { loadEnvConfig } from '@next/env'
+
+const dev = process.env.NODE_ENV !== 'production'
+loadEnvConfig(process.cwd(), dev)
 
 declare global {
   var db: Kysely<Database> | undefined
