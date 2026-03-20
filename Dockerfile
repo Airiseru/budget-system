@@ -5,14 +5,10 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
-COPY prisma ./prisma/
 RUN npm install
 
 # Copy the rest of the app
 COPY . .
-
-# Generate Prisma Client
-RUN npx prisma generate
 
 # Build the Next.js app
 RUN npm run build
@@ -21,4 +17,4 @@ RUN npm run build
 EXPOSE 3000
 
 # Start the app
-CMD ["npm", "start"]
+CMD ["sh", "-c", "npm run migrate && npm start"]
