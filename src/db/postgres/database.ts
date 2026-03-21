@@ -3,7 +3,7 @@ import {
     PostgresDialect
 } from 'kysely'
 import { Pool } from 'pg'
-import { Database } from './types'
+import { Database } from '../../types'
 import { loadEnvConfig } from '@next/env'
 
 const dev = process.env.NODE_ENV !== 'production'

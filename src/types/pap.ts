@@ -11,7 +11,7 @@ export interface PapTable {
     entity_id: string
     org_outcome_id: string
     pip_code: string | null
-    category: string | null
+    category: 'local' | 'foreign'
     title: string
     description: string | null
     purpose: string
@@ -19,15 +19,15 @@ export interface PapTable {
     project_type: string | null
     uacs_pap_code: string | null
     actual_start_date: Date | null
-    project_status: string | null
+    project_status: 'draft' | 'proposed' | 'approved' | 'for release' | 'terminating' | 'on-going' | 'completed' | 'rejected' | 'cancelled'
     auth_status: string | null
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
 
-export type PapInsertable = Insertable<PapTable>
-export type PapSelectable = Selectable<PapTable>
-export type PapUpdatable = Updateable<PapTable>
+export type Pap = Selectable<PapTable>
+export type NewPap = Insertable<PapTable>
+export type PapUpdate = Updateable<PapTable>
 
 export interface PapLocationTable {
     id: Generated<string>
@@ -41,11 +41,6 @@ export interface PapLocationTable {
     updated_at: ColumnType<Date, never, Date>
 }
 
-export type PapLocationInsertable = Insertable<PapLocationTable>
-export type PapLocationSelectable = Selectable<PapLocationTable>
-export type PapLocationUpdatable = Updateable<PapLocationTable>
-
-export interface Database {
-    pap: PapTable
-    pap_location: PapLocationTable
-}
+export type PapLocation = Selectable<PapLocationTable>
+export type NewPapLocation = Insertable<PapLocationTable>
+export type PapLocationUpdate = Updateable<PapLocationTable>
