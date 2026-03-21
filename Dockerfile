@@ -25,6 +25,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV NEXT_PRIVATE_STANDALONE=true
+ENV DATABASE_URL="postgres://dummy:dummy@localhost:5432/dummy"
 
 # Build the application
 RUN npm run build
@@ -69,5 +70,4 @@ EXPOSE 3000
 ENV HOSTNAME="0.0.0.0"
 
 # Start the server
-# CMD ["sh", "-c", "/db/node_modules/.bin/tsx /db/src/db/migrate.ts && node /app/.next/standalone/server.js"]
-CMD ["sh", "-c", "/db/node_modules/.bin/tsx /db/src/db/migrate.ts && node server.js"]
+CMD ["sh", "-c", `/db/node_modules/.bin/tsx /db/src/db/${DATABASE_TYPE}/migrate.ts && node server.js`]

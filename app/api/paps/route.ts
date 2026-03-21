@@ -1,6 +1,7 @@
 import { createPapRepository } from '@/src/db/factory'
 import { NewPap } from '@/src/types/pap'
 
+export const dynamic = 'force-dynamic';
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export async function GET(

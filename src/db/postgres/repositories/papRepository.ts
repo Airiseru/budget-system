@@ -45,7 +45,6 @@ export async function updatePap(id: string, updateWith: PapUpdate): Promise<Pap 
         .execute()
 
     if (result) {
-        console.log(`IN UPDATE PAP: ${JSON.stringify(result)}`);
         return await getPapById(id)
     }
 
