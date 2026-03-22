@@ -173,7 +173,7 @@ export default function PapForm({ pap }: PapFormProps) {
                     <button
                         type="submit"
                         disabled={isLoading}
-                        className="bg-blue-500 text-white px-4 py-2 rounded disabled:opacity-50"
+                        className="bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50"
                     >
                         {isLoading ? 'Saving...' : isEditing ? 'Update PAP' : 'Create PAP'}
                     </button>

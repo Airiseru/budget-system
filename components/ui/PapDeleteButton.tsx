@@ -11,7 +11,7 @@ export default function PapDeleteButton({ id }: { id: string }) {
         if (!confirm('Are you sure you want to delete this PAP?')) return
 
         setIsLoading(true)
-        
+
         try {
             const res = await fetch(`/api/paps/${id}`, { method: 'DELETE' })
             if (!res.ok) throw new Error('Failed to delete')
@@ -27,7 +27,7 @@ export default function PapDeleteButton({ id }: { id: string }) {
         <button
             onClick={handleDelete}
             disabled={isLoading}
-            className="bg-red-500 text-white px-4 py-2 rounded disabled:opacity-50"
+            className="bg-destructive text-white px-4 py-2 rounded disabled:opacity-50"
         >
             {isLoading ? 'Deleting...' : 'Delete'}
         </button>

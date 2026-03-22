@@ -1,6 +1,7 @@
 import { createPapRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
+import { ModeToggle } from "@/components/ui/system-toggle"
 import Link from "next/link"
 
 export const dynamic = 'force-dynamic';
@@ -34,6 +35,7 @@ export default async function PapPage() {
         return (
             <div className='m-4'>
                 <ButtonGroup className='my-4'>
+                    <ModeToggle></ModeToggle>
                     <ButtonGroup>
                         <Link href="/">
                             <Button variant="outline" aria-label="Go Back">Go Back</Button>
@@ -50,8 +52,8 @@ export default async function PapPage() {
                 <div>
                     {data.map((pap) =>
                         <Link href={`/paps/${pap.id}`} key={pap.id}>
-                            <div key={pap.id} className="border border-white rounded-md m-2 p-4">
-                                <h2 className="font-bold text-sky-500">{pap.title}</h2>
+                            <div key={pap.id} className="border rounded-md m-2 p-4">
+                                <h2 className="font-bold text-primary-foreground">{pap.title}</h2>
                                 <p>{pap.description}</p>
                             </div>
                         </Link>

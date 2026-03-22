@@ -22,7 +22,7 @@ export default async function PapPage({
             <div className="flex gap-2">
                 <Link
                     href={`/paps/${pap.id}/edit`}
-                    className="bg-blue-500 text-white px-4 py-2 rounded"
+                    className="bg-accent-foreground text-white px-4 py-2 rounded"
                 >
                     Edit
                 </Link>

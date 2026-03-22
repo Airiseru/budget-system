@@ -1,7 +1,11 @@
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
 export default function Home() {
   return (
-    <main>
-      <a href="/paps">PAPs</a>
+    <main className="m-4">
+      <Button variant="outline">
+        <Link href="/paps/">PAPs</Link>
+      </Button>
     </main>
   );
 }
