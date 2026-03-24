@@ -3,11 +3,19 @@ import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ModeToggle } from "@/components/ui/system-toggle"
 import Link from "next/link"
+import { sessionDetails } from '@/src/actions/auth'
+import { redirect } from 'next/navigation'
 
 export const dynamic = 'force-dynamic';
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function PapPage() {
+    const session = await sessionDetails()
+
+    if (!session) {
+        return redirect('/login')
+    }
+
     try {
         const data = await PapRepository.getAllPaps()
     
@@ -17,7 +25,7 @@ export default async function PapPage() {
                     <ButtonGroup className='my-4'>
                         <ModeToggle></ModeToggle>
                         <ButtonGroup>
-                            <Link href="/">
+                            <Link href="/home">
                                 <Button variant="outline" aria-label="Go Back">Go Back</Button>
                             </Link>
                         </ButtonGroup>
@@ -37,7 +45,7 @@ export default async function PapPage() {
                 <ButtonGroup className='my-4'>
                     <ModeToggle></ModeToggle>
                     <ButtonGroup>
-                        <Link href="/">
+                        <Link href="/home">
                             <Button variant="outline" aria-label="Go Back">Go Back</Button>
                         </Link>
                     </ButtonGroup>

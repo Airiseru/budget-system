@@ -32,7 +32,7 @@ export default function SignUpPage() {
 
             const entity = await createUserEntity()
 
-            const user = await authClient.signUp.email({
+            await authClient.signUp.email({
                 email: email,
                 password: password,
                 name: name,
@@ -64,9 +64,12 @@ export default function SignUpPage() {
             <h1 className="text-2xl font-bold mb-6">Sign Up</h1>
             {error && <p className="text-red-500 mb-4">{error}</p>}
             <form onSubmit={handleSubmit} className="space-y-4">
-                <input name="name" placeholder="Full Name" className="border px-3 py-2 w-full rounded" required autoComplete="off" />
-                <input name="email" type="email" placeholder="Email" className="border px-3 py-2 w-full rounded" required autoComplete="off" />
-                <input name="password" type="password" placeholder="Password" className="border px-3 py-2 w-full rounded" required autoComplete="off" />
+                <label htmlFor="name">Full Name</label>
+                <input id="name" name="name" placeholder="Full Name" className="border px-3 py-2 w-full rounded" required autoComplete="off" />
+                <label htmlFor="email">Email</label>
+                <input id="email" name="email" type="email" placeholder="Email" className="border px-3 py-2 w-full rounded" required autoComplete="off" />
+                <label htmlFor="password">Password</label>
+                <input id="password" name="password" type="password" placeholder="Password" className="border px-3 py-2 w-full rounded" required autoComplete="off" />
                 <div className="flex gap-2">
                     <button type="submit" disabled={isLoading} className="bg-accent-foreground text-white px-4 py-2 rounded w-full disabled:opacity-50">
                         {isLoading ? 'Signing up...' : 'Sign Up'}
