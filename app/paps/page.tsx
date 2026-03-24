@@ -10,12 +10,12 @@ const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres
 export default async function PapPage() {
     try {
         const data = await PapRepository.getAllPaps()
-        console.log(`GET PAPS RESULT in PapPage: ${JSON.stringify(data)}`)
     
         if (data.length === 0) {
             return (
                 <div className='m-4'>
                     <ButtonGroup className='my-4'>
+                        <ModeToggle></ModeToggle>
                         <ButtonGroup>
                             <Link href="/">
                                 <Button variant="outline" aria-label="Go Back">Go Back</Button>
