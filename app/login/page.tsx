@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/src/lib/auth-client";
+import { HomeButton } from "@/components/ui/HomeButton";
 
 export default function LoginPage() {
     const router = useRouter()
@@ -78,14 +79,7 @@ export default function LoginPage() {
                     {isLoading ? 'Logging in...' : 'Login'}
                 </button>
 
-                <button
-                    type="button"
-                    disabled={isLoading}
-                    onClick={() => router.push('/')}
-                    className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full"
-                >
-                    Go Back
-                </button>
+                <HomeButton text="Back" className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full" />
             </div>
         </form>
     </div>

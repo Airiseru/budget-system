@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { signup } from "@/app/actions/auth"
 import { useActionState } from "react"
+import { BackButton } from "@/components/ui/BackButton"
 
 export default function SignUpPage() {
     const router = useRouter()
@@ -54,13 +55,7 @@ export default function SignUpPage() {
                         {pending ? 'Signing up...' : 'Sign Up'}
                     </button>
 
-                    <button
-                        type="button"
-                        onClick={() => router.push('/')}
-                        className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full"
-                    >
-                        Go Back
-                    </button>
+                    <BackButton className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full" />
                 </div>
             </form>
         </div>
