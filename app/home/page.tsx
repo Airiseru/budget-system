@@ -1,14 +1,11 @@
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { LogoutButton } from "@/components/ui/LogoutButton"
-import { auth } from "@/src/lib/auth"
-import { headers } from "next/headers"
 import { redirect } from "next/navigation"
+import { sessionDetails } from "@/src/actions/auth"
 
 export default async function HomePage() {
-    const session = await auth.api.getSession({
-        headers: await headers()
-    })
+    const session = await sessionDetails()
 
     if (!session) {
         return redirect('/login')
