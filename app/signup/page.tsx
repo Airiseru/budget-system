@@ -10,10 +10,10 @@ export default function SignUpPage() {
 
     return (
         <div className="max-w-full p-8 flex h-screen items-center justify-center flex-col">
-            <div className="max-w-md w-full">
+            <div className="max-w-lg w-full">
                 <h1 className="text-2xl font-bold mb-4">Sign Up</h1>
             </div>
-            <form action={action} className="space-y-4 w-full  max-w-md">
+            <form action={action} className="space-y-4 w-full  max-w-lg">
                 <div className="space-y-2">
                     <label htmlFor="name">Full Name</label>
                     <input id="name" name="name" placeholder="Full Name" defaultValue={state?.values?.name ?? ''} className="border px-3 py-2 w-full rounded my-1" required autoComplete="off" />

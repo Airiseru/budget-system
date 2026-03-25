@@ -45,16 +45,34 @@ export default function LoginPage() {
     }
 
   return (
-    <div className="max-w-md mx-auto mt-16">
-        <h1 className="text-2xl font-bold mb-6">Login</h1>
-        {error && <p className="text-red-500 mb-4">{error}</p>}
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <label htmlFor="email">Email</label>
-            <input id="email" name="email" type="email" placeholder="Email" className="border px-3 py-2 w-full rounded" autoComplete="email" required />
-            <label htmlFor="password">Password</label>
-            <input id="password" name="password" type="password" placeholder="Password" className="border px-3 py-2 w-full rounded" autoComplete="current-password" required />
-            <input id="rememberMe" name="rememberMe" type="checkbox" className="mr-2" />
-            <label htmlFor="rememberMe">Remember me</label>
+    <div className="max-w-full p-8 flex h-screen items-center justify-center flex-col">
+        <div className="max-w-lg w-full">
+            <h1 className="text-2xl font-bold mb-4">Login</h1>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 w-full max-w-lg">
+            {error && (
+                <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                    <p className="text-red-500 italic">{error}</p>
+                </div>
+            )}
+            
+            <div className="space-y-2">
+                <label htmlFor="email">Email</label>
+                <input id="email" name="email" type="email" placeholder="Email" className="border px-3 py-2 w-full rounded my-1" autoComplete="email" required />
+            </div>
+
+            <div>
+                <label htmlFor="password">Password</label>
+                <input id="password" name="password" type="password" placeholder="Password" className="border px-3 py-2 w-full rounded my-1" autoComplete="current-password" required />
+            </div>
+
+            <div className="mb-4">
+                <input id="rememberMe" name="rememberMe" type="checkbox" className="mr-2" />
+                <label htmlFor="rememberMe">Remember me</label>
+            </div>
+
+
             <div className="flex gap-2">
                 <button type="submit" disabled={isLoading} className="bg-accent-foreground text-white px-4 py-2 rounded w-full disabled:opacity-50">
                     {isLoading ? 'Logging in...' : 'Login'}
@@ -62,6 +80,7 @@ export default function LoginPage() {
 
                 <button
                     type="button"
+                    disabled={isLoading}
                     onClick={() => router.push('/')}
                     className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full"
                 >
