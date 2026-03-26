@@ -23,10 +23,21 @@ export const auth = betterAuth({
             updatedAt: "updated_at"
         },
         additionalFields: {
+            position: {
+                type: 'string',
+                required: true,
+                input: true,
+            },
             role: {
                 type: ['unverified', 'admin', 'dbm', 'agency'],
                 required: true,
                 defaultValue: 'unverified',
+                input: false,
+            },
+            access_level: {
+                type: ['none', 'view', 'encode', 'review', 'approve'],
+                required: true,
+                defaultValue: 'none',
                 input: false,
             },
             entity_id: {

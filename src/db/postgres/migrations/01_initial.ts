@@ -15,7 +15,9 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('name', 'varchar', (col) => col.notNull())
         .addColumn('email', 'varchar', (col) => col.notNull())
         .addColumn('email_verified', 'boolean', (col) => col.notNull().defaultTo(false))
-        .addColumn('role', 'varchar', (col) => col.notNull().defaultTo('unverified'))
+        .addColumn('position', 'varchar', (col) => col.notNull())
+        .addColumn('role', 'varchar', (col) => col.notNull().defaultTo('unverified').check(sql`role IN ('unverified', 'admin', 'dbm', 'agency')`))
+        .addColumn('access_level', 'varchar', (col) => col.notNull().defaultTo('none'))
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').onDelete('cascade').notNull())
         .addColumn('public_key', 'varchar')
         .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
@@ -76,13 +78,35 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 
+    await db.schema
+        .createTable('agencies')
+        .addColumn('id', 'uuid', (col) =>
+            col.references('entities.id').onDelete('cascade').primaryKey().notNull()
+        )
+        .addColumn('department_id', 'uuid', (col) => col.references('departments.id').onDelete('cascade'))
+        .addColumn('name', 'varchar', (col) => col.notNull())
+        .addColumn('type', 'varchar', (col) => col.notNull())
+        .addColumn('uacs_code', 'varchar', (col) => col.notNull())
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+        .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+        .execute()
+
     // Create B-tree indexes
+    await db.schema.createIndex('idx_entities_id').on('entities').column('id').execute()
     await db.schema.createIndex('idx_sessions_token').on('sessions').column('token').execute()
     await db.schema.createIndex('idx_sessions_user_id').on('sessions').column('user_id').execute()
     await db.schema.createIndex('idx_accounts_user_id').on('accounts').column('user_id').execute()
+    await db.schema.createIndex('idx_agencies_department_id').on('agencies').column('department_id').execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
+    // Drop indexes
+    await db.schema.dropIndex('idx_entities_id').execute()
+    await db.schema.dropIndex('idx_sessions_token').execute()
+    await db.schema.dropIndex('idx_sessions_user_id').execute()
+    await db.schema.dropIndex('idx_accounts_user_id').execute()
+
+    // Drop tables
     await db.schema.dropTable('entities').execute()
     await db.schema.dropTable('users').execute()
     await db.schema.dropTable('sessions').execute()

@@ -11,6 +11,7 @@ export const SignupFormSchema = z.object({
         .regex(/\d/, { error: "Contain at least one number" })
         .regex(/[^a-zA-Z0-9]/, { error: "Contain at least one special character" })
         .trim(),
+    position: z.string().min(2, { error: "Position must be at least 2 characters" }).trim()
 })
 
 export type UserFormState =
@@ -20,9 +21,13 @@ export type UserFormState =
             name?: string[]
             email?: string[]
             password?: string[]
+            position?: string[]
+            entity_id?: string[]
         }
         values?: {
             name?: string
             email?: string
+            position?: string
+            entity_id?: string
         }
     } | undefined

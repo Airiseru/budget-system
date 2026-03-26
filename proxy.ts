@@ -29,5 +29,6 @@ export const config = {
         /* Match all request paths */
         '/paps/:path*',
         '/home/:path*',
+        '/admin/:path*',
     ],
 };
