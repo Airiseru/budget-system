@@ -4,10 +4,11 @@ import { sessionWithEntity } from './auth'
 import { requireAdmin } from './admin'
 import { createEntityRepository } from '../db/factory'
 import { Department, Agency, OperatingUnit, NewEntity } from '../types/entities'
-import { NewEntityFormState } from '../lib/validations/entities'
+import { NewEntityFormState, EditEntityFormState } from '../lib/validations/entities'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { DepartmentSchema, AgencySchema, OperatingUnitSchema } from '../lib/validations/entities'
+import { Update } from 'next/dist/build/swc/types'
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -141,5 +142,117 @@ export async function createNewEntity(
         }
     }
 
+    redirect('/admin/entities')
+}
+
+export async function updateEntity(state: EditEntityFormState, formData: FormData): Promise<EditEntityFormState> {
+    const session = await sessionWithEntity()
+
+    // 1. Basic Auth Checks
+    if (!session) redirect('/login')
+    if (session.user.role !== 'admin') {
+        return { formErrors: ['Unauthorized access.'] }
+    }
+
+    // 2. Extract Data
+    const entity_id = formData.get('entity_id') as string
+    const entity_type = formData.get('entity_type') as string 
+    const name = formData.get('name') as string
+    const uacs_code = formData.get('uacs_code') as string
+    const type = formData.get('type') as string 
+    
+    // Safely handle the "none" string from the shadcn select and convert it to null
+    const raw_dept_id = formData.get('department_id') as string
+    const department_id = (raw_dept_id === 'none' || !raw_dept_id) ? null : raw_dept_id
+    
+    const agency_id = formData.get('agency_id') as string
+
+    const values = { 
+        entity_id, 
+        entity_type, 
+        name, 
+        uacs_code, 
+        type, 
+        department_id: department_id ?? undefined, 
+        agency_id 
+    }
+
+    // 3. RBAC
+    const userEntityType = session.user_entity.entity_type
+    const userEntityId = session.user.entity_id
+
+    if (userEntityType === 'agency' && entity_type !== 'operating_unit') {
+        return { formErrors: ['Agency admins can only update operating units'] }
+    }
+    if (userEntityType === 'department' && entity_type === 'department') {
+        return { formErrors: ['Department admins cannot update departments'] }
+    }
+    
+    try {
+        if (entity_type === 'department') {
+            const validatedFields = DepartmentSchema.safeParse({ name, uacs_code })
+            if (!validatedFields.success) {
+                return {
+                    ...z.flattenError(validatedFields.error),
+                    values: { name, uacs_code }
+                }
+            }
+            await EntityRepository.updateDepartment(entity_id, { name, uacs_code })
+        } 
+        else if (entity_type === 'agency') {
+            const finalDeptId = 
+                (userEntityType === "national" || !userEntityType) // National Admin
+                    ? (department_id || undefined) // Uses form data (converts "" to undefined)
+                    : userEntityType === "department" // Department Admin
+                        ? userEntityId // Forces their own department ID
+                        : undefined
+
+            const validatedFields = AgencySchema.safeParse({ name, uacs_code, type, finalDeptId })
+
+            if (!validatedFields.success) {
+                return {
+                    ...z.flattenError(validatedFields.error),
+                    values: { name, uacs_code, type, department_id: finalDeptId ?? undefined }
+                }
+            }
+
+            await EntityRepository.updateAgency(entity_id, { 
+                name, 
+                uacs_code, 
+                type: type as 'bureau' | 'attached_agency',
+                department_id: finalDeptId || null 
+            })
+        } 
+        else if (entity_type === 'operating_unit') {
+            const finalAgencyid = 
+                (userEntityType === "national" || userEntityType === "department" || !userEntityType) // National or Department Admin
+                    ? (agency_id || undefined) // Uses form data (converts "" to undefined)
+                    : userEntityType === "agency" // Agency Admin
+                        ? userEntityId // Forces their own agency ID
+                        : undefined
+            
+            const validatedFields = OperatingUnitSchema.safeParse({ name, uacs_code, agency_id: finalAgencyid })
+
+            if (!validatedFields.success) {
+                return {
+                    ...z.flattenError(validatedFields.error),
+                    values: { name, uacs_code, agency_id: finalAgencyid ?? undefined }
+                }
+            }
+
+            await EntityRepository.updateOperatingUnit(entity_id, { 
+                name, 
+                uacs_code, 
+                agency_id: finalAgencyid || undefined
+            })
+        }
+    } catch (err) {
+        return {
+            formErrors: ['Failed to update entity. Please check your data and try again.'],
+            values
+        }
+    }
+
+    // 4. On absolute success, route them back to the table
     redirect('/admin/entities')
 }

@@ -58,8 +58,8 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             type: agency.type === 'bureau' ? 'Bureau' : 'Attached Agency',
             badge: 'secondary',
             parent: parentName,
-            editUrl: `/admin/entities/agencies/${agency.id}/edit`,
-            deleteUrl: `/admin/entities/agencies/${agency.id}/delete`,
+            editUrl: `/admin/entities/agency/${agency.id}/edit`,
+            deleteUrl: `/admin/entities/agency/${agency.id}/delete`,
         })
 
         ousByAgencyId.get(agency.id)?.forEach(ou => {
@@ -70,8 +70,8 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                 type: 'Operating Unit',
                 badge: 'outline',
                 parent: agency.name,
-                editUrl: `/admin/entities/operating-units/${ou.id}/edit`,
-                deleteUrl: `/admin/entities/operating-units/${ou.id}/delete`,
+                editUrl: `/admin/entities/operating-unit/${ou.id}/edit`,
+                deleteUrl: `/admin/entities/operating-unit/${ou.id}/delete`,
             })
         })
     }
@@ -86,8 +86,8 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             type: 'Department',
             badge: 'default',
             parent: '—',
-            editUrl: `/admin/entities/departments/${dept.id}/edit`,
-            deleteUrl: `/admin/entities/departments/${dept.id}/delete`,
+            editUrl: `/admin/entities/department/${dept.id}/edit`,
+            deleteUrl: `/admin/entities/department/${dept.id}/delete`,
         })
         agenciesByDeptId.get(dept.id)?.forEach(agency => addAgency(agency, dept.name))
     })
@@ -115,8 +115,8 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             type: 'Operating Unit',
             badge: 'outline',
             parent: '—',
-            editUrl: `/admin/entities/operating-units/${ou.id}/edit`,
-            deleteUrl: `/admin/entities/operating-units/${ou.id}/delete`,
+            editUrl: `/admin/entities/operating-unit/${ou.id}/edit`,
+            deleteUrl: `/admin/entities/operating-unit/${ou.id}/delete`,
         })
     })
 

@@ -82,7 +82,7 @@ export function NewEntityForm({ canCreate, departments, agencies }: Props) {
 
     return (
         <form action={action} className="space-y-6 border border-border rounded-lg p-6">
-            {state?.formErrors && (
+            {(state?.formErrors && state.formErrors.length > 0) && (
                 <p className="text-red-500 text-sm italic">{state.formErrors[0]}</p>
             )}
 

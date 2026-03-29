@@ -211,6 +211,45 @@ export async function getEntitySegmentsByDepartment(departmentId: string) {
 
     return { agencies, operatingUnits }
 }
+
+export async function getFullEntityById(
+    type: string,
+    id: string
+) {
+    try {
+        if (type === 'department') {
+            return await db.selectFrom('departments')
+                .selectAll()
+                .where('id', '=', id)
+                .executeTakeFirst()
+        } 
+        else if (type === 'agency') {
+            return await db.selectFrom('agencies')
+                .selectAll()
+                .where('id', '=', id)
+                .executeTakeFirst()
+        } 
+        else if (type === 'operating_unit') {
+            return await db.selectFrom('operating_units')
+                .leftJoin('agencies', 'agencies.id', 'operating_units.agency_id')
+                .where('operating_units.id', '=', id)
+                .select([
+                    'operating_units.id as id',
+                    'operating_units.name as name',
+                    'operating_units.uacs_code as uacs_code',
+                    'operating_units.agency_id as agency_id',
+                    // 4. Grab the department_id directly from the agency record
+                    'agencies.department_id as department_id', 
+                ])
+                .executeTakeFirst()
+        }
+        
+        return null
+    } catch (error) {
+        console.error("Failed to fetch full entity:", error)
+        return null
+    }
+}
     
 // USERS
 export async function getAllUsers(): Promise<Partial<User>[]> {

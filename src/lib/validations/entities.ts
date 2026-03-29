@@ -36,3 +36,25 @@ export type NewEntityFormState = {
         agency_id?: string
     }
 } | undefined
+
+export type EditEntityFormState = {
+    formErrors?: string[]
+    fieldErrors?: {
+        entity_id?: string[]
+        entity_type?: string[]
+        name?: string[]
+        uacs_code?: string[]
+        type?: string[]
+        department_id?: string[]
+        agency_id?: string[]
+    }
+    values?: {
+        entity_id?: string
+        entity_type?: string
+        name?: string
+        uacs_code?: string
+        type?: string
+        department_id?: string
+        agency_id?: string
+    }
+} | undefined
