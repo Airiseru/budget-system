@@ -58,3 +58,15 @@ export type EditEntityFormState = {
         agency_id?: string
     }
 } | undefined
+
+export type DeleteEntityFormState = {
+    formErrors?: string[]
+    fieldErrors?: {
+        entity_id?: string[]
+        entity_type?: string[]
+    }
+    values?: {
+        entity_id?: string
+        entity_type?: string
+    }
+} | undefined

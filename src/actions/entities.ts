@@ -3,12 +3,11 @@
 import { sessionWithEntity } from './auth'
 import { requireAdmin } from './admin'
 import { createEntityRepository } from '../db/factory'
-import { Department, Agency, OperatingUnit, NewEntity } from '../types/entities'
-import { NewEntityFormState, EditEntityFormState } from '../lib/validations/entities'
+import { Department, Agency, OperatingUnit } from '../types/entities'
+import { NewEntityFormState, EditEntityFormState, DeleteEntityFormState } from '../lib/validations/entities'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { DepartmentSchema, AgencySchema, OperatingUnitSchema } from '../lib/validations/entities'
-import { Update } from 'next/dist/build/swc/types'
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -254,5 +253,27 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
     }
 
     // 4. On absolute success, route them back to the table
+    redirect('/admin/entities')
+}
+
+export async function deleteEntityAction(state: DeleteEntityFormState, formData: FormData): Promise<DeleteEntityFormState> {
+    const session = await sessionWithEntity()
+
+    if (!session || session.user.role !== 'admin') {
+        return { formErrors: ['Unauthorized access.'] }
+    }
+
+    const entity_id = formData.get('entity_id') as string
+
+    try {
+        await EntityRepository.deleteEntity(entity_id)
+    } catch (err) {
+        // This catches Foreign Key Constraint errors (e.g., trying to delete a Department that still has Agencies)
+        return {
+            formErrors: ['Failed to delete entity. Please ensure there are no sub-agencies or operating units attached to it before deleting.'],
+        }
+    }
+
+    // 3. Route back to the main table on success
     redirect('/admin/entities')
 }
