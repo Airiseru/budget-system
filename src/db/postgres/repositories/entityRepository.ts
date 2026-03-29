@@ -38,11 +38,11 @@ export async function getDepartmentById(id: string): Promise<Department | null> 
     return await db.selectFrom('departments').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
 }
 
-export async function createDepartment(department: NewDepartment): Promise<Department> {
+export async function createDepartment(department: Partial<Department>): Promise<Department> {
     const new_entity = await createEntity({type: 'department'})
     department.id = new_entity.id
 
-    return await db.insertInto('departments').values(department).returningAll().executeTakeFirstOrThrow()
+    return await db.insertInto('departments').values(department as NewDepartment).returningAll().executeTakeFirstOrThrow()
 }
 
 export async function updateDepartment(id: string, updateWith: DepartmentUpdate): Promise<void> {
@@ -70,15 +70,15 @@ export async function getAllAgenciesByDepartmentId(department_id: string): Promi
     return await db.selectFrom('agencies').selectAll().where('department_id', '=', department_id).execute()
 }
 
-export async function createAgency(agency: NewAgency, department_id: string | null): Promise<Partial<Agency>> {
+export async function createAgency(agency: Partial<NewAgency>, department_id: string | null): Promise<Partial<Agency>> {
     const new_entity = await createEntity({type: 'agency'})
     agency.id = new_entity.id
 
     if (department_id === null) {
-        return await db.insertInto('agencies').values(agency).returningAll().executeTakeFirstOrThrow()
+        return await db.insertInto('agencies').values(agency as NewAgency).returningAll().executeTakeFirstOrThrow()
     }
 
-    return await db.insertInto('agencies').values({ ...agency, department_id }).returning([
+    return await db.insertInto('agencies').values({ ...agency as NewAgency, department_id }).returning([
         'id', 'name', 'uacs_code', 'type'
     ]).executeTakeFirstOrThrow()
 }
@@ -116,11 +116,11 @@ export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise
         .execute()
 }
 
-export async function createOperatingUnit(operating_unit: NewOperatingUnit, agency_id: string): Promise<Partial<OperatingUnit>> {
+export async function createOperatingUnit(operating_unit: Partial<NewOperatingUnit>, agency_id: string): Promise<Partial<OperatingUnit>> {
     const new_entity = await createEntity({type: 'operating_unit'})
     operating_unit.id = new_entity.id
 
-    return await db.insertInto('operating_units').values({ ...operating_unit, agency_id }).returning([
+    return await db.insertInto('operating_units').values({ ...operating_unit as NewOperatingUnit, agency_id }).returning([
         'id', 'name', 'uacs_code'
     ]).executeTakeFirstOrThrow()
 }
@@ -170,6 +170,7 @@ export async function getAllEntitySegments() {
             'entities.type as entity_type',
             'operating_units.name as name',
             'operating_units.uacs_code as uacs_code',
+            'operating_units.agency_id as agency_id',
         ])
         .execute()
 

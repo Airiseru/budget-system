@@ -3,17 +3,23 @@
 import { sessionWithEntity } from './auth'
 import { requireAdmin } from './admin'
 import { createEntityRepository } from '../db/factory'
-import { Department, Agency, OperatingUnit } from '../types/entities'
+import { Department, Agency, OperatingUnit, NewEntity } from '../types/entities'
+import { NewEntityFormState } from '../lib/validations/entities'
+import { redirect } from 'next/navigation'
+import { z } from 'zod'
+import { DepartmentSchema, AgencySchema, OperatingUnitSchema } from '../lib/validations/entities'
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
-export async function loadEntities(): Promise<{} | {
+export async function loadEntities(needsAdmin = false): Promise<{} | {
     departments: Partial<Department[]>,
     agencies: Partial<Agency[]>,
     operatingUnits: Partial<OperatingUnit[]>,
     entityName: string
 }> {
-    await requireAdmin()
+    if (needsAdmin) {
+        await requireAdmin()
+    }
 
     const session = await sessionWithEntity()
     if (!session) return {}
@@ -42,4 +48,98 @@ export async function loadEntities(): Promise<{} | {
     }
 
     return {}
+}
+
+export async function createNewEntity(
+    state: NewEntityFormState,
+    formData: FormData
+): Promise<NewEntityFormState> {
+    const session = await sessionWithEntity()
+
+    if (!session) redirect('login')
+    if (session.user.role === 'unverified') redirect('pending-approval')
+
+    const entityType = formData.get('entity_type') as string
+    const name = formData.get('name') as string
+    const uacs_code = formData.get('uacs_code') as string
+    const type = formData.get('type') as string
+    
+    // Check if department_id is null
+    const raw_dept_id = formData.get('department_id') as string
+    const department_id = raw_dept_id ? raw_dept_id : null 
+    
+    const agency_id = formData.get('agency_id') as string
+
+    const values = { name, uacs_code, type, department_id: department_id ?? undefined, agency_id }
+
+    const userEntityType = session.user_entity.entity_type
+    const userEntityId = session.user.entity_id
+
+    if (userEntityType === 'agency' && entityType !== 'operating_unit') {
+        return { formErrors: ['Agency admins can only create operating units'] }
+    }
+    if (userEntityType === 'department' && entityType === 'department') {
+        return { formErrors: ['Department admins cannot create departments'] }
+    }
+
+    try {
+        if (entityType === 'department') {
+            const validatedFields = DepartmentSchema.safeParse({ name, uacs_code })
+            if (!validatedFields.success) {
+                return {
+                    ...z.flattenError(validatedFields.error),
+                    values: { name, uacs_code }
+                }
+            }
+            await EntityRepository.createDepartment({ name, uacs_code })
+        }
+
+        else if (entityType === 'agency') {
+            const validatedFields = AgencySchema.safeParse({ name, uacs_code, type, department_id })
+
+            const finalDeptId = 
+                (userEntityType === "national" || !userEntityType) // National Admin
+                    ? (department_id || undefined) // Uses form data (converts "" to undefined)
+                    : userEntityType === "department" // Department Admin
+                        ? userEntityId // Forces their own department ID
+                        : undefined
+
+            if (!validatedFields.success) {
+                return {
+                    ...z.flattenError(validatedFields.error),
+                    values: { name, uacs_code, type, department_id: finalDeptId ?? undefined }
+                }
+            }
+            await EntityRepository.createAgency(
+                { name, uacs_code, type: type as 'bureau' | 'attached_agency' },
+                finalDeptId || null
+            )
+        }
+
+        else if (entityType === 'operating_unit') {
+            const finalAgencyid = 
+                (userEntityType === "national" || userEntityType === "department" || !userEntityType) // National or Department Admin
+                    ? (agency_id || undefined) // Uses form data (converts "" to undefined)
+                    : userEntityType === "agency" // Agency Admin
+                        ? userEntityId // Forces their own agency ID
+                        : undefined
+            
+            const validatedFields = OperatingUnitSchema.safeParse({ name, uacs_code, agency_id: finalAgencyid })
+
+            if (!validatedFields.success) {
+                return {
+                    ...z.flattenError(validatedFields.error),
+                    values: { name, uacs_code, agency_id: finalAgencyid ?? undefined }
+                }
+            }
+            await EntityRepository.createOperatingUnit({ name, uacs_code }, finalAgencyid || "")
+        }
+    } catch (err) {
+        return {
+            formErrors: ['Failed to create entity. Please try again'],
+            values: values
+        }
+    }
+
+    redirect('/admin/entities')
 }

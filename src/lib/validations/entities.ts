@@ -1,0 +1,38 @@
+import { z } from 'zod'
+import { AgencyTypes } from '@/src/types/entities'
+
+export const DepartmentSchema = z.object({
+    name: z.string().min(1, { error: "Name is required" }),
+    uacs_code: z.coerce.number().min(1, { error: "UACS Code is required" }).max(99, { error: "UACS Code must be between 1 and 99" })
+})
+
+export const AgencySchema = z.object({
+    name: z.string().min(1, { error: "Name is required" }),
+    uacs_code: z.coerce.number().min(0, { error: "UACS Code is required" }).max(999, { error: "UACS Code must be between 1 and 999" }),
+    type: z.enum(AgencyTypes).default('bureau'),
+    department_id: z.string().nullable().optional(),
+})
+
+export const OperatingUnitSchema = z.object({
+    name: z.string().min(1, { error: "Name is required" }),
+    uacs_code: z.coerce.number().min(1, { error: "UACS Code is required" }).max(99, { error: "UACS Code must be between 1 and 99" }),
+    agency_id: z.string().min(1, { error: "Agency is required" })
+})
+
+export type NewEntityFormState = {
+    formErrors?: string[]
+    fieldErrors?: {
+        name?: string[]
+        uacs_code?: string[]
+        type?: string[]
+        department_id?: string[]
+        agency_id?: string[]
+    }
+    values?: {
+        name?: string
+        uacs_code?: string
+        type?: string
+        department_id?: string
+        agency_id?: string
+    }
+} | undefined

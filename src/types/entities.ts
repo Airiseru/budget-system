@@ -95,6 +95,7 @@ export interface AgenciesTable {
 export type Agency = Selectable<AgenciesTable>
 export type NewAgency = Insertable<AgenciesTable>
 export type AgencyUpdate = Updateable<AgenciesTable>
+export const AgencyTypes = ['bureau', 'attached_agency']
 
 export interface OperatingUnitsTable {
     id: string

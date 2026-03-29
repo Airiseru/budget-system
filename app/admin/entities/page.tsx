@@ -17,6 +17,14 @@ export default async function EntitiesPage() {
 
         const { departments, agencies, operatingUnits, entityName } = result
 
+        if (!departments || !agencies || !operatingUnits) {
+            return (
+                <main className="m-4">
+                    <p className="text-muted-foreground">Unable to load entities.</p>
+                </main>
+            )
+        }
+
         return (
             <main className="m-6 space-y-6 max-w-7xl md:mx-auto md:my-12 max-h-screen">
                 <div className="flex items-center justify-between">
