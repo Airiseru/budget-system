@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/src/lib/auth-client";
-import { HomeButton } from "@/components/ui/HomeButton";
+import BackButton from "@/components/ui/BackButton";
+import { Button } from "@/components/ui/button"
 
 export default function LoginPage() {
     const router = useRouter()
@@ -75,11 +76,11 @@ export default function LoginPage() {
 
 
             <div className="flex gap-2">
-                <HomeButton text="Back" className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full" />
+                <BackButton url='/' className="bg-gray-200 text-gray-700 px-4 py-5 rounded w-1/2 text-md" variant="default" />
 
-                <button type="submit" disabled={isLoading} className="bg-accent-foreground text-white px-4 py-2 rounded w-full disabled:opacity-50">
+                <Button className="w-1/2 rounded py-5 text-md disabled:opacity-50 bg-accent-foreground text-white border border-accent-foreground hover:bg-accent-foreground/50" disabled={isLoading} type="submit" variant="outline">
                     {isLoading ? 'Logging in...' : 'Login'}
-                </button>
+                </Button>
             </div>
         </form>
     </div>

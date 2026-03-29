@@ -4,6 +4,7 @@ import { signup } from "@/app/actions/auth"
 import { useActionState, useState } from "react"
 import { Department, Agency } from "@/src/types/entities"
 import BackButton from "@/components/ui/BackButton"
+import { Button } from "@/components/ui/button"
 import {
     Select,
     SelectContent,
@@ -168,11 +169,11 @@ export default function SignUpForm({ departments, agencies }: Props) {
                 )}
 
                 <div className="mt-5 flex gap-2">
-                    <BackButton className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full" />
-
-                    <button type="submit" disabled={pending} className="bg-accent-foreground text-white px-4 py-2 rounded w-full disabled:opacity-50">
+                    <BackButton url='/' className="bg-gray-200 text-gray-700 px-4 py-5 rounded w-1/2 text-md" variant="default" />
+                    
+                    <Button className="w-1/2 rounded py-5 text-md disabled:opacity-50 bg-accent-foreground text-white border border-accent-foreground hover:bg-accent-foreground/50" disabled={pending} type="submit" variant="outline">
                         {pending ? 'Signing up...' : 'Sign Up'}
-                    </button>
+                    </Button>
                 </div>
             </form>
         </div>
