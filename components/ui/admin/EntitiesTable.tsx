@@ -2,7 +2,7 @@
 
 import { Department, Agency, OperatingUnit } from '@/src/types/entities'
 import { Button } from '@/components/ui/button'
-import { Pencil } from 'lucide-react'
+import { Pencil, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow
@@ -24,6 +24,7 @@ type Row = {
     badge: string
     parent: string
     editUrl: string
+    deleteUrl: string
 }
 
 export function EntitiesTable({ departments, agencies, operatingUnits, entityName }: Props) {
@@ -58,6 +59,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             badge: 'secondary',
             parent: parentName,
             editUrl: `/admin/entities/agencies/${agency.id}/edit`,
+            deleteUrl: `/admin/entities/agencies/${agency.id}/delete`,
         })
 
         ousByAgencyId.get(agency.id)?.forEach(ou => {
@@ -69,6 +71,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                 badge: 'outline',
                 parent: agency.name,
                 editUrl: `/admin/entities/operating-units/${ou.id}/edit`,
+                deleteUrl: `/admin/entities/operating-units/${ou.id}/delete`,
             })
         })
     }
@@ -84,6 +87,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             badge: 'default',
             parent: '—',
             editUrl: `/admin/entities/departments/${dept.id}/edit`,
+            deleteUrl: `/admin/entities/departments/${dept.id}/delete`,
         })
         agenciesByDeptId.get(dept.id)?.forEach(agency => addAgency(agency, dept.name))
     })
@@ -112,6 +116,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             badge: 'outline',
             parent: '—',
             editUrl: `/admin/entities/operating-units/${ou.id}/edit`,
+            deleteUrl: `/admin/entities/operating-units/${ou.id}/delete`,
         })
     })
 
@@ -151,6 +156,11 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                                     <Link href={row.editUrl}>
                                         <Button variant="ghost" size="icon">
                                             <Pencil className="w-4 h-4" />
+                                        </Button>
+                                    </Link>
+                                    <Link href={row.deleteUrl}>
+                                        <Button variant="ghost" size="icon">
+                                            <Trash2 className="w-4 h-4 text-destructive" />
                                         </Button>
                                     </Link>
                                 </TableCell>
