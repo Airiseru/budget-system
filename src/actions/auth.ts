@@ -3,6 +3,9 @@
 import { auth } from "@/src/lib/auth"
 import { headers } from "next/headers"
 import { createEntityRepository } from "../db/factory"
+import { SignupFormSchema, UserFormState, LoginFormSchema } from "../lib/validations/user"
+import { redirect } from "next/navigation"
+import * as z from 'zod'
 
 export async function sessionDetails() {
     return await auth.api.getSession({
@@ -31,4 +34,53 @@ export async function sessionWithEntity() {
             entity_name: entityName,
         }
     }
+}
+
+export async function signup(state: UserFormState, formData: FormData): Promise<UserFormState> {
+    // Validate form fields
+    const name = formData.get('name') as string
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const position = formData.get('position') as string
+    const entity_id = formData.get('entity_id') as string
+
+    const submittedValues = { name, email, position, entity_id }
+
+    const validatedFields = SignupFormSchema.safeParse({ name, email, password, position })
+
+    if (!validatedFields.success) {
+        return {
+            ...z.flattenError(validatedFields.error),
+            values: submittedValues
+        }
+    }
+
+    const response = await auth.api.signUpEmail({
+        body: {
+            email: email,
+            password: password,
+            name: name,
+            entity_id: entity_id,
+            position: position
+        },
+        asResponse: true
+    })
+
+    if (response.status !== 200) {
+        return {
+            formErrors: [ response.statusText ],
+            values: submittedValues
+        }
+    }
+
+    // Redirect to login page
+    redirect('/login')
+}
+
+export async function logout() {
+    await auth.api.signOut({
+        headers: await headers() 
+    })
+
+    redirect('/login')
 }

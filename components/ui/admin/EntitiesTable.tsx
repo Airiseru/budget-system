@@ -13,6 +13,7 @@ type Props = {
     departments: Partial<Department[]>
     agencies: Partial<Agency[]>
     operatingUnits: Partial<OperatingUnit[]>
+    entityName: string
 }
 
 type Row = {
@@ -25,7 +26,7 @@ type Row = {
     editUrl: string
 }
 
-export function EntitiesTable({ departments, agencies, operatingUnits }: Props) {
+export function EntitiesTable({ departments, agencies, operatingUnits, entityName }: Props) {
     // mapping of department id to agencies
     const agenciesByDeptId = new Map<string | null, Agency[]>()
 
@@ -86,6 +87,14 @@ export function EntitiesTable({ departments, agencies, operatingUnits }: Props) 
         })
         agenciesByDeptId.get(dept.id)?.forEach(agency => addAgency(agency, dept.name))
     })
+
+    // agencies under the department
+    if (!departments || departments.filter(Boolean).length === 0) {
+        agenciesByDeptId.forEach((deptAgencies, deptId) => {
+            if (deptId === null) return  // independent agencies handled separately
+            deptAgencies.forEach(agency => addAgency(agency, entityName))
+        })
+    }
 
     // independent agencies (no department)
     agenciesByDeptId.get(null)?.forEach(agency => addAgency(agency, 'Independent'))

@@ -14,6 +14,12 @@ export const SignupFormSchema = z.object({
     position: z.string().min(2, { error: "Position must be at least 2 characters" }).trim()
 })
 
+export const LoginFormSchema = z.object({
+    email: z.email({ message: "Please enter a valid email address." }),
+    password: z.string().min(1, { message: "Password is required." }),
+    rememberMe: z.string().optional()
+})
+
 export type UserFormState =
     {
         formErrors?: string[]
@@ -23,11 +29,13 @@ export type UserFormState =
             password?: string[]
             position?: string[]
             entity_id?: string[]
+            rememberMe?: string[]
         }
         values?: {
             name?: string
             email?: string
             position?: string
             entity_id?: string
+            rememberMe?: boolean
         }
     } | undefined

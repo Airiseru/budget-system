@@ -1,6 +1,6 @@
 "use client"
 
-import { signup } from "@/app/actions/auth"
+import { signup } from "@/src/actions/auth"
 import { useActionState, useState } from "react"
 import { Department, Agency } from "@/src/types/entities"
 import BackButton from "@/components/ui/BackButton"

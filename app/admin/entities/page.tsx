@@ -17,8 +17,6 @@ export default async function EntitiesPage() {
 
         const { departments, agencies, operatingUnits, entityName } = result
 
-        console.log(entityName)
-
         return (
             <main className="m-6 space-y-6 max-w-7xl md:mx-auto md:my-12 max-h-screen">
                 <div className="flex items-center justify-between">
@@ -38,6 +36,7 @@ export default async function EntitiesPage() {
                     departments={departments}
                     agencies={agencies}
                     operatingUnits={operatingUnits}
+                    entityName={entityName}
                 />
             </main>
         )

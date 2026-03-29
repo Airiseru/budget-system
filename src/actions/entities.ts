@@ -5,6 +5,8 @@ import { requireAdmin } from './admin'
 import { createEntityRepository } from '../db/factory'
 import { Department, Agency, OperatingUnit } from '../types/entities'
 
+const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
+
 export async function loadEntities(): Promise<{} | {
     departments: Partial<Department[]>,
     agencies: Partial<Agency[]>,
@@ -16,10 +18,6 @@ export async function loadEntities(): Promise<{} | {
     const session = await sessionWithEntity()
     if (!session) return {}
     if (!session.user.entity_id) return {}
-
-    const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
-
-    console.log(session.user_entity)
 
     if (session.user_entity.entity_type === "national") {
         return {

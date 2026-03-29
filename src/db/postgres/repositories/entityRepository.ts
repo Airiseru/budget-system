@@ -70,7 +70,7 @@ export async function getAllAgenciesByDepartmentId(department_id: string): Promi
     return await db.selectFrom('agencies').selectAll().where('department_id', '=', department_id).execute()
 }
 
-export async function createAgency(agency: NewAgency, department_id: string | null): Promise<Agency> {
+export async function createAgency(agency: NewAgency, department_id: string | null): Promise<Partial<Agency>> {
     const new_entity = await createEntity({type: 'agency'})
     agency.id = new_entity.id
 
@@ -78,7 +78,9 @@ export async function createAgency(agency: NewAgency, department_id: string | nu
         return await db.insertInto('agencies').values(agency).returningAll().executeTakeFirstOrThrow()
     }
 
-    return await db.insertInto('agencies').values({ ...agency, department_id }).returningAll().executeTakeFirstOrThrow()
+    return await db.insertInto('agencies').values({ ...agency, department_id }).returning([
+        'id', 'name', 'uacs_code', 'type'
+    ]).executeTakeFirstOrThrow()
 }
 
 export async function updateAgency(id: string, updateWith: AgencyUpdate): Promise<void> {
@@ -114,11 +116,13 @@ export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise
         .execute()
 }
 
-export async function createOperatingUnit(operating_unit: NewOperatingUnit, agency_id: string): Promise<OperatingUnit> {
+export async function createOperatingUnit(operating_unit: NewOperatingUnit, agency_id: string): Promise<Partial<OperatingUnit>> {
     const new_entity = await createEntity({type: 'operating_unit'})
     operating_unit.id = new_entity.id
 
-    return await db.insertInto('operating_units').values({ ...operating_unit, agency_id }).returningAll().executeTakeFirstOrThrow()
+    return await db.insertInto('operating_units').values({ ...operating_unit, agency_id }).returning([
+        'id', 'name', 'uacs_code'
+    ]).executeTakeFirstOrThrow()
 }
 
 export async function updateOperatingUnit(id: string, updateWith: OperatingUnitUpdate): Promise<void> {
