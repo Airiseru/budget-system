@@ -39,10 +39,24 @@ export async function getDepartmentById(id: string): Promise<Department | null> 
 }
 
 export async function createDepartment(department: Partial<Department>): Promise<Department> {
-    const new_entity = await createEntity({type: 'department'})
-    department.id = new_entity.id
+    // Create transaction block
+    return await db.transaction().execute(async (trx) => {
+        
+        // Create entity
+        const new_entity = await trx.insertInto('entities')
+            .values({ type: 'department' })
+            .returningAll()
+            .executeTakeFirstOrThrow()
+            
+        // Get generated id
+        department.id = new_entity.id
 
-    return await db.insertInto('departments').values(department as NewDepartment).returningAll().executeTakeFirstOrThrow()
+        // Create department
+        return await trx.insertInto('departments')
+            .values(department as NewDepartment)
+            .returningAll()
+            .executeTakeFirstOrThrow()
+    })
 }
 
 export async function updateDepartment(id: string, updateWith: DepartmentUpdate): Promise<void> {
@@ -71,18 +85,28 @@ export async function getAllAgenciesByDepartmentId(department_id: string): Promi
 }
 
 export async function createAgency(agency: Partial<NewAgency>, department_id: string | null): Promise<Partial<Agency>> {
-    const new_entity = await createEntity({type: 'agency'})
-    agency.id = new_entity.id
+    return await db.transaction().execute(async (trx) => {
+        // Create entity
+        const new_entity = await trx.insertInto('entities')
+            .values({ type: 'agency' })
+            .returning('id')
+            .executeTakeFirstOrThrow()
 
-    if (department_id === null) {
-        return await db.insertInto('agencies').values(agency as NewAgency).returningAll().executeTakeFirstOrThrow()
-    }
+        // Create independent agency
+        if (department_id === null) {
+            return await trx.insertInto('agencies')
+                .values({ ...(agency as NewAgency), id: new_entity.id })
+                .returningAll()
+                .executeTakeFirstOrThrow()
+        }
 
-    return await db.insertInto('agencies').values({ ...agency as NewAgency, department_id }).returning([
-        'id', 'name', 'uacs_code', 'type'
-    ]).executeTakeFirstOrThrow()
+        // Create agency
+        return await trx.insertInto('agencies')
+            .values({ ...(agency as NewAgency), id: new_entity.id, department_id })
+            .returning(['id', 'name', 'uacs_code', 'type'])
+            .executeTakeFirstOrThrow()
+    })
 }
-
 export async function updateAgency(id: string, updateWith: AgencyUpdate): Promise<void> {
     await db
         .updateTable('agencies')
@@ -117,12 +141,19 @@ export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise
 }
 
 export async function createOperatingUnit(operating_unit: Partial<NewOperatingUnit>, agency_id: string): Promise<Partial<OperatingUnit>> {
-    const new_entity = await createEntity({type: 'operating_unit'})
-    operating_unit.id = new_entity.id
+    return await db.transaction().execute(async (trx) => {
+        // Create entity
+        const new_entity = await trx.insertInto('entities')
+            .values({ type: 'operating_unit' })
+            .returning('id')
+            .executeTakeFirstOrThrow()
 
-    return await db.insertInto('operating_units').values({ ...operating_unit as NewOperatingUnit, agency_id }).returning([
-        'id', 'name', 'uacs_code'
-    ]).executeTakeFirstOrThrow()
+        // Create operating unit
+        return await trx.insertInto('operating_units')
+            .values({ ...(operating_unit as NewOperatingUnit), id: new_entity.id, agency_id })
+            .returning(['id', 'name', 'uacs_code'])
+            .executeTakeFirstOrThrow()
+    })
 }
 
 export async function updateOperatingUnit(id: string, updateWith: OperatingUnitUpdate): Promise<void> {
