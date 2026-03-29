@@ -75,11 +75,11 @@ export default function LoginPage() {
 
 
             <div className="flex gap-2">
+                <HomeButton text="Back" className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full" />
+
                 <button type="submit" disabled={isLoading} className="bg-accent-foreground text-white px-4 py-2 rounded w-full disabled:opacity-50">
                     {isLoading ? 'Logging in...' : 'Login'}
                 </button>
-
-                <HomeButton text="Back" className="bg-gray-200 text-gray-700 px-4 py-2 rounded w-full" />
             </div>
         </form>
     </div>
