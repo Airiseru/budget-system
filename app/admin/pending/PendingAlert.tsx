@@ -5,7 +5,7 @@ import { ShieldAlert } from "lucide-react"
 export function PendingAlert() {
     return (
         <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground flex items-center gap-2">
+            <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground flex items-center gap-2">
                 <ShieldAlert className="text-amber-500" />
                 Pending Approvals
             </h1>

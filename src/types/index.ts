@@ -1,4 +1,4 @@
-import { EntitiesTable, UserTable, SessionTable, AccountTable, VerificationTable, DepartmentsTable, AgenciesTable } from "./entities"
+import { EntitiesTable, UserTable, SessionTable, AccountTable, VerificationTable, DepartmentsTable, AgenciesTable, OperatingUnitsTable } from "./entities"
 import { PapTable, PapLocationTable } from "./pap";
 
 export interface Database {
@@ -9,6 +9,7 @@ export interface Database {
     verifications: VerificationTable
     departments: DepartmentsTable
     agencies: AgenciesTable
+    operating_units: OperatingUnitsTable
     pap: PapTable
     pap_location: PapLocationTable
 }

@@ -1,21 +1,86 @@
 'use server'
 
-import { createEntityRepository } from '@/src/db/factory'
 import { auth } from "@/src/lib/auth"
 import { headers } from "next/headers"
-
-export async function createUserEntity() {
-    const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
-    return await entityRepository.createEntity({ type: 'user' })
-}
-
-export async function deleteUserEntity(id: string) {
-    const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
-    return await entityRepository.deleteEntity(id)
-}
+import { createEntityRepository } from "../db/factory"
+import { SignupFormSchema, UserFormState, LoginFormSchema } from "../lib/validations/user"
+import { redirect } from "next/navigation"
+import * as z from 'zod'
 
 export async function sessionDetails() {
     return await auth.api.getSession({
         headers: await headers()
     })
+}
+
+export async function sessionWithEntity() {
+    const session = await sessionDetails()
+    if (!session) return null
+
+    const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
+    const entity = await EntityRepository.getEntityOfUser(session.user.entity_id || '')
+
+    const entityName =
+        entity?.entity_type === 'national' ? 'All Entities' :
+        entity?.entity_type === 'department' ? entity.department_name :
+        entity?.entity_type === 'agency' ? entity.agency_name :
+        entity?.entity_type === 'operating_unit' ? entity.operating_unit_name :
+        null
+
+    return {
+        ...session,
+        user_entity: {
+            entity_type: entity?.entity_type,
+            entity_name: entityName,
+        }
+    }
+}
+
+export async function signup(state: UserFormState, formData: FormData): Promise<UserFormState> {
+    // Validate form fields
+    const name = formData.get('name') as string
+    const email = formData.get('email') as string
+    const password = formData.get('password') as string
+    const position = formData.get('position') as string
+    const entity_id = formData.get('entity_id') as string
+
+    const submittedValues = { name, email, position, entity_id }
+
+    const validatedFields = SignupFormSchema.safeParse({ name, email, password, position })
+
+    if (!validatedFields.success) {
+        return {
+            ...z.flattenError(validatedFields.error),
+            values: submittedValues
+        }
+    }
+
+    const response = await auth.api.signUpEmail({
+        body: {
+            email: email,
+            password: password,
+            name: name,
+            entity_id: entity_id,
+            position: position
+        },
+        asResponse: true
+    })
+
+    if (response.status !== 200) {
+        return {
+            formErrors: [ response.statusText ],
+            values: submittedValues
+        }
+    }
+
+    // Redirect to login page
+    redirect('/login')
+}
+
+export async function logout() {
+    await auth.api.signOut({
+        headers: await headers() 
+    })
+
+    redirect('/login')
 }

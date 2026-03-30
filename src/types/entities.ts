@@ -13,7 +13,6 @@ export interface EntitiesTable {
 
 export type Entity = Selectable<EntitiesTable>
 export type NewEntity = Insertable<EntitiesTable>
-export type EntityUpdate = Updateable<EntitiesTable>
 
 export interface UserTable {
     id: string
@@ -31,7 +30,6 @@ export interface UserTable {
 }
 
 export type User = Selectable<UserTable>
-export type NewUser = Insertable<UserTable>
 export type UserUpdate = Updateable<UserTable>
 export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency';
 export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve';
@@ -75,6 +73,7 @@ export interface VerificationTable {
 export interface DepartmentsTable {
     id: string
     name: string
+    abbr: string
     uacs_code: string
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
@@ -88,6 +87,7 @@ export interface AgenciesTable {
     id: string
     department_id: string | null
     name: string
+    abbr: string | null
     type: 'bureau' | 'attached_agency'
     uacs_code: string
     created_at: Generated<Date>
@@ -97,6 +97,34 @@ export interface AgenciesTable {
 export type Agency = Selectable<AgenciesTable>
 export type NewAgency = Insertable<AgenciesTable>
 export type AgencyUpdate = Updateable<AgenciesTable>
+export const AgencyTypes = ['bureau', 'attached_agency']
+
+export interface OperatingUnitsTable {
+    id: string
+    agency_id: string
+    name: string
+    abbr: string | null
+    uacs_code: string
+    created_at: Generated<Date>
+    updated_at: ColumnType<Date, never, Date>
+}
+
+export type OperatingUnit = Selectable<OperatingUnitsTable>
+export type NewOperatingUnit = Insertable<OperatingUnitsTable>
+export type OperatingUnitUpdate = Updateable<OperatingUnitsTable>
+
+export type EntitySegments = {
+    entity_id: string
+    entity_type: string
+    department_id: string | null
+    department_name: string | null
+    department_abbr: string | null
+    agency_id: string | null
+    agency_name: string | null
+    agency_abbr: string | null
+    operating_unit_id: string | null
+    operating_unit_name: string | null
+}
 
 export type UserEntity = {
     user_id: string
