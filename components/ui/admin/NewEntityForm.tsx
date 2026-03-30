@@ -41,6 +41,12 @@ const entityUacsCodePlaceholders: Record<string, string> = {
     operating_unit: "01",
 }
 
+const entityAbbrPlaceholders: Record<string, string> = {
+    department: "DBM",
+    agency: "PhilFIDA",
+    operating_unit: "CO",
+}
+
 export function NewEntityForm({ canCreate, departments, agencies }: Props) {
     const [state, action, pending] = useActionState(createNewEntity, undefined)
     
@@ -109,12 +115,19 @@ export function NewEntityForm({ canCreate, departments, agencies }: Props) {
             {entityType && (
                 <div key={entityType} className="space-y-6 animate-in fade-in slide-in-from-top-2">
                     
-                    {/* Name & UACS Inputs ... (Keep these exactly the same as your code) */}
+                    {/* Name, Abbreviation, UACS Inputs */}
                     <div className="space-y-2">
                         <label htmlFor="name" className="font-medium">Name</label>
                         <input id="name" name="name" defaultValue={state?.values?.name ?? ''} className="border border-border px-3 py-2 my-1 w-full rounded bg-background" placeholder={entityNamePlaceholders[entityType]} required autoComplete="off" />
                         {state?.fieldErrors?.name && (
                             <p className="text-red-500 text-sm italic">{state.fieldErrors.name[0]}</p>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        <label htmlFor="abbr" className="font-medium">Abbreviation</label>
+                        <input id="abbr" name="abbr" defaultValue={state?.values?.abbr ?? ''} className="border border-border px-3 py-2 my-1 w-full rounded bg-background" placeholder={entityAbbrPlaceholders[entityType]} autoComplete="off" />
+                        {state?.fieldErrors?.abbr && (
+                            <p className="text-red-500 text-sm italic">{state.fieldErrors.abbr[0]}</p>
                         )}
                     </div>
                     <div className="space-y-2">

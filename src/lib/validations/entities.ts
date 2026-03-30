@@ -3,7 +3,8 @@ import { AgencyTypes } from '@/src/types/entities'
 
 export const DepartmentSchema = z.object({
     name: z.string().min(1, { error: "Name is required" }),
-    uacs_code: z.coerce.number().min(1, { error: "UACS Code is required" }).max(99, { error: "UACS Code must be between 1 and 99" })
+    uacs_code: z.coerce.number().min(1, { error: "UACS Code is required" }).max(99, { error: "UACS Code must be between 1 and 99" }),
+    abbr: z.string().min(1, { error: "Abbreviation is required" }),
 })
 
 export const AgencySchema = z.object({
@@ -23,6 +24,7 @@ export type NewEntityFormState = {
     formErrors?: string[]
     fieldErrors?: {
         name?: string[]
+        abbr?: string[]
         uacs_code?: string[]
         type?: string[]
         department_id?: string[]
@@ -30,6 +32,7 @@ export type NewEntityFormState = {
     }
     values?: {
         name?: string
+        abbr?: string
         uacs_code?: string
         type?: string
         department_id?: string
@@ -43,6 +46,7 @@ export type EditEntityFormState = {
         entity_id?: string[]
         entity_type?: string[]
         name?: string[]
+        abbr?: string[]
         uacs_code?: string[]
         type?: string[]
         department_id?: string[]
@@ -52,6 +56,7 @@ export type EditEntityFormState = {
         entity_id?: string
         entity_type?: string
         name?: string
+        abbr?: string | null
         uacs_code?: string
         type?: string
         department_id?: string

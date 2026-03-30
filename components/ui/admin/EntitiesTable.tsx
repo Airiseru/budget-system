@@ -19,6 +19,7 @@ type Props = {
 type Row = {
     id: string
     name: string
+    abbr: string
     uacs_code: string
     type: string
     badge: string
@@ -54,6 +55,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
         rows.push({
             id: agency.id,
             name: agency.name,
+            abbr: agency.abbr ? ` (${agency.abbr})` : '',
             uacs_code: agency.uacs_code,
             type: agency.type === 'bureau' ? 'Bureau' : 'Attached Agency',
             badge: 'secondary',
@@ -66,6 +68,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             rows.push({
                 id: ou.id,
                 name: ou.name,
+                abbr: ou.abbr ? ` (${ou.abbr})` : '',
                 uacs_code: ou.uacs_code,
                 type: 'Operating Unit',
                 badge: 'outline',
@@ -82,6 +85,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
         rows.push({
             id: dept.id,
             name: dept.name,
+            abbr: dept.abbr ? ` (${dept.abbr})` : '',
             uacs_code: dept.uacs_code,
             type: 'Department',
             badge: 'default',
@@ -111,6 +115,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
         rows.push({
             id: ou.id,
             name: ou.name,
+            abbr: ou.abbr ? ` (${ou.abbr})` : '',
             uacs_code: ou.uacs_code,
             type: 'Operating Unit',
             badge: 'outline',
@@ -144,7 +149,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                     <TableBody>
                         {rows.map(row => (
                             <TableRow key={row.id}>
-                                <TableCell className="font-medium">{row.name}</TableCell>
+                                <TableCell className="font-medium">{row.name}{row.abbr}</TableCell>
                                 <TableCell className="font-mono text-sm text-muted-foreground">{row.uacs_code}</TableCell>
                                 <TableCell>
                                     <Badge variant={row.badge as 'default' | 'secondary' | 'outline'}>

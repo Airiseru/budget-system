@@ -103,7 +103,7 @@ export async function createAgency(agency: Partial<NewAgency>, department_id: st
         // Create agency
         return await trx.insertInto('agencies')
             .values({ ...(agency as NewAgency), id: new_entity.id, department_id })
-            .returning(['id', 'name', 'uacs_code', 'type'])
+            .returning(['id', 'name', 'abbr', 'uacs_code', 'type'])
             .executeTakeFirstOrThrow()
     })
 }
@@ -134,6 +134,7 @@ export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise
         .select([
             'operating_units.id as id',
             'operating_units.name as name',
+            'operating_units.abbr as abbr',
             'operating_units.uacs_code as uacs_code'
         ])
         .where('agency_id', '=', agency_id)
@@ -151,7 +152,7 @@ export async function createOperatingUnit(operating_unit: Partial<NewOperatingUn
         // Create operating unit
         return await trx.insertInto('operating_units')
             .values({ ...(operating_unit as NewOperatingUnit), id: new_entity.id, agency_id })
-            .returning(['id', 'name', 'uacs_code'])
+            .returning(['id', 'name', 'abbr', 'uacs_code'])
             .executeTakeFirstOrThrow()
     })
 }
@@ -176,6 +177,7 @@ export async function getAllEntitySegments() {
             'entities.id as id',
             'entities.type as entity_type',
             'departments.name as name',
+            'departments.abbr as abbr',
             'departments.uacs_code as uacs_code',
         ])
         .execute()
@@ -187,6 +189,7 @@ export async function getAllEntitySegments() {
             'entities.id as id',
             'entities.type as entity_type',
             'agencies.name as name',
+            'agencies.abbr as abbr',
             'agencies.uacs_code as uacs_code',
             'agencies.type as type',
             'agencies.department_id as department_id',
@@ -200,6 +203,7 @@ export async function getAllEntitySegments() {
             'entities.id as id',
             'entities.type as entity_type',
             'operating_units.name as name',
+            'operating_units.abbr as abbr',
             'operating_units.uacs_code as uacs_code',
             'operating_units.agency_id as agency_id',
         ])
@@ -218,6 +222,7 @@ export async function getEntitySegmentsByDepartment(departmentId: string) {
             'agencies.name as name',
             'agencies.department_id as department_id',
             'agencies.uacs_code as uacs_code',
+            'agencies.abbr as abbr',
             'agencies.type as type',
         ])
         .where('department_id', '=', departmentId)
@@ -234,6 +239,7 @@ export async function getEntitySegmentsByDepartment(departmentId: string) {
                 'entities.type as entity_type',
                 'operating_units.name as name',
                 'operating_units.agency_id',
+                'operating_units.abbr as abbr',
                 'operating_units.uacs_code as uacs_code',
             ])
             .where('operating_units.agency_id', 'in', agencyIds)
@@ -268,8 +274,8 @@ export async function getFullEntityById(
                     'operating_units.id as id',
                     'operating_units.name as name',
                     'operating_units.uacs_code as uacs_code',
+                    'operating_units.abbr as abbr',
                     'operating_units.agency_id as agency_id',
-                    // 4. Grab the department_id directly from the agency record
                     'agencies.department_id as department_id', 
                 ])
                 .executeTakeFirst()
@@ -343,14 +349,17 @@ export async function getEntityOfUser(entityId: string) {
             // department fields
             'departments.id as department_id',
             'departments.name as department_name',
+            'departments.abbr as department_abbr',
             'departments.uacs_code as department_uacs_code',
             // agency fields
             'agencies.id as agency_id',
             'agencies.name as agency_name',
+            'agencies.abbr as agency_abbr',
             'agencies.department_id as parent_department_id',
             // operating unit fields
             'operating_units.id as operating_unit_id',
             'operating_units.name as operating_unit_name',
+            'operating_units.abbr as operating_unit_abbr',
             'operating_units.agency_id as parent_agency_id',
         ])
         .where('entities.id', '=', entityId)

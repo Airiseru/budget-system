@@ -61,6 +61,7 @@ export async function createNewEntity(
 
     const entityType = formData.get('entity_type') as string
     const name = formData.get('name') as string
+    const abbr = formData.get('abbr') as string
     const uacs_code = formData.get('uacs_code') as string
     const type = formData.get('type') as string
     
@@ -70,7 +71,7 @@ export async function createNewEntity(
     
     const agency_id = formData.get('agency_id') as string
 
-    const values = { name, uacs_code, type, department_id: department_id ?? undefined, agency_id }
+    const values = { name, abbr, uacs_code, type, department_id: department_id ?? undefined, agency_id }
 
     const userEntityType = session.user_entity.entity_type
     const userEntityId = session.user.entity_id
@@ -84,14 +85,14 @@ export async function createNewEntity(
 
     try {
         if (entityType === 'department') {
-            const validatedFields = DepartmentSchema.safeParse({ name, uacs_code })
+            const validatedFields = DepartmentSchema.safeParse({ name, uacs_code, abbr })
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, uacs_code }
+                    values: { name, abbr, uacs_code }
                 }
             }
-            await EntityRepository.createDepartment({ name, uacs_code })
+            await EntityRepository.createDepartment({ name, uacs_code, abbr })
         }
 
         else if (entityType === 'agency') {
@@ -107,11 +108,11 @@ export async function createNewEntity(
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, uacs_code, type, department_id: finalDeptId ?? undefined }
+                    values: { name, abbr, uacs_code, type, department_id: finalDeptId ?? undefined }
                 }
             }
             await EntityRepository.createAgency(
-                { name, uacs_code, type: type as 'bureau' | 'attached_agency' },
+                { name, abbr, uacs_code, type: type as 'bureau' | 'attached_agency' },
                 finalDeptId || null
             )
         }
@@ -124,12 +125,12 @@ export async function createNewEntity(
                         ? userEntityId // Forces their own agency ID
                         : undefined
             
-            const validatedFields = OperatingUnitSchema.safeParse({ name, uacs_code, agency_id: finalAgencyid })
+            const validatedFields = OperatingUnitSchema.safeParse({ name, abbr, uacs_code, agency_id: finalAgencyid })
 
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, uacs_code, agency_id: finalAgencyid ?? undefined }
+                    values: { name, abbr, uacs_code, agency_id: finalAgencyid ?? undefined }
                 }
             }
             await EntityRepository.createOperatingUnit({ name, uacs_code }, finalAgencyid || "")
@@ -157,6 +158,7 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
     const entity_id = formData.get('entity_id') as string
     const entity_type = formData.get('entity_type') as string 
     const name = formData.get('name') as string
+    const abbr = formData.get('abbr') as string
     const uacs_code = formData.get('uacs_code') as string
     const type = formData.get('type') as string 
     
@@ -169,7 +171,8 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
     const values = { 
         entity_id, 
         entity_type, 
-        name, 
+        name,
+        abbr,
         uacs_code, 
         type, 
         department_id: department_id ?? undefined, 
@@ -189,14 +192,14 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
     
     try {
         if (entity_type === 'department') {
-            const validatedFields = DepartmentSchema.safeParse({ name, uacs_code })
+            const validatedFields = DepartmentSchema.safeParse({ name, uacs_code, abbr })
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, uacs_code }
+                    values: { name, abbr, uacs_code }
                 }
             }
-            await EntityRepository.updateDepartment(entity_id, { name, uacs_code })
+            await EntityRepository.updateDepartment(entity_id, { name, abbr, uacs_code })
         } 
         else if (entity_type === 'agency') {
             const finalDeptId = 
@@ -211,12 +214,13 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, uacs_code, type, department_id: finalDeptId ?? undefined }
+                    values: { name, abbr, uacs_code, type, department_id: finalDeptId ?? undefined }
                 }
             }
 
             await EntityRepository.updateAgency(entity_id, { 
-                name, 
+                name,
+                abbr,
                 uacs_code, 
                 type: type as 'bureau' | 'attached_agency',
                 department_id: finalDeptId || null 
@@ -235,12 +239,13 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, uacs_code, agency_id: finalAgencyid ?? undefined }
+                    values: { name, abbr, uacs_code, agency_id: finalAgencyid ?? undefined }
                 }
             }
 
             await EntityRepository.updateOperatingUnit(entity_id, { 
                 name, 
+                abbr,
                 uacs_code, 
                 agency_id: finalAgencyid || undefined
             })

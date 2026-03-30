@@ -73,6 +73,7 @@ export interface VerificationTable {
 export interface DepartmentsTable {
     id: string
     name: string
+    abbr: string
     uacs_code: string
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
@@ -86,6 +87,7 @@ export interface AgenciesTable {
     id: string
     department_id: string | null
     name: string
+    abbr: string | null
     type: 'bureau' | 'attached_agency'
     uacs_code: string
     created_at: Generated<Date>
@@ -101,6 +103,7 @@ export interface OperatingUnitsTable {
     id: string
     agency_id: string
     name: string
+    abbr: string | null
     uacs_code: string
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
@@ -115,8 +118,10 @@ export type EntitySegments = {
     entity_type: string
     department_id: string | null
     department_name: string | null
+    department_abbr: string | null
     agency_id: string | null
     agency_name: string | null
+    agency_abbr: string | null
     operating_unit_id: string | null
     operating_unit_name: string | null
 }
