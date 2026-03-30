@@ -76,6 +76,20 @@ export function EditEntityForm({ canCreate, entityType, entity, departments, age
             </div>
 
             <div className="space-y-2">
+                <label htmlFor="abbr" className="font-medium">Abbreviation</label>
+                <input
+                    id="abbr"
+                    name="abbr"
+                    defaultValue={state?.values?.abbr ?? entity.abbr}
+                    className="border border-border px-3 py-2 my-1 w-full rounded bg-background"
+                    autoComplete="off"
+                />
+                {state?.fieldErrors?.name && (
+                    <p className="text-red-500 text-sm italic">{state.fieldErrors.name}</p>
+                )}
+            </div>
+
+            <div className="space-y-2">
                 <label htmlFor="uacs_code" className="font-medium">UACS Code</label>
                 <input
                     id="uacs_code"

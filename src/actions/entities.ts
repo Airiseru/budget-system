@@ -96,7 +96,7 @@ export async function createNewEntity(
         }
 
         else if (entityType === 'agency') {
-            const validatedFields = AgencySchema.safeParse({ name, uacs_code, type, department_id })
+            const validatedFields = AgencySchema.safeParse({ name, abbr, uacs_code, type, department_id })
 
             const finalDeptId = 
                 (userEntityType === "national" || !userEntityType) // National Admin
@@ -209,7 +209,7 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
                         ? userEntityId // Forces their own department ID
                         : undefined
 
-            const validatedFields = AgencySchema.safeParse({ name, uacs_code, type, finalDeptId })
+            const validatedFields = AgencySchema.safeParse({ name, abbr, uacs_code, type, finalDeptId })
 
             if (!validatedFields.success) {
                 return {
@@ -234,7 +234,7 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
                         ? userEntityId // Forces their own agency ID
                         : undefined
             
-            const validatedFields = OperatingUnitSchema.safeParse({ name, uacs_code, agency_id: finalAgencyid })
+            const validatedFields = OperatingUnitSchema.safeParse({ name, abbr, uacs_code, agency_id: finalAgencyid })
 
             if (!validatedFields.success) {
                 return {
