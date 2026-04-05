@@ -6,16 +6,20 @@ import { Pap, NewPap } from "@/src/types/pap"
 
 interface PapFormProps {
     pap?: Pap
+    entityId: string;  
+    entityName: string; 
 }
 
-export default function PapForm({ pap }: PapFormProps) {
+export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
     const router = useRouter()
     const isEditing = !!pap
 
     const [formData, setFormData] = useState<NewPap>({
-        entity_id: pap?.entity_id || '',
+        // If editing, use existing. If new, use the session's entityId automatically.
+        entity_id: pap?.entity_id || entityId,
         org_outcome_id: pap?.org_outcome_id || '',
         pip_code: pap?.pip_code || '',
+        tier: pap?.tier || 1,
         category: pap?.category || 'local',
         title: pap?.title || '',
         description: pap?.description || '',
@@ -68,6 +72,10 @@ export default function PapForm({ pap }: PapFormProps) {
 
     return (
         <div className="max-w-lg mx-auto mt-8">
+            <div className="mb-6 p-4 bg-gray-50 border rounded-lg shadow-sm">
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Agency Context</span>
+                <p className="text-md font-semibold text-gray-700">{entityName}</p>
+            </div>
             <h1 className="text-2xl font-bold mb-6">
                 {isEditing ? 'Edit PAP' : 'Create PAP'}
             </h1>
@@ -80,27 +88,15 @@ export default function PapForm({ pap }: PapFormProps) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 {/* TURN INTO SELECT COMPONENT */}
-                {isEditing ? (
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Entity ID</label>
-                        <p>{formData.entity_id}</p>
-                    </div>
-                ) : (
-                    <div>
-                        <label className="block text-sm font-medium mb-1">Entity ID</label>
-                        <input
-                            name="entity_id"
-                            type="text"
-                            value={formData.entity_id}
-                            onChange={handleChange}
-                            placeholder="Entity ID"
-                            className="border p-2 w-full rounded"
-                            required
-                            disabled={isLoading}
-                        />
-                    </div>
-                )
-                }
+                <div>
+                    <label className="block text-sm font-medium mb-1 text-gray-600">Entity ID (Locked)</label>
+                    <input
+                        type="text"
+                        value={formData.entity_id}
+                        disabled
+                        className="bg-gray-100 border p-2 w-full rounded text-gray-500 cursor-not-allowed"
+                    />
+                </div>
 
                 <div>
                     <label className="block text-sm font-medium mb-1">Organizational Outcome</label>
@@ -114,6 +110,24 @@ export default function PapForm({ pap }: PapFormProps) {
                         required
                         disabled={isLoading}
                     />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Tier</label>
+                    <select
+                        name="tier"
+                        value={formData.tier}
+                        onChange={(e) => {
+                            const val = Number(e.target.value) as 1 | 2; // Cast the type here
+                            setFormData(prev => ({ ...prev, tier: val }));
+                        }}
+                        className="border p-2 w-full rounded bg-white"
+                        required
+                        disabled={isLoading}
+                        >
+                        <option value={1}>Tier 1 (Ongoing PAPs)</option>
+                        <option value={2}>Tier 2 (New Proposals)</option>
+                    </select>
                 </div>
 
                 <div>

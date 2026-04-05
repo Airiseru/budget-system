@@ -9,7 +9,6 @@ import {
 export interface FormTable {
     id: Generated<string>
     entity_id: string
-    pap_id: string
     type: string
     codename: string
     auth_status: string | null
@@ -20,3 +19,10 @@ export interface FormTable {
 export type Form = Selectable<FormTable>
 export type NewForm = Insertable<FormTable>
 export type FormUpdate = Updateable<FormTable>
+
+export interface FormPapsTable {
+  form_id: string;
+  pap_id: string;
+}
+
+export type NewFormPap = Insertable<FormPapsTable>;

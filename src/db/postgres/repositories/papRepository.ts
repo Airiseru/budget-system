@@ -36,6 +36,20 @@ export async function getPap(criteria: Partial<Pap>): Promise<Pap[]> {
     return await query.selectAll().execute()
 }
 
+export async function getFormsByPapId(papId: string) {
+    return await db
+        .selectFrom('forms')
+        .innerJoin('form_paps', 'forms.id', 'form_paps.form_id')
+        .where('form_paps.pap_id', '=', papId)
+        .select([
+            'forms.id', 
+            'forms.type', 
+            'forms.auth_status', 
+            'forms.created_at'
+        ])
+        .execute();
+}
+
 // UPDATE
 export async function updatePap(id: string, updateWith: PapUpdate): Promise<Pap | null> {
     const result = await db

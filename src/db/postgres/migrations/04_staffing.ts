@@ -6,7 +6,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .createTable('staffing_summary')
     .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
     .addColumn('form_id', 'uuid', (col) => 
-      col.references('form.id').onDelete('cascade').notNull().unique()
+      col.references('forms.id').onDelete('cascade').notNull().unique()
     )
     .addColumn('fiscal_year', 'integer', (col) => col.notNull())
     .addColumn('digital_signature', 'text', (col) => col.notNull())
@@ -22,7 +22,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     .addColumn('staffing_summary_id', 'uuid', (col) => 
       col.references('staffing_summary.id').onDelete('cascade').notNull()
     )
-    .addColumn('pap_id', 'text', (col) => col.notNull())
+    .addColumn('pap_id', 'uuid', (col) => col.references('pap.id').notNull())
     .addColumn('tier', 'integer', (col) => col.notNull())
     .addColumn('staff_type', 'text', (col) => col.notNull())
     .addColumn('organizational_unit', 'text', (col) => col.notNull())

@@ -39,3 +39,7 @@ export interface PositionTable {
 export type Position = Selectable<PositionTable>
 export type NewPosition = Insertable<PositionTable>
 export type PositionUpdate = Updateable<PositionTable>
+
+export interface StaffingSummaryWithPositions extends StaffingSummary {
+    positions: Position[];
+}

@@ -108,11 +108,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     
     // create Forms table
     await db.schema
-        .createTable('form')
+        .createTable('forms')
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
         // Link to the Entity submitting the form
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').notNull())
         .addColumn('type', 'text', (col) => col.notNull()) // e.g., 'staffing', 'bp205'
+        .addColumn('codename', 'text')
         .addColumn('auth_status', 'text', (col) => col.defaultTo('pending'))
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
@@ -148,4 +149,5 @@ export async function down(db: Kysely<any>): Promise<void> {
     await db.schema.dropTable('departments').execute()
     await db.schema.dropTable('agencies').execute()
     await db.schema.dropTable('operating_units').execute()
+    await db.schema.dropTable('forms').execute()
 }

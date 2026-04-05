@@ -19,28 +19,24 @@ export async function GET(request: Request) {
     }
 }
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
     try {
-        const body = await request.json()
+        const body = await req.json();
         
-        // Destructure the payload we're sending from the React frontend
-        const { entityId, papId, summary, positions } = body
+        // Destructure the payload sent by the form
+        const { entityId, summary, positions } = body;
 
-        // Execute the triple-insert transaction in the repository
+        // Ensure you pass 'summary' (which contains fiscal_year) 
+        // to your repository function, not the whole body.
         const result = await StaffingRepository.createStaffingSubmission(
-            entityId,
-            papId,
-            summary,
+            entityId, 
+            summary, // This must contain { fiscal_year, digital_signature }
             positions
-        )
+        );
 
-        console.log(`CREATE STAFFING RESULT: Success for Form ID ${result.formId}`)
-        return NextResponse.json(result, { status: 201 })
+        return Response.json(result);
     } catch (error) {
-        console.error("POST STAFFING ERROR:", error)
-        return NextResponse.json(
-            { error: "Failed to create staffing submission" }, 
-            { status: 500 }
-        )
+        console.error("POST STAFFING ERROR:", error);
+        return Response.json({ error: "Failed to save" }, { status: 500 });
     }
 }
