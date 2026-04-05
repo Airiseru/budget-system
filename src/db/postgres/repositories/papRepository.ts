@@ -3,19 +3,19 @@ import { Pap, NewPap, PapUpdate } from '../../../types/pap'
 
 // READ
 export async function getAllPaps(): Promise<Pap[]> {
-    return await db.selectFrom('pap').selectAll().execute()
+    return await db.selectFrom('paps').selectAll().execute()
 }
 
 export async function getPapById(id: string): Promise<Pap | null> {
-    return await db.selectFrom('pap').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
+    return await db.selectFrom('paps').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
 }
 
 export async function getPapByEntityId(entityId: string): Promise<Pap[]> {
-    return await db.selectFrom('pap').selectAll().where('entity_id', '=', entityId).execute()
+    return await db.selectFrom('paps').selectAll().where('entity_id', '=', entityId).execute()
 }
 
 export async function getPap(criteria: Partial<Pap>): Promise<Pap[]> {
-    let query = db.selectFrom('pap')
+    let query = db.selectFrom('paps')
 
     if (criteria.category) {
         query = query.where('category', '=', criteria.category)
@@ -53,7 +53,7 @@ export async function getFormsByPapId(papId: string) {
 // UPDATE
 export async function updatePap(id: string, updateWith: PapUpdate): Promise<Pap | null> {
     const result = await db
-        .updateTable('pap')
+        .updateTable('paps')
         .set(updateWith)
         .where('id', '=', id)
         .execute()
@@ -67,10 +67,10 @@ export async function updatePap(id: string, updateWith: PapUpdate): Promise<Pap 
 
 // CREATE
 export async function createPap(pap: NewPap): Promise<Pap> {
-    return await db.insertInto('pap').values(pap).returningAll().executeTakeFirstOrThrow()
+    return await db.insertInto('paps').values(pap).returningAll().executeTakeFirstOrThrow()
 }
 
 // DELETE
 export async function deletePap(id: string): Promise<void> {
-    await db.deleteFrom('pap').where('id', '=', id).returningAll().executeTakeFirst()
+    await db.deleteFrom('paps').where('id', '=', id).returningAll().executeTakeFirst()
 }

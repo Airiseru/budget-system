@@ -36,6 +36,29 @@ export async function sessionWithEntity() {
     }
 }
 
+export async function requireVerifiedUser() {
+    const session = await sessionDetails()
+    if (!session || session?.user?.role === 'unverified') {
+        redirect('/login')
+    }
+}
+
+export async function redirectBasedOnRole() {
+    const session = await sessionDetails()
+    if (!session) {
+        redirect('/login')
+    }
+    else if (session.user.role === 'unverified') {
+        redirect('/pending-approval')
+    }
+    else if (session.user.role === 'admin') {
+        redirect('/admin')
+    }
+    else {
+        redirect('/home')
+    }
+}
+
 export async function signup(state: UserFormState, formData: FormData): Promise<UserFormState> {
     // Validate form fields
     const name = formData.get('name') as string

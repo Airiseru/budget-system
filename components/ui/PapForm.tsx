@@ -3,12 +3,26 @@
 import { useState } from 'react'
 import { useRouter } from "next/navigation"
 import { Pap, NewPap } from "@/src/types/pap"
+import {
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 interface PapFormProps {
     pap?: Pap
     entityId: string;  
     entityName: string; 
 }
+
+const tierOptions = [
+    { value: 1, label: 'Tier 1 (Ongoing PAPs)' },
+    { value: 2, label: 'Tier 2 (New Proposals)' },
+]
 
 export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
     const router = useRouter()
@@ -112,22 +126,20 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
                     />
                 </div>
 
-                <div>
-                    <label className="block text-sm font-medium mb-1">Tier</label>
-                    <select
-                        name="tier"
-                        value={formData.tier}
-                        onChange={(e) => {
-                            const val = Number(e.target.value) as 1 | 2; // Cast the type here
-                            setFormData(prev => ({ ...prev, tier: val }));
-                        }}
-                        className="border p-2 w-full rounded bg-white"
-                        required
-                        disabled={isLoading}
-                        >
-                        <option value={1}>Tier 1 (Ongoing PAPs)</option>
-                        <option value={2}>Tier 2 (New Proposals)</option>
-                    </select>
+                <div className='space-y-2'>
+                    <label id='tier' className="block text-sm font-medium mb-1">Tier</label>
+                    <input id='tier' type="hidden" name="tier" value={formData.tier} required />
+                    <Select value={formData.tier} onValueChange={(value) => setFormData(prev => ({ ...prev, tier: Number(value) as 1 | 2 }))}>
+                        <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base">
+                            <SelectValue placeholder="Select Tier">
+                                { formData.tier ? tierOptions[formData.tier - 1].label : 'Select Tier' }
+                            </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="1">Tier 1 (Ongoing PAPs)</SelectItem>
+                            <SelectItem value="2">Tier 2 (New Proposals)</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
 
                 <div>

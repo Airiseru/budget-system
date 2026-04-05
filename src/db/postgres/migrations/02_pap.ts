@@ -3,7 +3,7 @@ import { Kysely, sql } from "kysely";
 export async function up(db: Kysely<any>): Promise<void> {
     // Create Pap Table
     await db.schema
-        .createTable('pap')
+        .createTable('paps')
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').onDelete('cascade').notNull())
         .addColumn('org_outcome_id', 'varchar', (col) => col.notNull())
@@ -24,11 +24,11 @@ export async function up(db: Kysely<any>): Promise<void> {
         .execute()
 
     // Create B-tree index for entity_id
-    await db.schema.createIndex('idx_pap_entity_id').on('pap').column('entity_id').execute()
+    await db.schema.createIndex('idx_pap_entity_id').on('paps').column('entity_id').execute()
 
     // Create GIN index for full text search on title, description, and purpose
     await sql`
-        CREATE INDEX idx_pap_search ON pap USING GIN(
+        CREATE INDEX idx_pap_search ON paps USING GIN(
             to_tsvector('english',
                 COALESCE(title, '') || ' ' ||
                 COALESCE(description, '') || ' ' ||
@@ -44,5 +44,5 @@ export async function down(db: Kysely<any>): Promise<void> {
     await db.schema.dropIndex('idx_pap_entity_id').execute()
 
     // Drop tables
-    await db.schema.dropTable('pap').execute()
+    await db.schema.dropTable('paps').execute()
 }

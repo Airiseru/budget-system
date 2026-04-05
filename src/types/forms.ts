@@ -21,8 +21,8 @@ export type NewForm = Insertable<FormTable>
 export type FormUpdate = Updateable<FormTable>
 
 export interface FormPapsTable {
-  form_id: string;
-  pap_id: string;
+    form_id: string;
+    pap_id: string;
 }
 
 export type NewFormPap = Insertable<FormPapsTable>;

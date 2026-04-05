@@ -8,7 +8,7 @@ export async function up(db: Kysely<any>): Promise<void> {
             col.references('forms.id').onDelete('cascade').notNull()
         )
         .addColumn('pap_id', 'uuid', (col) => 
-            col.references('pap.id').onDelete('cascade').notNull()
+            col.references('paps.id').onDelete('cascade').notNull()
         )
         // Create a composite primary key to prevent duplicate links
         .addPrimaryKeyConstraint('form_paps_pk', ['form_id', 'pap_id'])

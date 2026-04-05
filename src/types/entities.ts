@@ -24,7 +24,6 @@ export interface UserTable {
     role: 'unverified' | 'admin' | 'dbm' | 'agency'
     access_level: 'none' | 'view' | 'encode' | 'review' | 'approve'
     entity_id: string | null
-    public_key: string | null
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }

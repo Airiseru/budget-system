@@ -35,7 +35,7 @@ export default async function StaffingPage() {
                             </Link>
                         </ButtonGroup>
                         <ButtonGroup>
-                            <Link href="/staffing/new">
+                            <Link href="/forms/staff/new">
                                 <Button variant="outline">Create New Staffing Form</Button>
                             </Link>
                         </ButtonGroup>
@@ -55,7 +55,7 @@ export default async function StaffingPage() {
                         </Link>
                     </ButtonGroup>
                     <ButtonGroup>
-                        <Link href="/staffing/new">
+                        <Link href="/forms/staff/new">
                             <Button variant="outline">Create New Staffing Form</Button>
                         </Link>
                     </ButtonGroup>
@@ -64,7 +64,7 @@ export default async function StaffingPage() {
                 <h1 className="text-2xl font-bold mb-6">Staffing Submissions</h1>
                 <div className="grid gap-4">
                     {data.map((summary) => (
-                        <Link href={`/staffing/${summary.id}`} key={summary.id}>
+                        <Link href={`/forms/staff/${summary.id}`} key={summary.id}>
                             <div className="border rounded-lg p-4 hover:bg-accent transition-colors">
                                 <div className="flex justify-between items-center">
                                     <h2 className="font-bold text-lg">FY {summary.fiscal_year} Staffing Plan</h2>

@@ -28,6 +28,7 @@ export const config = {
     matcher: [
         /* Match all request paths */
         '/paps/:path*',
+        '/forms/:path*',
         '/home/:path*',
         '/admin/:path*',
     ],

@@ -42,13 +42,8 @@ export const auth = betterAuth({
             },
             entity_id: {
                 type: "string",
-                required: false,
+                required: true,
                 input: true
-            },
-            public_key: {
-                type: "string",
-                required: false,
-                input: false
             }
         },
     },

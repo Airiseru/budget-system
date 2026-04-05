@@ -8,7 +8,7 @@ async function injectTiers(
 ): Promise<NewPosition[]> {
     // 1. Fetch PAPs with explicit typing
     const paps = await trx
-        .selectFrom('pap')
+        .selectFrom('paps')
         .select(['id', 'tier'])
         .execute();
     
@@ -44,7 +44,7 @@ export async function createStaffingSubmission(
             .executeTakeFirstOrThrow();
 
         // 2. Create Summary
-        const summary = await trx.insertInto('staffing_summary')
+        const summary = await trx.insertInto('staffing_summaries')
             .values({
                 form_id: form.id,
                 fiscal_year: summaryData.fiscal_year,
@@ -63,7 +63,7 @@ export async function createStaffingSubmission(
                 staffing_summary_id: summary.id
             }));
 
-            await trx.insertInto('position')
+            await trx.insertInto('positions')
                 .values(positionRows)
                 .execute();
         }
@@ -93,7 +93,7 @@ export async function updateStaffingSubmission(
 ) {
     return await db.transaction().execute(async (trx) => {
         // 1. Update Header
-        await trx.updateTable('staffing_summary')
+        await trx.updateTable('staffing_summaries')
             .set({
                 fiscal_year: payload.summary.fiscal_year,
                 digital_signature: payload.summary.digital_signature,
@@ -102,7 +102,7 @@ export async function updateStaffingSubmission(
             .execute();
 
         // 2. Delete existing positions
-        await trx.deleteFrom('position')
+        await trx.deleteFrom('positions')
             .where('staffing_summary_id', '=', summaryId)
             .execute();
 
@@ -116,7 +116,7 @@ export async function updateStaffingSubmission(
                 staffing_summary_id: summaryId
             }));
 
-            await trx.insertInto('position')
+            await trx.insertInto('positions')
                 .values(positionRows)
                 .execute();
         }
@@ -127,8 +127,8 @@ export async function updateStaffingSubmission(
 
 // READ
 export async function getStaffingByFormId(formId: string) {
-    return await db.selectFrom('staffing_summary')
-        .innerJoin('position', 'position.staffing_summary_id', 'staffing_summary.id')
+    return await db.selectFrom('staffing_summaries')
+        .innerJoin('positions', 'positions.staffing_summary_id', 'staffing_summaries.id')
         .selectAll()
         .where('form_id', '=', formId)
         .execute();
@@ -136,23 +136,23 @@ export async function getStaffingByFormId(formId: string) {
 
 export async function getAllStaffingSummaries() {
     return await db
-        .selectFrom('staffing_summary')
-        .innerJoin('forms', 'forms.id', 'staffing_summary.form_id')
+        .selectFrom('staffing_summaries')
+        .innerJoin('forms', 'forms.id', 'staffing_summaries.form_id')
         .select([
-            'staffing_summary.id',
-            'staffing_summary.fiscal_year',
-            'staffing_summary.digital_signature',
-            'staffing_summary.submission_date',
+            'staffing_summaries.id',
+            'staffing_summaries.fiscal_year',
+            'staffing_summaries.digital_signature',
+            'staffing_summaries.submission_date',
             'forms.auth_status', // Now you can show if it's Pending/Approved
             'forms.entity_id'
         ])
-        .orderBy('staffing_summary.submission_date', 'desc')
+        .orderBy('staffing_summaries.submission_date', 'desc')
         .execute()
 }
 
 export async function getStaffingById(id: string): Promise<StaffingSummaryWithPositions | undefined> {
     const summary = await db
-        .selectFrom('staffing_summary')
+        .selectFrom('staffing_summaries')
         .where('id', '=', id)
         .selectAll()
         .executeTakeFirst();
@@ -160,7 +160,7 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
     if (!summary) return undefined;
 
     const positions = await db
-        .selectFrom('position')
+        .selectFrom('positions')
         .where('staffing_summary_id', '=', id)
         .selectAll()
         .execute();
@@ -176,7 +176,7 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
  */
 export async function deleteStaffingForm(summaryId: string) {
     const summary = await db
-        .selectFrom('staffing_summary')
+        .selectFrom('staffing_summaries')
         .select('form_id')
         .where('id', '=', summaryId)
         .executeTakeFirst();
@@ -191,25 +191,25 @@ export async function deleteStaffingForm(summaryId: string) {
 export async function getStaffingWithPositions(summaryId: string) {
     // 1. Get the Summary Header (Join with form to get auth_status)
     const summary = await db
-        .selectFrom('staffing_summary')
-        .innerJoin('forms', 'forms.id', 'staffing_summary.form_id')
+        .selectFrom('staffing_summaries')
+        .innerJoin('forms', 'forms.id', 'staffing_summaries.form_id')
         .select([
-            'staffing_summary.id',
-            'staffing_summary.form_id',
-            'staffing_summary.fiscal_year',
-            'staffing_summary.digital_signature',
-            'staffing_summary.submission_date',
+            'staffing_summaries.id',
+            'staffing_summaries.form_id',
+            'staffing_summaries.fiscal_year',
+            'staffing_summaries.digital_signature',
+            'staffing_summaries.submission_date',
             'forms.auth_status',
             'forms.entity_id',
         ])
-        .where('staffing_summary.id', '=', summaryId)
+        .where('staffing_summaries.id', '=', summaryId)
         .executeTakeFirst();
 
     if (!summary) return null;
 
     // 2. Get all the Position rows for this specific summary
     const positions = await db
-        .selectFrom('position')
+        .selectFrom('positions')
         .selectAll()
         .where('staffing_summary_id', '=', summaryId)
         .execute();

@@ -121,7 +121,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                 const data = await response.json()
                 router.refresh()
                 const targetId = data.formId || staff?.id;
-                router.push(targetId ? `/staff/${targetId}` : '/staff');
+                router.push(targetId ? `/forms/staff/${targetId}` : '/forms/staff');
             } else {
                 const errData = await response.json()
                 setError(errData.error || 'Something went wrong')
@@ -499,7 +499,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
                         <button
                             type="button"
-                            onClick={() => router.push('/staff')}
+                            onClick={() => router.push('/forms/staff')}
                             className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition-all"
                         >
                             Cancel

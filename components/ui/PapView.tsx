@@ -84,7 +84,7 @@ export default function PapView({ pap, relatedForms }: { pap: Pap, relatedForms:
                                 {relatedForms.map((form) => (
                                     <Link 
                                         key={form.id} 
-                                        href={`/staff/${form.id}`}
+                                        href={`/forms/staff/${form.id}`}
                                         className="group block p-4 border rounded-lg hover:border-blue-300 hover:bg-blue-50/30 transition-all"
                                     >
                                         <div className="flex justify-between items-center">
