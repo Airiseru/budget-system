@@ -11,6 +11,7 @@ export interface PapTable {
     entity_id: string
     org_outcome_id: string
     pip_code: string | null
+    tier: 1 | 2
     category: 'local' | 'foreign'
     title: string
     description: string | null

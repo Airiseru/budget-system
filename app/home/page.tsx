@@ -22,6 +22,9 @@ export default async function HomePage() {
                 <Button variant="outline">
                     <Link href="/paps/">PAPs</Link>
                 </Button>
+                <Button variant="outline">
+                    <Link href="/staffing/">Form 204 (Staffing)</Link>
+                </Button>
                 <LogoutButton></LogoutButton>
                 <HomeButton url="/home"></HomeButton>
             </div>
