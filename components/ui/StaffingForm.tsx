@@ -31,7 +31,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                 salary_grade: "", 
                 total_salary: 0,
                 // ADD THESE DEFAULTS:
-                staff_type: "Permanent", 
+                staff_type: "Casual", 
                 organizational_unit: "Main Office",
                 months_employed: 12
             }

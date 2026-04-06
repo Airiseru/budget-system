@@ -12,7 +12,7 @@ export default async function HomePage() {
         return redirect('/login')
     }
     else if (session.user.role === 'unverified') {
-        console.log('Please approach your agency representative to verify your account.')
+        return redirect('/pending-approval')
     }
     
     return (
@@ -24,6 +24,9 @@ export default async function HomePage() {
                 </Button>
                 <Button variant="outline">
                     <Link href="/forms/staff/">Form 204 (Staffing)</Link>
+                </Button>
+                <Button variant="outline">
+                    <Link href="/home/settings/">Settings</Link>
                 </Button>
                 <LogoutButton></LogoutButton>
                 <HomeButton url="/home"></HomeButton>

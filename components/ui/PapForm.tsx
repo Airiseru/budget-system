@@ -6,9 +6,7 @@ import { Pap, NewPap } from "@/src/types/pap"
 import {
     Select,
     SelectContent,
-    SelectGroup,
     SelectItem,
-    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
@@ -101,7 +99,6 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                {/* TURN INTO SELECT COMPONENT */}
                 <div>
                     <label className="block text-sm font-medium mb-1 text-gray-600">Entity ID (Locked)</label>
                     <input

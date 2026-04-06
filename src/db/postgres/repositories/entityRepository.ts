@@ -304,6 +304,25 @@ export async function getAllUsers(): Promise<Partial<User>[]> {
         .execute()
 }
 
+export async function getUserById(id: string): Promise<User> {
+    return await db
+        .selectFrom('users')
+        .selectAll()
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
+}
+
+export async function getUserPin(id: string): Promise<Partial<User>> {
+    return await db
+        .selectFrom('users')
+        .select([
+            'id',
+            'signing_pin_hash'
+        ])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
+}
+
 export async function getUserByRole(role: UserRole): Promise<User[]> {
     return await db
         .selectFrom('users')

@@ -3,9 +3,10 @@
 import { auth } from "@/src/lib/auth"
 import { headers } from "next/headers"
 import { createEntityRepository } from "../db/factory"
-import { SignupFormSchema, UserFormState, LoginFormSchema } from "../lib/validations/user"
+import { SignupFormSchema, UserFormState } from "../lib/validations/user"
 import { redirect } from "next/navigation"
 import * as z from 'zod'
+import { UserAccessLevels } from "../types/entities"
 
 export async function sessionDetails() {
     return await auth.api.getSession({
@@ -57,6 +58,24 @@ export async function redirectBasedOnRole() {
     else {
         redirect('/home')
     }
+}
+
+export async function requireAccessLevel(level: string) {
+    const session = await sessionDetails()
+    if (!session) redirect('/login')
+    if (session.user.access_level !== level) redirect('/home/settings')
+    return session
+}
+
+export async function requireMinAccessLevel(minimumLevel: string) {
+    const session = await sessionDetails()
+    if (!session) redirect('/login')
+
+    const userLevelIndex = UserAccessLevels.indexOf(session.user.access_level)
+    const requiredLevelIndex = UserAccessLevels.indexOf(minimumLevel)
+
+    if (userLevelIndex < requiredLevelIndex) redirect('/home')
+    return session
 }
 
 export async function signup(state: UserFormState, formData: FormData): Promise<UserFormState> {

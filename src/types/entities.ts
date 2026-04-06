@@ -23,6 +23,7 @@ export interface UserTable {
     position: string
     role: 'unverified' | 'admin' | 'dbm' | 'agency'
     access_level: 'none' | 'view' | 'encode' | 'review' | 'approve'
+    signing_pin_hash: string | null
     entity_id: string | null
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
@@ -32,6 +33,7 @@ export type User = Selectable<UserTable>
 export type UserUpdate = Updateable<UserTable>
 export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency';
 export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve';
+export const UserAccessLevels = ['none', 'view', 'encode', 'review', 'approve'];
 
 export interface SessionTable {
     id: string

@@ -40,11 +40,16 @@ export const auth = betterAuth({
                 defaultValue: 'none',
                 input: false,
             },
+            signing_pin_hash: {
+                type: "string",
+                required: false,
+                input: false
+            },
             entity_id: {
                 type: "string",
                 required: true,
                 input: true
-            }
+            },
         },
     },
     session: {

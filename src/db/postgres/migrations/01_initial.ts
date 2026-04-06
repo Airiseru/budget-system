@@ -3,10 +3,10 @@ import { Kysely, sql } from "kysely";
 export async function up(db: Kysely<any>): Promise<void> {
     // Create Entities Table
     await db.schema
-    .createTable('entities')
-    .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-    .addColumn('type', 'varchar', (col) => col.notNull())
-    .execute()
+        .createTable('entities')
+        .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+        .addColumn('type', 'varchar', (col) => col.notNull())
+        .execute()
 
     // Create User Table
     await db.schema
@@ -18,6 +18,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('position', 'varchar', (col) => col.notNull())
         .addColumn('role', 'varchar', (col) => col.notNull().defaultTo('unverified').check(sql`role IN ('unverified', 'admin', 'dbm', 'agency')`))
         .addColumn('access_level', 'varchar', (col) => col.notNull().defaultTo('none'))
+        .addColumn('signing_pin_hash', 'varchar(60)') // hashed pin for digital signatures
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').onDelete('cascade').notNull())
         .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))

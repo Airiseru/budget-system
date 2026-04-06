@@ -10,7 +10,7 @@ export interface UserKeyTable {
     user_id: string
     public_key: string
     device_name: string
-    status: 'active' | 'revoked'
+    status: 'active' | 'revoked' | 'expired'
     created_at: Generated<Date>
     expires_at: Date
     revoked_at: Date | null
@@ -18,6 +18,9 @@ export interface UserKeyTable {
 
 export type UserKey = Selectable<UserKeyTable>
 export type NewUserKey = Insertable<UserKeyTable>
+export type UserKeyUpdate = Updateable<UserKeyTable>
+export type UserKeyStatus = 'active' | 'revoked' | 'expired'
+export const UserKeyStatuses = ['active', 'revoked', 'expired']
 
 export interface SignatoryTable {
     id: Generated<string>
