@@ -9,9 +9,8 @@ import {
 export interface StaffingTable {
     id: Generated<string>
     // Link to the base 'form' table (the envelope)
-    form_id: string 
+    form_id: string
     fiscal_year: number
-    digital_signature: string
     submission_date: Generated<Date>
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>

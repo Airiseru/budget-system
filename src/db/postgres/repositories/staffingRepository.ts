@@ -38,7 +38,7 @@ export async function createStaffingSubmission(
                 entity_id: entityId, 
                 type: 'staffing',
                 codename: 'Form 204',
-                auth_status: 'pending'
+                auth_status: 'pending_personnel'
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -48,14 +48,12 @@ export async function createStaffingSubmission(
             .values({
                 form_id: form.id,
                 fiscal_year: summaryData.fiscal_year,
-                digital_signature: summaryData.digital_signature,
             })
             .returningAll()
             .executeTakeFirstOrThrow();
 
         // 3. Create Position Rows with Tier Injection
         if (positions.length > 0) {
-            // FIX: We fetch the tiers from the PAP table and attach them here
             const enrichedPositions = await injectTiers(trx, positions);
             
             const positionRows = enrichedPositions.map((p) => ({
@@ -95,8 +93,7 @@ export async function updateStaffingSubmission(
         // 1. Update Header
         await trx.updateTable('staffing_summaries')
             .set({
-                fiscal_year: payload.summary.fiscal_year,
-                digital_signature: payload.summary.digital_signature,
+                fiscal_year: payload.summary.fiscal_year
             })
             .where('id', '=', summaryId)
             .execute();
@@ -134,19 +131,61 @@ export async function getStaffingByFormId(formId: string) {
         .execute();
 }
 
-export async function getAllStaffingSummaries() {
-    return await db
+export async function getAllStaffingSummaries(
+    entityId: string,
+    entityType: string,
+    userEntityId: string
+) {
+    let query = db
         .selectFrom('staffing_summaries')
         .innerJoin('forms', 'forms.id', 'staffing_summaries.form_id')
+        .innerJoin('entities', 'entities.id', 'forms.entity_id')
         .select([
             'staffing_summaries.id',
             'staffing_summaries.fiscal_year',
-            'staffing_summaries.digital_signature',
             'staffing_summaries.submission_date',
-            'forms.auth_status', // Now you can show if it's Pending/Approved
-            'forms.entity_id'
+            'forms.auth_status',
+            'forms.entity_id',
+            'entities.type as entity_type'
         ])
         .orderBy('staffing_summaries.submission_date', 'desc')
+
+    // Return all if national
+    if (entityType === 'national') {
+        return await query.execute()
+    }
+
+    // Department can see forms from their department, agency, or operating unit
+    if (entityType === 'department') {
+        return await query
+            .leftJoin('agencies', 'agencies.id', 'forms.entity_id')
+            .leftJoin('operating_units', 'operating_units.id', 'forms.entity_id')
+            .where(({ eb, or }) => or([
+                eb('forms.entity_id', '=', userEntityId),
+                eb('agencies.department_id', '=', userEntityId),
+                eb('operating_units.agency_id', 'in',
+                    db.selectFrom('agencies')
+                        .where('department_id', '=', userEntityId)
+                        .select('id')
+                ),
+            ]))
+            .execute()
+    }
+
+    // Agency can see forms from their agency or operating unit
+    if (entityType === 'agency') {
+        return await query
+            .leftJoin('operating_units', 'operating_units.id', 'forms.entity_id')
+            .where(({ eb, or }) => or([
+                eb('forms.entity_id', '=', userEntityId),
+                eb('operating_units.agency_id', '=', userEntityId),
+            ]))
+            .execute()
+    }
+
+    // Operating Unit can only see their own
+    return await query.
+        where('forms.entity_id', '=', userEntityId)
         .execute()
 }
 
@@ -169,6 +208,25 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
         ...summary,
         positions
     };
+}
+
+export async function getStaffingWithFormById(id: string) {
+    return await db
+        .selectFrom('staffing_summaries')
+        .innerJoin('forms', 'forms.id', 'staffing_summaries.form_id')
+        .where('staffing_summaries.id', '=', id)
+        .select([
+            'staffing_summaries.id as id',
+            'staffing_summaries.created_at as created_at',
+            'staffing_summaries.updated_at as updated_at',
+            'staffing_summaries.fiscal_year as fiscal_year',
+            'staffing_summaries.submission_date as submission_date',
+            'staffing_summaries.form_id as form_id',
+            'forms.entity_id as entity_id',
+            'forms.type as type',
+            'forms.auth_status as auth_status'
+        ])
+        .executeTakeFirst();
 }
 
 /**
@@ -197,7 +255,6 @@ export async function getStaffingWithPositions(summaryId: string) {
             'staffing_summaries.id',
             'staffing_summaries.form_id',
             'staffing_summaries.fiscal_year',
-            'staffing_summaries.digital_signature',
             'staffing_summaries.submission_date',
             'forms.auth_status',
             'forms.entity_id',

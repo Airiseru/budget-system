@@ -27,7 +27,7 @@ export default function PapDeleteButton({ id }: { id: string }) {
         <button
             onClick={handleDelete}
             disabled={isLoading}
-            className="bg-destructive text-white px-4 py-2 rounded disabled:opacity-50"
+            className="bg-destructive text-white px-4 py-2 rounded-md hover:bg-destructive/90 disabled:opacity-50"
         >
             {isLoading ? 'Deleting...' : 'Delete'}
         </button>

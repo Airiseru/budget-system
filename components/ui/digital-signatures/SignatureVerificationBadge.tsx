@@ -41,23 +41,30 @@ export function SignatureVerificationBadge({ signatoryId, formData, signerName, 
                 {status === 'valid' && <ShieldCheck className="h-4 w-4 text-emerald-600" />}
                 {status === 'invalid' && <ShieldX className="h-4 w-4 text-destructive" />}
             </div>
-            <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
+            
+            <div className="flex-1 min-w-0 flex items-start justify-between gap-4">
+                <div>
                     <p className="text-sm font-medium">{signerName}</p>
-                    <Badge variant={
-                        status === 'loading' ? 'secondary' :
-                        status === 'valid' ? 'default' : 'destructive'
-                    }>
-                        {status === 'loading' ? 'Verifying...' :
-                         status === 'valid' ? 'Valid' : 'Invalid'}
-                    </Badge>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        Signed {new Date(signedAt).toLocaleString()}
+                    </p>
+                    {details && (
+                        <p className="text-xs text-destructive mt-1 font-medium">{details}</p>
+                    )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                    Signed {new Date(signedAt).toLocaleString()}
-                </p>
-                {details && (
-                    <p className="text-xs text-destructive mt-0.5">{details}</p>
-                )}
+
+                <Badge
+                    variant={status === 'invalid' ? 'destructive' : 'secondary'}
+                    className={
+                        status === 'valid' 
+                        ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-none border-transparent' 
+                        : 'shadow-none'
+                    }
+                >
+                    {status === 'loading' ? 'Verifying...' :
+                     status === 'valid' ? 'Valid' : 'Invalid'}
+                </Badge>
+                
             </div>
         </div>
     )

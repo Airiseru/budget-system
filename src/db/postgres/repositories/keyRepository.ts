@@ -66,12 +66,34 @@ export async function getSignatoriesOfUser(user_id: string): Promise<Signatory[]
     return await db.selectFrom('signatories').selectAll().where('user_id', '=', user_id).execute()
 }
 
-export async function getSignatoriesOfForm(form_id: string): Promise<Signatory[]> {
-    return await db.selectFrom('signatories').selectAll().where('form_id', '=', form_id).execute()
+export async function getSignatoriesByFormId(form_id: string) {
+    return await db
+        .selectFrom('signatories')
+        .innerJoin('users', 'users.id', 'signatories.user_id')
+        .select([
+            'signatories.id',
+            'users.name as user_name',
+            'signatories.role',
+            'signatories.created_at'
+        ])
+        .where('signatories.form_id', '=', form_id)
+        .where('signatories.signature', 'is not', null)
+        .orderBy('signatories.created_at', 'asc')
+        .execute()
 }
 
 export async function getSignatoryById(id: string): Promise<Signatory | null> {
     return await db.selectFrom('signatories').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
+}
+
+export async function getSignatoryByFormIdAndUserId(form_id: string, user_id: string): Promise<Signatory | null> {
+    const signatory = await db.selectFrom('signatories').selectAll().where('form_id', '=', form_id).where('user_id', '=', user_id).executeTakeFirst()
+
+    if (!signatory) {
+        return null
+    }
+
+    return signatory
 }
 
 export async function getSignatoryWithKey(signature_id: string) {

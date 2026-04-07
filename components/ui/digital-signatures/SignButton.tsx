@@ -11,12 +11,13 @@ type Props = {
     formId: string
     formData: object
     userId: string
+    signatoryRole: string
     onApproved?: () => void
 }
 
-type Step = 'idle' | 'pin' | 'approving' | 'approved'
+type Step = 'idle' | 'pin' | 'signing' | 'signed'
 
-export function ApproveButton({ formId, formData, userId, onApproved }: Props) {
+export function SignButton({ formId, formData, userId, signatoryRole, onApproved }: Props) {
     const [step, setStep] = useState<Step>('idle')
     const [pin, setPin] = useState('')
     const [showPin, setShowPin] = useState(false)
@@ -30,7 +31,7 @@ export function ApproveButton({ formId, formData, userId, onApproved }: Props) {
             return
         }
 
-        setStep('approving')
+        setStep('signing')
 
         try {
             const privateKey = await getPrivateKey(userId)
@@ -55,10 +56,11 @@ export function ApproveButton({ formId, formData, userId, onApproved }: Props) {
                 formId,
                 activeKey.id,
                 activeKey.public_key,
+                signatoryRole,
                 signature
             )
 
-            setStep('approved')
+            setStep('signed')
             setPin('')
             onApproved?.()
         } catch (err: any) {
@@ -68,18 +70,18 @@ export function ApproveButton({ formId, formData, userId, onApproved }: Props) {
         }
     }
 
-    if (step === 'approved') {
+    if (step === 'signed') {
         return (
             <div className="flex items-center gap-2 text-emerald-600">
                 <ShieldCheck className="h-4 w-4" />
-                <span className="text-sm font-medium">Approved</span>
+                <span className="text-sm font-medium">Signed</span>
             </div>
         )
     }
 
     if (step === 'idle') {
         return (
-            <Button onClick={() => setStep('pin')} className="gap-2">
+            <Button onClick={() => setStep('pin')} className="gap-2 bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80">
                 <PenLine className="h-4 w-4" />
                 Sign Document
             </Button>
@@ -120,15 +122,15 @@ export function ApproveButton({ formId, formData, userId, onApproved }: Props) {
             <div className="flex gap-2">
                 <Button
                     onClick={handleApprove}
-                    disabled={pin.length !== 6 || step === 'approving'}
-                    className="flex-1"
+                    disabled={pin.length !== 6 || step === 'signing'}
+                    className="flex-1 bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80"
                 >
-                    {step === 'approving' ? 'Approving...' : 'Confirm Approval'}
+                    {step === 'signing' ? 'Signing...' : 'Confirm Signature'}
                 </Button>
                 <Button
                     variant="outline"
                     onClick={() => { setStep('idle'); setPin(''); setError(null) }}
-                    disabled={step === 'approving'}
+                    disabled={step === 'signing'}
                 >
                     Cancel
                 </Button>

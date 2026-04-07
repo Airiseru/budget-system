@@ -3,7 +3,7 @@
 import { createEntityRepository } from '@/src/db/factory'
 import { sessionDetails } from './auth'
 import { revalidatePath } from 'next/cache'
-import { UserRole, UserAccessLevel } from '@/src/types/entities'
+import { UserRole, UserAccessLevel, UserWorkflowRole } from '@/src/types/entities'
 import { redirect } from 'next/navigation'
 
 export async function requireAdmin(
@@ -22,11 +22,11 @@ export async function getPendingUsers() {
     return await entityRepository.getPendingUsers()
 }
 
-export async function approveUser(id: string, role: UserRole, access_level: UserAccessLevel) {
+export async function approveUser(id: string, role: UserRole, access_level: UserAccessLevel, workflow_role: UserWorkflowRole | null) {
     await requireAdmin()
     const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
-    await entityRepository.updateUser(id, { role: role, access_level: access_level })
+    await entityRepository.updateUser(id, { role: role, access_level: access_level, workflow_role: workflow_role })
     revalidatePath('/admin/pending')
 }
 

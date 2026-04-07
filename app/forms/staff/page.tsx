@@ -1,28 +1,45 @@
-import { createStaffingRepository } from '@/src/db/factory' // or createStaffingRepository
+import { createStaffingRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ModeToggle } from "@/components/ui/system-toggle"
 import Link from "next/link"
-import { sessionDetails } from '@/src/actions/auth'
+import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
+import { Badge } from '@/components/ui/badge'
 
 export const dynamic = 'force-dynamic';
 
-// If you put the functions in PapRepository, keep this. 
-// If you made a separate one, use createStaffingRepository.
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 
+const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+    draft: 'outline',
+    pending_personnel: 'secondary',
+    pending_budget: 'secondary',
+    pending_agency_head: 'secondary',
+    approved: 'default',
+}
+
+const statusLabels: Record<string, string> = {
+    draft: 'Draft',
+    pending_personnel: 'Pending Personnel Officer',
+    pending_budget: 'Pending Budget Officer',
+    pending_agency_head: 'Pending Agency Head',
+    approved: 'Approved',
+}
+
 export default async function StaffingPage() {
-    const session = await sessionDetails()
+    const session = await sessionWithEntity()
 
     if (!session) {
         return redirect('/login')
     }
 
     try {
-        // You'll need to ensure this method exists in your repository 
-        // to fetch all staffing summaries for the dashboard
-        const data = await StaffingRepo.getAllStaffingSummaries() 
+        const data = await StaffingRepo.getAllStaffingSummaries(
+            session.user.id ?? '',
+            session.user_entity.entity_type ?? '',
+            session.user.entity_id ?? ''
+        ) 
     
         if (data.length === 0) {
             return (
@@ -67,14 +84,24 @@ export default async function StaffingPage() {
                         <Link href={`/forms/staff/${summary.id}`} key={summary.id}>
                             <div className="border rounded-lg p-4 hover:bg-accent transition-colors">
                                 <div className="flex justify-between items-center">
-                                    <h2 className="font-bold text-lg">FY {summary.fiscal_year} Staffing Plan</h2>
-                                    <span className="text-sm text-muted-foreground">
+                                    <div className="flex items-center gap-3">
+                                        <h2 className="font-bold text-lg">FY {summary.fiscal_year} Staffing Plan</h2>
+                                        <Badge 
+                                            variant={statusColors[summary.auth_status ?? 'draft'] ?? 'outline'}
+                                            className={
+                                                summary.auth_status === 'approved' 
+                                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                                                : ''
+                                            }
+                                        >
+                                            {statusLabels[summary.auth_status ?? 'draft'] ?? summary.auth_status}
+                                        </Badge>
+                                    </div>
+
+                                    <span className="text-sm text-muted-foreground shrink-0">
                                         {new Date(summary.submission_date).toLocaleDateString()}
                                     </span>
                                 </div>
-                                <p className="text-sm opacity-80 mt-1">
-                                    Signed by: {summary.digital_signature}
-                                </p>
                             </div>
                         </Link>
                     ))}

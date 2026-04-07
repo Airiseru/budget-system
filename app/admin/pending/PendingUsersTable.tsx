@@ -10,7 +10,7 @@ import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
 import { Check, Trash2 } from 'lucide-react'
-import { UserEntity, UserRole, UserAccessLevel } from '@/src/types/entities'
+import { UserEntity, UserRole, UserAccessLevel, UserWorkflowRole } from '@/src/types/entities'
 
 const roleLabels: Record<string, string> = {
     agency: 'Agency',
@@ -23,6 +23,16 @@ const accessLevelLabels: Record<string, string> = {
     encode: 'Encoder',
     review: 'Reviewer',
     approve: 'Approver',
+}
+
+const workflowRoleLabels: Record<string, string> = {
+    none: 'None / N/A',
+    personnel_officer: 'Personnel Officer',
+    budget_officer: 'Budget Officer',
+    planning_officer: 'Planning Officer',
+    chief_accountant: 'Chief Accountant',
+    office_head: 'Office Head',
+    agency_head: 'Agency Head',
 }
 
 export function PendingUsersTable({ users }: { users: UserEntity[] }) {
@@ -42,6 +52,7 @@ export function PendingUsersTable({ users }: { users: UserEntity[] }) {
                         <TableHead>User Details</TableHead>
                         <TableHead>Position</TableHead>
                         <TableHead>Organization Role</TableHead>
+                        <TableHead>Workflow Role</TableHead>
                         <TableHead>Access Level</TableHead>
                         <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
@@ -59,14 +70,17 @@ export function PendingUsersTable({ users }: { users: UserEntity[] }) {
 function UserApprovalRow({ user }: { user: UserEntity }) {
     const [role, setRole] = useState<string>("")
     const [accessLevel, setAccessLevel] = useState<string>("")
+    const [workflowRole, setWorkflowRole] = useState<string>("")
     const [isLoading, setIsLoading] = useState(false)
 
     async function handleApprove() {
-        if (!role || !accessLevel) return
+        if (!role || !accessLevel || !workflowRole) return
         
         setIsLoading(true)
         try {
-            await approveUser(user.user_id, role as UserRole, accessLevel as UserAccessLevel)
+            const finalWorkflowRole = workflowRole === 'none' ? null : workflowRole
+
+            await approveUser(user.user_id, role as UserRole, accessLevel as UserAccessLevel, finalWorkflowRole as UserWorkflowRole)
         } catch (error) {
             console.error("Failed to approve user", error)
             setIsLoading(false)
@@ -113,6 +127,25 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
             </TableCell>
 
             <TableCell>
+                <Select value={workflowRole} onValueChange={(val) => setWorkflowRole(val || "")} disabled={isLoading}>
+                    <SelectTrigger className="w-[140px]">
+                        <SelectValue placeholder="Select Role">
+                        {workflowRole ? workflowRoleLabels[workflowRole] : 'Select Workflow Role'}
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="none">None / N/A</SelectItem>
+                        <SelectItem value="personnel_officer">Personnel Officer</SelectItem>
+                        <SelectItem value="budget_officer">Budget Officer</SelectItem>
+                        <SelectItem value="planning_officer">Planning Officer</SelectItem>
+                        <SelectItem value="chief_accountant">Chief Accountant</SelectItem>
+                        <SelectItem value="office_head">Office Head</SelectItem>
+                        <SelectItem value="agency_head">Agency Head</SelectItem>
+                    </SelectContent>
+                </Select>
+            </TableCell>
+
+            <TableCell>
                 <Select value={accessLevel} onValueChange={(val) => setAccessLevel(val || "")} disabled={isLoading}>
                     <SelectTrigger className="w-[140px]">
                         <SelectValue placeholder="Select Level">
@@ -143,8 +176,7 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
                     variant="default" 
                     className="gap-1 bg-emerald-600 hover:bg-emerald-700 text-white" 
                     onClick={handleApprove}
-                    // Disable the button until both dropdowns are filled
-                    disabled={!role || !accessLevel || isLoading} 
+                    disabled={!role || !accessLevel || !workflowRole || isLoading} 
                 >
                     <Check className="w-4 h-4" />
                     Approve

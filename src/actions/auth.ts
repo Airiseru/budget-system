@@ -67,15 +67,20 @@ export async function requireAccessLevel(level: string) {
     return session
 }
 
-export async function requireMinAccessLevel(minimumLevel: string) {
+export async function requireMinAccessLevel(minimumLevel: string, returnSession: boolean = false) {
     const session = await sessionDetails()
     if (!session) redirect('/login')
 
     const userLevelIndex = UserAccessLevels.indexOf(session.user.access_level)
     const requiredLevelIndex = UserAccessLevels.indexOf(minimumLevel)
 
-    if (userLevelIndex < requiredLevelIndex) redirect('/home')
-    return session
+    if (userLevelIndex < requiredLevelIndex) {
+        if (returnSession) redirect('/home')
+        else return false
+    }
+    
+    if (returnSession) return session
+    else return true
 }
 
 export async function signup(state: UserFormState, formData: FormData): Promise<UserFormState> {

@@ -1,13 +1,15 @@
 'use server'
 
 import bcrypt from 'bcrypt'
-import { createEntityRepository, createKeyRepository } from '../db/factory'
-import { sessionDetails } from './auth'
+import { createEntityRepository, createKeyRepository, createFormRepository } from '../db/factory'
+import { requireMinAccessLevel, sessionDetails } from './auth'
 import { redirect } from 'next/navigation'
 import { verifySignature } from '../lib/crypto'
+import { getWorkflow, canSign, getNextStatus } from '../lib/workflows'
 
 const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 const keyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
+const formRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export async function setSigningPin(pin: string) {
     const session = await sessionDetails()
@@ -83,11 +85,15 @@ export async function verifyAndSubmitSignature(
     formId: string,
     keyId: string,
     publicKeySnapshot: string,
+    signatoryRole: string,
     signature: string
 ) {
     const session = await sessionDetails()
     if (!session) redirect('/login')
-    if (session.user.access_level !== 'approve') throw new Error('Unauthorized')
+
+    const validAccess = await requireMinAccessLevel('encode', false) as boolean
+
+    if (!validAccess) throw new Error('Unauthorized')
 
     // Verify if PIN is correct
     if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
@@ -98,14 +104,30 @@ export async function verifyAndSubmitSignature(
     if (key.status !== 'active') throw new Error('Key is no longer active')
     if (key.expires_at && key.expires_at < new Date()) throw new Error('Key has expired')
 
+    // Get form's current status
+    const form = await formRepository.getFormAuthStatus(formId)
+
+    // Get correct workflow for form type
+    const workflow = getWorkflow(form.type)
+
+    if (!canSign(form.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? '', signatoryRole, workflow)) {
+        throw new Error('You are not authorized to sign at this stage')
+    }
+
     // Store signature
-    return await keyRepository.createSignatory({
+    const signatory = await keyRepository.createSignatory({
         form_id: formId,
         user_id: session.user.id,
+        role: signatoryRole,
         key_id: keyId,
         public_key_snapshot: publicKeySnapshot,
         signature
     })
+
+    // Update form status
+    await formRepository.updateFormAuthStatus(formId, getNextStatus(form.auth_status ?? '', workflow) ?? '')
+
+    return signatory
 }
 
 export async function verifyFormSignature(signatoryId: string, formData: object) {

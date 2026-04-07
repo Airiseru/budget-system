@@ -17,6 +17,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('email_verified', 'boolean', (col) => col.notNull().defaultTo(false))
         .addColumn('position', 'varchar', (col) => col.notNull())
         .addColumn('role', 'varchar', (col) => col.notNull().defaultTo('unverified').check(sql`role IN ('unverified', 'admin', 'dbm', 'agency')`))
+        .addColumn('workflow_role', 'varchar', (col) => col.check(sql`workflow_role IN ('personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head')`))
         .addColumn('access_level', 'varchar', (col) => col.notNull().defaultTo('none'))
         .addColumn('signing_pin_hash', 'varchar(60)') // hashed pin for digital signatures
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').onDelete('cascade').notNull())
@@ -32,7 +33,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').notNull())
         .addColumn('type', 'text', (col) => col.notNull()) // e.g., 'staffing', 'bp205'
         .addColumn('codename', 'text')
-        .addColumn('auth_status', 'text', (col) => col.defaultTo('pending'))
+        .addColumn('auth_status', 'text', (col) => col.defaultTo('draft'))
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .execute()
@@ -56,6 +57,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
         .addColumn('form_id', 'uuid', col => col.notNull().references('forms.id').onDelete('cascade'))
         .addColumn('user_id', 'varchar', (col) => col.references('users.id').onDelete('cascade').notNull())
+        .addColumn('role', 'varchar', (col) => col.notNull())
         .addColumn('key_id', 'uuid', col => col.notNull().references('user_keys.id'))
         .addColumn('public_key_snapshot', 'text', col => col.notNull())
         .addColumn('signature', 'text', col => col.notNull())
@@ -146,6 +148,7 @@ export async function up(db: Kysely<any>): Promise<void> {
 
     // Create B-tree indexes
     await db.schema.createIndex('idx_entities_id').on('entities').column('id').execute()
+    await db.schema.createIndex('idx_forms_entity_id').on('forms').column('entity_id').execute()
     await db.schema.createIndex('idx_user_keys_user_id').on('user_keys').column('user_id').execute()
     await db.schema.createIndex('idx_user_keys_status').on('user_keys').column('status').execute()
     await db.schema.createIndex('idx_signatories_form_id').on('signatories').column('form_id').execute()
@@ -154,12 +157,12 @@ export async function up(db: Kysely<any>): Promise<void> {
     await db.schema.createIndex('idx_accounts_user_id').on('accounts').column('user_id').execute()
     await db.schema.createIndex('idx_agencies_department_id').on('agencies').column('department_id').execute()
     await db.schema.createIndex('idx_operating_units_agency_id').on('operating_units').column('agency_id').execute()
-    await db.schema.createIndex('idx_forms_entity_id').on('forms').column('entity_id').execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
     // Drop indexes
     await db.schema.dropIndex('idx_entities_id').execute()
+    await db.schema.dropIndex('idx_forms_entity_id').execute()
     await db.schema.dropIndex('idx_user_keys_user_id').execute()
     await db.schema.dropIndex('idx_user_keys_status').execute()
     await db.schema.dropIndex('idx_signatories_form_id').execute()

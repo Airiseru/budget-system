@@ -6,18 +6,18 @@ export const dynamic = 'force-dynamic';
 // Initialize the repository via the factory
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 
-export async function GET(request: Request) {
-    try {
-        // Fetches all summaries (with the auth_status join we added to the repo)
-        const summaries = await StaffingRepository.getAllStaffingSummaries()
+// export async function GET(request: Request) {
+//     try {
+//         // Fetches all summaries (with the auth_status join we added to the repo)
+//         const summaries = await StaffingRepository.getAllStaffingSummaries()
         
-        console.log(`GET STAFFING SUMMARIES RESULT: ${summaries.length} items found`)
-        return NextResponse.json(summaries)
-    } catch (error) {
-        console.error("GET STAFFING ERROR:", error)
-        return NextResponse.json({ error: "Failed to fetch staffing data" }, { status: 500 })
-    }
-}
+//         console.log(`GET STAFFING SUMMARIES RESULT: ${summaries.length} items found`)
+//         return NextResponse.json(summaries)
+//     } catch (error) {
+//         console.error("GET STAFFING ERROR:", error)
+//         return NextResponse.json({ error: "Failed to fetch staffing data" }, { status: 500 })
+//     }
+// }
 
 export async function POST(req: Request) {
     try {

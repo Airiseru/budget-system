@@ -343,6 +343,7 @@ export async function getPendingUsers(): Promise<UserEntity[]> {
             'users.email as user_email',
             'users.position as position',
             'users.role as role',
+            'users.workflow_role as workflow_role',
             'users.access_level as access_level',
             'users.created_at as user_created_at',
             'users.updated_at as user_updated_at',

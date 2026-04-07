@@ -2,12 +2,13 @@ import { sessionDetails } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
 import SettingsNav from '@/components/ui/SettingsNav'
+import { requireMinAccessLevel } from '@/src/actions/auth'
 
 export default async function SettingsPage() {
     const session = await sessionDetails()
     if (!session) redirect('/login')
 
-    const canAccessKeys = session.user.access_level === 'approve'
+    const canAccessKeys = await requireMinAccessLevel('encode', false)
 
     return (
         <main className="m-6 max-w-2xl md:mx-auto md:my-12 space-y-6">
@@ -22,7 +23,7 @@ export default async function SettingsPage() {
                 <div className="w-[73px]" />
             </div>
 
-            <SettingsNav canAccessKeys={canAccessKeys} />
+            <SettingsNav canAccessKeys={canAccessKeys as boolean} />
         </main>
     )
 }

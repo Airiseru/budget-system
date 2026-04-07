@@ -22,7 +22,6 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
     const [formData, setFormData] = useState({
         fiscal_year: staff?.fiscal_year || 2026,
-        digital_signature: staff?.digital_signature || "",
         positions: staff?.positions || [
             { 
                 pap_id: "", 
@@ -102,7 +101,6 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
             entityId: entityId, // This now uses the ID from your Server Action
             summary: {
                 fiscal_year: formData.fiscal_year,
-                digital_signature: formData.digital_signature
             },
             positions: formData.positions
         };
@@ -120,7 +118,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
             if (response.ok) {
                 const data = await response.json()
                 router.refresh()
-                const targetId = data.formId || staff?.id;
+                const targetId = data.summaryId || staff?.id;
                 router.push(targetId ? `/forms/staff/${targetId}` : '/forms/staff');
             } else {
                 const errData = await response.json()
@@ -475,24 +473,11 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
 
                 <div className="pt-4 border-t space-y-4">
-                    <div>
-                        <label className="block text-sm font-semibold mb-1 text-gray-700">Digital Signature</label>
-                        <input
-                            name="digital_signature"
-                            type="text"
-                            value={formData.digital_signature}
-                            onChange={handleHeaderChange}
-                            placeholder="Type full name as signature"
-                            className="border p-2 w-full rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                            required
-                        />
-                    </div>
-
                     <div className="flex gap-3 pt-2">
                         <button
                             type="submit"
                             disabled={isLoading}
-                            className="bg-blue-600 text-white px-6 py-2 rounded-lg font-medium disabled:opacity-50 hover:bg-blue-700 transition-all shadow-sm"
+                            className="bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80 transition-all"
                         >
                             {isLoading ? 'Saving...' : isEditing ? 'Update Summary' : 'Submit Form 204'}
                         </button>
@@ -500,7 +485,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                         <button
                             type="button"
                             onClick={() => router.push('/forms/staff')}
-                            className="bg-gray-100 text-gray-700 px-6 py-2 rounded-lg font-medium hover:bg-gray-200 transition-all"
+                            className="bg-gray-200 text-gray-700 px-4 py-2 rounded disabled:opacity-50 hover:bg-gray-300 transition-all"
                         >
                             Cancel
                         </button>

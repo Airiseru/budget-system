@@ -50,6 +50,11 @@ export const auth = betterAuth({
                 required: true,
                 input: true
             },
+            workflow_role: {
+                type: "string",
+                required: false,
+                input: false
+            }
         },
     },
     session: {

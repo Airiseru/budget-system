@@ -1,4 +1,4 @@
-import { requireAccessLevel } from '@/src/actions/auth'
+import { requireMinAccessLevel } from '@/src/actions/auth'
 import { getUserKeys, hasSigningPin } from '@/src/actions/keys'
 import { DeviceKeyBanner } from '@/components/ui/digital-signatures/DeviceKeyBanner'
 import { DeviceKeysSettings } from '@/components/ui/digital-signatures/DeviceKeysSettings'
@@ -6,7 +6,7 @@ import { SetPin } from '@/components/ui/digital-signatures/setPin'
 import BackButton from '@/components/ui/BackButton'
 
 export default async function KeysSettingsPage() {
-    const session = await requireAccessLevel('approve')
+    const session = await requireMinAccessLevel('encode', true) as { user: { id: string } }
 
     const [keys, hasPinAlready] = await Promise.all([
         getUserKeys(),

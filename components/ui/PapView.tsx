@@ -16,6 +16,7 @@ interface RelatedForm {
     id: string;
     type: string;
     created_at: string | Date;
+    auth_status: string | null;
 }
 
 export default function PapView({ pap, relatedForms }: { pap: Pap, relatedForms: RelatedForm[] }) {
@@ -33,7 +34,7 @@ export default function PapView({ pap, relatedForms }: { pap: Pap, relatedForms:
 
                 <Link 
                     href={`/paps/${pap.id}/edit`}
-                    className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition-all shadow-sm"
+                    className="flex items-center gap-2 bg-secondary-foreground hover:bg-secondary-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
                 >
                     <Pencil size={14} />
                     Edit PAP
@@ -85,16 +86,17 @@ export default function PapView({ pap, relatedForms }: { pap: Pap, relatedForms:
                                     <Link 
                                         key={form.id} 
                                         href={`/forms/staff/${form.id}`}
-                                        className="group block p-4 border rounded-lg hover:border-blue-300 hover:bg-blue-50/30 transition-all"
+                                        className="group block p-4 border rounded-lg hover:border-accent-foreground transition-all"
                                     >
                                         <div className="flex justify-between items-center">
                                             <div>
-                                                <span className="text-sm font-bold text-gray-800 group-hover:text-blue-700">Form {form.type}</span>
-                                                <p className="text-[10px] text-gray-400 font-mono mt-0.5">{form.id}</p>
+                                                <span className="text-sm font-bold group-hover:text-secondary-foreground">Form {form.type}</span>
+                                                <p className="text-[10px] text-gray-400 font-mono mt-0.5">{new Date(form.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
                                             </div>
-                                            <div className="text-right">
+                                            <div className="text-right flex flex-col">
+                                                <p className="text-xs text-gray-400">Status:</p>
                                                 <p className="text-xs font-medium text-gray-600">
-                                                    {new Date(form.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                    {form.auth_status === 'approved' ? 'Approved' : 'Pending'}
                                                 </p>
                                             </div>
                                         </div>

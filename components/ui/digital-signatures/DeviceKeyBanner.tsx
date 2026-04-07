@@ -92,7 +92,7 @@ export function DeviceKeyBanner({ userId }: { userId: string }) {
                     <KeyRound className="h-5 w-5 text-yellow-600 shrink-0" />
                     <div>
                         <p className="font-medium text-yellow-800 dark:text-yellow-200 text-sm">
-                            This device is not registered for approvals.
+                            This device is not registered for digital signatures.
                         </p>
                         <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-0.5">
                             Register this device to sign documents and form submissions.

@@ -26,6 +26,7 @@ export interface SignatoryTable {
     id: Generated<string>
     form_id: string
     user_id: string
+    role: string // prepared by, certified correct, approved by
     key_id: string
     public_key_snapshot: string
     signature: string

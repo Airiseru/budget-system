@@ -1,7 +1,7 @@
 const keySettings = {
     name: 'ECDSA',
     namedCurve: 'P-256',
-    // hash: { name: 'SHA-256' },
+    hash: { name: 'SHA-256' },
 }
 
 export async function generateKeyPair(): Promise<{
@@ -28,7 +28,7 @@ export async function signFormData(
 ): Promise<string> {
     const canonical = JSON.stringify(formData, Object.keys(formData).sort())
     const data = new TextEncoder().encode(canonical)
-
+    
     const signature = await crypto.subtle.sign(
         keySettings,
         privateKey,

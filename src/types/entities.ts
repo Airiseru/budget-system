@@ -14,6 +14,12 @@ export interface EntitiesTable {
 export type Entity = Selectable<EntitiesTable>
 export type NewEntity = Insertable<EntitiesTable>
 
+export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency';
+export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve';
+export const UserAccessLevels = ['none', 'view', 'encode', 'review', 'approve'];
+export type UserWorkflowRole = 'personnel_officer' | 'budget_officer' | 'planning_officer' | 'chief_accountant' | 'office_head' | 'agency_head';
+export const UserWorkflowRoles = ['personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head']
+
 export interface UserTable {
     id: string
     name: string
@@ -21,8 +27,9 @@ export interface UserTable {
     email_verified: boolean
     image: string | null
     position: string
-    role: 'unverified' | 'admin' | 'dbm' | 'agency'
-    access_level: 'none' | 'view' | 'encode' | 'review' | 'approve'
+    role: UserRole
+    workflow_role: UserWorkflowRole | null
+    access_level: UserAccessLevel
     signing_pin_hash: string | null
     entity_id: string | null
     created_at: Generated<Date>
@@ -31,9 +38,6 @@ export interface UserTable {
 
 export type User = Selectable<UserTable>
 export type UserUpdate = Updateable<UserTable>
-export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency';
-export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve';
-export const UserAccessLevels = ['none', 'view', 'encode', 'review', 'approve'];
 
 export interface SessionTable {
     id: string
@@ -133,6 +137,7 @@ export type UserEntity = {
     user_email: string
     position: string
     role: UserRole
+    workflow_role: UserWorkflowRole | null
     access_level: UserAccessLevel
     entity_type: string
     entity_name: string
