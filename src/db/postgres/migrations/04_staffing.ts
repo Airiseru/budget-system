@@ -4,9 +4,9 @@ export async function up(db: Kysely<any>): Promise<void> {
     // Create the Parent Table (Staffing Summary)
     await db.schema
         .createTable('staffing_summaries')
-        .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-        .addColumn('form_id', 'uuid', (col) => 
-            col.references('forms.id').onDelete('cascade').notNull().unique()
+        // ID is the Primary Key AND references forms.id
+        .addColumn('id', 'uuid', (col) => 
+            col.primaryKey().references('forms.id').onDelete('cascade')
         )
         .addColumn('fiscal_year', 'integer', (col) => col.notNull())
         .addColumn('submission_date', 'timestamp', (col) => col.defaultTo(sql`now()`))
@@ -32,17 +32,34 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('total_salary', 'numeric', (col) => col.notNull())
         .execute()
 
+    // Compensations (Child of Positions)
+    await db.schema
+        .createTable('compensations')
+        .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+        .addColumn('position_id', 'uuid', (col) => 
+            col.references('positions.id').onDelete('cascade').notNull()
+        )
+        .addColumn('name', 'text', (col) => col.notNull())
+        .addColumn('amount', 'numeric(12, 2)', (col) => col.notNull().defaultTo(0))
+        .addCheckConstraint('valid_comp_names', 
+            sql`name IN ('PERA', 'RATA', 'Clothing Allowance', 'Mid Year Bonus', 'End Year Bonus', 'Cash Gift', 'PEI', 'RLIP', 'Pag-IBIG', 'ECiP', 'PHIC')`
+        )
+        .execute()
+
     // Create B-tree index
     await db.schema.createIndex('idx_pap_id').on('positions').column('pap_id').execute()
     await db.schema.createIndex('idx_staffing_summary_id').on('positions').column('staffing_summary_id').execute()
+    await db.schema.createIndex('idx_comp_position_id').on('compensations').column('position_id').execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
     // Drop indexes
     await db.schema.dropIndex('idx_pap_id').execute()
     await db.schema.dropIndex('idx_staffing_summary_id').execute()
+    await db.schema.dropIndex('idx_comp_position_id').execute()
 
     // Drop tables
-	await db.schema.dropTable('positions').execute()
-	await db.schema.dropTable('staffing_summaries').execute()
+	await db.schema.dropTable('compensations').execute()
+    await db.schema.dropTable('positions').execute()
+    await db.schema.dropTable('staffing_summaries').execute()
 }

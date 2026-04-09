@@ -16,26 +16,84 @@ interface StaffingSummaryProps {
     entityName: string; // Added
 }
 
+type PositionFormInput = {
+    id?: string;
+    staffing_summary_id?: string;
+    pap_id: string;
+    tier?: number;
+    staff_type: string;
+    organizational_unit: string;
+    position_title: string;
+    salary_grade: string;
+    num_positions: number;
+    months_employed: number;
+    total_salary: number;
+    compensations: {
+        id?: string;
+        staff_id?: string;
+        name: string;
+        amount: number;
+    }[];
+};
+
 export default function StaffForm({ staff, availablePaps, entityId, entityName }: StaffingSummaryProps) {
     const router = useRouter()
     const isEditing = !!staff
 
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<{
+        fiscal_year: number;
+        positions: PositionFormInput[]; 
+    }>({
         fiscal_year: staff?.fiscal_year || 2026,
-        positions: staff?.positions || [
+        positions: staff?.positions.map(p => ({
+            ...p,
+            compensations: p.compensations || [] 
+        })) || [
             { 
                 pap_id: "", 
                 position_title: "", 
                 num_positions: 1, 
                 salary_grade: "", 
                 total_salary: 0,
-                // ADD THESE DEFAULTS:
                 staff_type: "Casual", 
                 organizational_unit: "Main Office",
-                months_employed: 12
+                months_employed: 12,
+                compensations: [] 
             }
         ]
     });
+    // ===========================
+    // COMPENSATION FUNCTIONS
+    const handleCompensationChange = (posIndex: number, compIndex: number, field: string, value: any) => {
+        const updatedPositions = [...formData.positions];
+        const updatedComps = [...updatedPositions[posIndex].compensations];
+        
+        updatedComps[compIndex] = { ...updatedComps[compIndex], [field]: value };
+        updatedPositions[posIndex].compensations = updatedComps;
+        
+        setFormData({ ...formData, positions: updatedPositions });
+    };
+
+    const addCompensation = (posIndex: number) => {
+        const updatedPositions = [...formData.positions];
+        updatedPositions[posIndex].compensations = [
+            ...updatedPositions[posIndex].compensations,
+            { name: "PERA", amount: 2000 } // Default PERA is a nice UX touch
+        ];
+        setFormData({ ...formData, positions: updatedPositions });
+    };
+
+    const removeCompensation = (posIndex: number, compIndex: number) => {
+        const updatedPositions = [...formData.positions];
+        updatedPositions[posIndex].compensations = updatedPositions[posIndex].compensations.filter((_, i) => i !== compIndex);
+        setFormData({ ...formData, positions: updatedPositions });
+    };
+
+    const compensationNames = [
+        'PERA', 'RATA', 'Clothing Allowance', 'Mid Year Bonus', 
+        'End Year Bonus', 'Cash Gift', 'PEI', 'RLIP', 'Pag-IBIG', 'ECiP', 'PHIC'
+    ];
+    // ===========================
 
     // Helper to get the tier of a selected PAP
     const getTierForPap = (papId: string) => {
@@ -72,21 +130,21 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
     };
 
     const addRow = () => {
+        const newRow: PositionFormInput = { 
+            pap_id: "", 
+            position_title: "", 
+            num_positions: 1, 
+            salary_grade: "", 
+            total_salary: 0,
+            staff_type: "Casual", 
+            organizational_unit: "",
+            months_employed: 12,
+            compensations: []
+        };
+
         setFormData({
             ...formData,
-            positions: [
-                ...formData.positions, 
-                { 
-                    pap_id: "", 
-                    position_title: "", 
-                    num_positions: 1, 
-                    salary_grade: "", 
-                    total_salary: 0,
-                    staff_type: "Casual", 
-                    organizational_unit: "",
-                    months_employed: 12 
-                }
-            ]
+            positions: [...formData.positions, newRow]
         });
     };
 
@@ -144,6 +202,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
     );
 
     const renderPositionRow = (pos: any, index: number) => (
+    <>
         <tr key={index} className="hover:bg-gray-50/50">
             <td className="p-2 border-r align-top">
                 <select
@@ -199,7 +258,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                     onChange={(e) => handlePositionChange(index, 'num_positions', parseInt(e.target.value))} 
                 />
             </td>
-            <td className="p-2">
+            <td className="p-2 border-r">
                 <input 
                     placeholder="SG"
                     className="w-full p-1 border rounded"
@@ -208,7 +267,53 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                 />
             </td>
         </tr>
-    );
+        {/* COMPENSATIONS SUB-ROW */}
+        {pos.compensations && pos.compensations.length > 0 && (
+            <tr className="bg-slate-50/50">
+                <td colSpan={5} className="p-2 pb-4 pl-12 border-b grid grid-cols-3">
+                    <div className="flex flex-wrap gap-2">
+                        {pos.compensations.map((comp: any, cIdx: number) => (
+                            <div key={cIdx} className="flex items-center gap-1 bg-white border rounded shadow-sm p-1">
+                                <select 
+                                    className="text-[10px] font-bold border-none bg-transparent focus:ring-0"
+                                    value={comp.name}
+                                    onChange={(e) => handleCompensationChange(index, cIdx, 'name', e.target.value)}
+                                >
+                                    {compensationNames.map(n => <option key={n} value={n}>{n}</option>)}
+                                </select>
+                                <input 
+                                    type="number"
+                                    className="w-20 text-[10px] border-none bg-transparent focus:ring-0 text-right font-mono"
+                                    value={comp.amount}
+                                    onChange={(e) => handleCompensationChange(index, cIdx, 'amount', parseFloat(e.target.value))}
+                                />
+                                <button 
+                                    type="button"
+                                    onClick={() => removeCompensation(index, cIdx)}
+                                    className="text-red-400 hover:text-red-600 px-1"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </td>
+            </tr>
+        )}
+        <tr>
+            <td colSpan={5} className="p-2 align-middle text-center">
+                <button 
+                    type="button"
+                    onClick={() => addCompensation(index)}
+                    className="text-[10px] bg-blue-500 text-white border border-blue-200 px-2 py-1 rounded hover:bg-blue-700 font-bold uppercase w-full h-12"
+                >
+                    + Compensation
+                </button>
+            </td>
+        </tr>
+        
+    </>
+);
 
     const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
@@ -244,16 +349,32 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
     };
 
     const removeRow = (index: number) => {
-        // Don't allow deleting the last row if you want to keep the form active
+        // 1. If it's the last row, reset it to a clean state with the new compensations field
         if (formData.positions.length <= 1) {
             setFormData({
                 ...formData,
-                positions: [{ pap_id: "", position_title: "", num_positions: 1, salary_grade: "", total_salary: 0, staff_type: "Casual", organizational_unit: "", months_employed: 12 }]
+                positions: [{ 
+                    pap_id: "", 
+                    position_title: "", 
+                    num_positions: 1, 
+                    salary_grade: "", 
+                    total_salary: 0, 
+                    staff_type: "Casual", 
+                    organizational_unit: "", 
+                    months_employed: 12,
+                    compensations: []
+                }]
             });
             return;
         }
+
+        // 2. Otherwise, filter out the position at the specific index
         const updatedPositions = formData.positions.filter((_, i) => i !== index);
-        setFormData({ ...formData, positions: updatedPositions });
+        
+        setFormData({ 
+            ...formData, 
+            positions: updatedPositions 
+        });
     };
 
     const renderUnassignedRows = () => {

@@ -1,34 +1,42 @@
 import { db } from '../database'
-import { StaffingSummary, NewStaffingSummary, Position, NewPosition, StaffingSummaryWithPositions } from '../../../types/staffing'
+import { StaffingSummary, NewStaffingSummary, Position, NewPosition, StaffingSummaryWithPositions, NewCompensation } from '../../../types/staffing'
 
-// Helper function to inject tiers into position rows
-async function injectTiers(
+import { jsonArrayFrom } from 'kysely/helpers/postgres'
+
+// Helper function to inject tiers while preserving extra data (like compensations)
+async function injectTiers<T extends { pap_id: string }>(
     trx: any, 
-    positions: Omit<NewPosition, 'staffing_summary_id'>[]
-): Promise<NewPosition[]> {
-    // 1. Fetch PAPs with explicit typing
+    positions: T[]
+): Promise<(T & { tier: number; staffing_summary_id: string })[]> {
+    // 1. Fetch PAPs
     const paps = await trx
         .selectFrom('paps')
         .select(['id', 'tier'])
         .execute();
     
-    // 2. Map through positions with typed parameters
+    // 2. Map through positions
     return positions.map((pos) => {
-        // Find the PAP in the database results
         const parentPap = paps.find((p: { id: string; tier: number }) => p.id === pos.pap_id);
         
         return {
             ...pos,
-            tier: parentPap?.tier || 1, // Ensure tier is present for the DB
-            staffing_summary_id: ""     // Placeholder that gets overwritten in the main function
-        } as NewPosition;
+            tier: parentPap?.tier || 1,
+            staffing_summary_id: "" // Placeholder
+        };
     });
+}
+
+interface PositionInput extends Omit<NewPosition, 'staffing_summary_id'> {
+    compensations?: {
+        name: string;
+        amount: number;
+    }[];
 }
 
 // CREATE
 export async function createStaffingSubmission(
     entityId: string,
-    summaryData: Omit<NewStaffingSummary, 'form_id'>,
+    summaryData: Omit<NewStaffingSummary, 'id' | 'submission_date' | 'created_at' | 'updated_at'>,
     positions: Omit<NewPosition, 'staffing_summary_id'>[]
 ) {
     return await db.transaction().execute(async (trx) => {
@@ -36,8 +44,8 @@ export async function createStaffingSubmission(
         const form = await trx.insertInto('forms')
             .values({ 
                 entity_id: entityId, 
-                type: 'staffing',
-                codename: 'Form 204',
+                type: 'BP',
+                codename: 'bp204',
                 auth_status: 'pending_personnel'
             })
             .returning('id')
@@ -46,27 +54,41 @@ export async function createStaffingSubmission(
         // 2. Create Summary
         const summary = await trx.insertInto('staffing_summaries')
             .values({
-                form_id: form.id,
+                id: form.id,
                 fiscal_year: summaryData.fiscal_year,
             })
             .returningAll()
             .executeTakeFirstOrThrow();
-
-        // 3. Create Position Rows with Tier Injection
+        
+        // 3. Positions
         if (positions.length > 0) {
             const enrichedPositions = await injectTiers(trx, positions);
             
-            const positionRows = enrichedPositions.map((p) => ({
-                ...p,
-                staffing_summary_id: summary.id
-            }));
+            for (const pos of enrichedPositions) {
+                const currentPos = pos as PositionInput;
+                const { compensations, ...positionData } = currentPos;
 
-            await trx.insertInto('positions')
-                .values(positionRows)
-                .execute();
+                const insertedPosition = await trx.insertInto('positions')
+                    .values({
+                        ...positionData,
+                        staffing_summary_id: summary.id
+                    })
+                    .returning('id')
+                    .executeTakeFirstOrThrow();
+
+                if (compensations && compensations.length > 0) {
+                    await trx.insertInto('compensations')
+                        .values(compensations.map(comp => ({
+                            name: comp.name,    
+                            amount: comp.amount, 
+                            staff_id: insertedPosition.id 
+                        })))
+                        .execute();
+                }
+            }
         }
 
-        // 4. Link PAPs to Form (for high-level tracking)
+        // 4. Link PAPs to Form
         const uniquePaps = [...new Set(positions.map(p => p.pap_id))].filter(Boolean);
         if (uniquePaps.length > 0) {
             await trx.insertInto('form_paps')
@@ -127,7 +149,7 @@ export async function getStaffingByFormId(formId: string) {
     return await db.selectFrom('staffing_summaries')
         .innerJoin('positions', 'positions.staffing_summary_id', 'staffing_summaries.id')
         .selectAll()
-        .where('form_id', '=', formId)
+        .where('staffing_summaries.id', '=', formId)
         .execute();
 }
 
@@ -138,7 +160,7 @@ export async function getAllStaffingSummaries(
 ) {
     let query = db
         .selectFrom('staffing_summaries')
-        .innerJoin('forms', 'forms.id', 'staffing_summaries.form_id')
+        .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
         .innerJoin('entities', 'entities.id', 'forms.entity_id')
         .select([
             'staffing_summaries.id',
@@ -213,7 +235,7 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
 export async function getStaffingWithFormById(id: string) {
     return await db
         .selectFrom('staffing_summaries')
-        .innerJoin('forms', 'forms.id', 'staffing_summaries.form_id')
+        .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
         .where('staffing_summaries.id', '=', id)
         .select([
             'staffing_summaries.id as id',
@@ -221,7 +243,6 @@ export async function getStaffingWithFormById(id: string) {
             'staffing_summaries.updated_at as updated_at',
             'staffing_summaries.fiscal_year as fiscal_year',
             'staffing_summaries.submission_date as submission_date',
-            'staffing_summaries.form_id as form_id',
             'forms.entity_id as entity_id',
             'forms.type as type',
             'forms.auth_status as auth_status'
@@ -229,31 +250,40 @@ export async function getStaffingWithFormById(id: string) {
         .executeTakeFirst();
 }
 
+export async function getStaffingDetails(formId: string) {
+    return await db.selectFrom('positions')
+        .where('staffing_summary_id', '=', formId)
+        .select((eb) => [
+            'id',
+            'position_title',
+            'salary_grade',
+            'num_positions',
+            'total_salary',
+            jsonArrayFrom(
+                eb.selectFrom('compensations')
+                    .select(['name', 'amount'])
+                    .whereRef('compensations.staff_id', '=', 'positions.id')
+            ).as('compensations')
+        ])
+        .execute();
+}
+
 /**
  * DELETE: Removes the entire submission by targeting the parent 'form' entry.
  */
 export async function deleteStaffingForm(summaryId: string) {
-    const summary = await db
-        .selectFrom('staffing_summaries')
-        .select('form_id')
+    await db.deleteFrom('forms')
         .where('id', '=', summaryId)
-        .executeTakeFirst();
-
-    if (summary) {
-        await db.deleteFrom('forms')
-            .where('id', '=', summary.form_id)
-            .execute();
-    }
+        .execute();
 }
 
 export async function getStaffingWithPositions(summaryId: string) {
     // 1. Get the Summary Header (Join with form to get auth_status)
     const summary = await db
         .selectFrom('staffing_summaries')
-        .innerJoin('forms', 'forms.id', 'staffing_summaries.form_id')
+        .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
         .select([
             'staffing_summaries.id',
-            'staffing_summaries.form_id',
             'staffing_summaries.fiscal_year',
             'staffing_summaries.submission_date',
             'forms.auth_status',
@@ -277,3 +307,4 @@ export async function getStaffingWithPositions(summaryId: string) {
         positions: positions
     };
 }
+

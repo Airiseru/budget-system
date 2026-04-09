@@ -9,7 +9,6 @@ import {
 export interface StaffingTable {
     id: Generated<string>
     // Link to the base 'form' table (the envelope)
-    form_id: string
     fiscal_year: number
     submission_date: Generated<Date>
     created_at: Generated<Date>
@@ -39,6 +38,21 @@ export type Position = Selectable<PositionTable>
 export type NewPosition = Insertable<PositionTable>
 export type PositionUpdate = Updateable<PositionTable>
 
+export interface CompensationTable {
+    id: Generated<string>
+    staff_id: string 
+    name: string
+    amount: number
+}
+
+export type Compensation = Selectable<CompensationTable>
+export type NewCompensation = Insertable<CompensationTable>
+export type CompensationUpdate = Updateable<CompensationTable>
+
+export interface PositionWithCompensations extends Position {
+    compensations: Compensation[];
+}
+
 export interface StaffingSummaryWithPositions extends StaffingSummary {
-    positions: Position[];
+    positions: PositionWithCompensations[];
 }

@@ -2,7 +2,7 @@ import { EntitiesTable, UserTable, SessionTable, AccountTable, VerificationTable
 import { FormTable, FormPapsTable } from "./forms";
 import { UserKeyTable, SignatoryTable } from "./keys"
 import { PapTable, PapLocationTable } from "./pap";
-import { PositionTable, StaffingTable, StaffingSummaryWithPositions } from "./staffing";
+import { PositionTable, StaffingTable, StaffingSummaryWithPositions, CompensationTable } from "./staffing";
 
 export interface Database {
     entities: EntitiesTable
@@ -22,5 +22,6 @@ export interface Database {
     form_paps: FormPapsTable
     staffing_summaries: StaffingTable;
     positions: PositionTable;
+    compensations: CompensationTable;
     staff_with_position: StaffingSummaryWithPositions;
 }
