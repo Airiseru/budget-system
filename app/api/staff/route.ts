@@ -24,14 +24,15 @@ export async function POST(req: Request) {
         const body = await req.json();
         
         // Destructure the payload sent by the form
-        const { entityId, summary, positions } = body;
+        const { entityId, summary, positions, auth_status } = body;
 
         // Ensure you pass 'summary' (which contains fiscal_year) 
         // to your repository function, not the whole body.
         const result = await StaffingRepository.createStaffingSubmission(
             entityId, 
             summary, // This must contain { fiscal_year, digital_signature }
-            positions
+            positions,
+            auth_status ?? "draft"
         );
 
         return Response.json(result);

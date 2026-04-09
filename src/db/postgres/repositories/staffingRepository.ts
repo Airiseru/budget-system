@@ -29,7 +29,8 @@ async function injectTiers(
 export async function createStaffingSubmission(
     entityId: string,
     summaryData: Omit<NewStaffingSummary, 'form_id'>,
-    positions: Omit<NewPosition, 'staffing_summary_id'>[]
+    positions: Omit<NewPosition, 'staffing_summary_id'>[],
+    auth_status: string
 ) {
     return await db.transaction().execute(async (trx) => {
         // 1. Create Base Form
@@ -38,7 +39,7 @@ export async function createStaffingSubmission(
                 entity_id: entityId, 
                 type: 'staffing',
                 codename: 'Form 204',
-                auth_status: 'pending_personnel'
+                auth_status: auth_status
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -86,11 +87,20 @@ export async function updateStaffingSubmission(
     summaryId: string, 
     payload: { 
         summary: any, 
-        positions: any[] 
+        positions: any[],
+        auth_status?: string
     }
 ) {
     return await db.transaction().execute(async (trx) => {
-        // 1. Update Header
+        // 1. Update Auth Status
+        if (payload.auth_status) {
+            await trx.updateTable('forms')
+                .set({ auth_status: payload.auth_status })
+                .where('id', '=', summaryId)
+                .execute();
+        }
+
+        // 2. Update Header
         await trx.updateTable('staffing_summaries')
             .set({
                 fiscal_year: payload.summary.fiscal_year
@@ -98,12 +108,12 @@ export async function updateStaffingSubmission(
             .where('id', '=', summaryId)
             .execute();
 
-        // 2. Delete existing positions
+        // 3. Delete existing positions
         await trx.deleteFrom('positions')
             .where('staffing_summary_id', '=', summaryId)
             .execute();
 
-        // 3. Re-insert with Tier Injection
+        // 4. Re-insert with Tier Injection
         if (payload.positions.length > 0) {
             // FIX: Again, lookup tiers to ensure DB integrity
             const enrichedPositions = await injectTiers(trx, payload.positions);
@@ -120,6 +130,14 @@ export async function updateStaffingSubmission(
 
         return { success: true };
     });
+}
+
+export async function updateFormAuthStatus(formId: string, authStatus: string) {
+    return await db
+        .updateTable('forms')
+        .set({ auth_status: authStatus })
+        .where('id', '=', formId)
+        .execute();
 }
 
 // READ

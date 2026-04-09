@@ -92,6 +92,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel'>('draft');
 
     async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -102,7 +103,8 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
             summary: {
                 fiscal_year: formData.fiscal_year,
             },
-            positions: formData.positions
+            positions: formData.positions,
+            auth_status: submitAction
         };
 
         const endpoint = isEditing ? `/api/staff/${staff.id}` : '/api/staff'
@@ -476,16 +478,26 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                     <div className="flex gap-3 pt-2">
                         <button
                             type="submit"
+                            onClick={() => setSubmitAction("draft")}
                             disabled={isLoading}
                             className="bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80 transition-all"
                         >
-                            {isLoading ? 'Saving...' : isEditing ? 'Update Summary' : 'Submit Form 204'}
+                            {isLoading && submitAction === "draft" ? 'Saving...' : isEditing ? 'Update Draft' : 'Save Draft'}
+                        </button>
+
+                        <button
+                            type="submit"
+                            onClick={() => setSubmitAction("pending_personnel")}
+                            disabled={isLoading}
+                            className="bg-secondary-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-secondary-foreground/80 transition-all"
+                        >
+                            {isLoading && submitAction === "pending_personnel" ? 'Submitting...' : "Submit Form"}
                         </button>
 
                         <button
                             type="button"
                             onClick={() => router.push('/forms/staff')}
-                            className="bg-gray-200 text-gray-700 px-4 py-2 rounded disabled:opacity-50 hover:bg-gray-300 transition-all"
+                            className="bg-gray-200 px-4 py-2 rounded disabled:opacity-50 hover:bg-gray-100 transition-all"
                         >
                             Cancel
                         </button>

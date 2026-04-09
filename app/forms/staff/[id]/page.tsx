@@ -1,14 +1,16 @@
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow"
 import { getCurrentSignatoryRole, canSign } from "@/src/lib/workflows"
-import { createStaffingRepository, createKeyRepository } from "@/src/db/factory"
+import { createStaffingRepository, createKeyRepository, createFormRepository } from "@/src/db/factory"
 import { sessionWithEntity } from "@/src/actions/auth"
 import { redirect, notFound } from "next/navigation"
 import { SignSection } from "@/components/ui/digital-signatures/SignSection"
 import BackButton from "@/components/ui/BackButton"
 import { Badge } from "@/components/ui/badge"
+import { revalidatePath } from "next/cache"
 
 export const dynamic = "force-dynamic"
 
+const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -53,12 +55,30 @@ export default async function StaffingFormPage({
         form_id: summary.form_id,
     }
 
+    // handle auth update
+    const updateAuthStatus = async () => {
+        "use server"
+
+        // check if the user is authorized to update the auth status
+        // TO DO
+
+        // check if auth is draft
+        if (summary.auth_status !== 'draft') return
+
+        // update auth status
+        await FormRepo.updateFormAuthStatus(summary.form_id ?? "", "pending_personnel")
+        revalidatePath(`/forms/staff/${id}`)
+    }
+
     return (
         <main className="m-6 max-w-4xl md:mx-auto md:my-12 space-y-6">
-            <div className="flex items-center justify-between">
-                <BackButton url="/forms/staff" />
-                <div className="text-center">
-                    <h1 className="text-3xl font-bold tracking-tight">
+            <div className="grid grid-cols-3 items-center">
+                <div>
+                    <BackButton url="/forms/staff" />
+                </div>
+
+                <div className="text-center justify-self-center w-full">
+                    <h1 className="text-3xl font-bold tracking-tight whitespace-nowrap">
                         FY {summary.fiscal_year} Staffing Plan
                     </h1>
                     <div className="flex justify-center mt-2">
@@ -73,7 +93,19 @@ export default async function StaffingFormPage({
                         </Badge>
                     </div>
                 </div>
-                <div className="w-[73px]" />
+                
+                <div className="flex justify-end">
+                    {summary.auth_status === 'draft' && (
+                        <form action={updateAuthStatus}>
+                            <button
+                                type="submit"
+                                className="bg-accent-foreground text-white px-4 py-2 rounded hover:bg-accent-foreground/80 transition-all"
+                            >
+                                Submit Form
+                            </button>
+                        </form>
+                    )}
+                </div>
             </div>
 
             {/* form details */}
