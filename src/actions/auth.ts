@@ -3,7 +3,7 @@
 import { auth } from "@/src/lib/auth"
 import { headers } from "next/headers"
 import { createEntityRepository } from "../db/factory"
-import { logUserLogout } from "./audit"
+import { logUserSignUp, logUserLogout } from "./audit"
 import { SignupFormSchema, UserFormState } from "../lib/validations/user"
 import { redirect } from "next/navigation"
 import * as z from 'zod'
@@ -121,6 +121,17 @@ export async function signup(state: UserFormState, formData: FormData): Promise<
         }
     }
 
+    const responseData = await response.json()
+
+    // Log user signup
+    try {
+        if (!responseData.user.id || !responseData.user.entity_id) return
+
+        logUserSignUp(responseData.user.id, responseData.user.entity_id)
+    } catch (error) {
+        console.error("Failed to create audit log for user signup", error)
+    }
+
     // Redirect to login page
     redirect('/login')
 }
@@ -128,6 +139,7 @@ export async function signup(state: UserFormState, formData: FormData): Promise<
 export async function logout() {
     const session = await sessionDetails()
 
+    // Log user logout
     if (session?.user) {
         try {
             logUserLogout(session.user.id, session.user.entity_id)
@@ -139,8 +151,6 @@ export async function logout() {
     await auth.api.signOut({
         headers: await headers() 
     })
-
-    // Create audit log for user logout
 
     redirect('/login')
 }
