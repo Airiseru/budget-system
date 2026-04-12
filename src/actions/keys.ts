@@ -6,6 +6,7 @@ import { requireMinAccessLevel, sessionDetails } from './auth'
 import { redirect } from 'next/navigation'
 import { verifySignature } from '../lib/crypto'
 import { getWorkflow, canSign, getNextStatus } from '../lib/workflows'
+import { logUserKeyCreation, logUserKeyRevoke } from './audit'
 
 const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 const keyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -61,23 +62,34 @@ export async function registerDeviceKey(
     const expiresAt = new Date()
     expiresAt.setDate(expiresAt.getDate() + expiresInDays)
 
-    return await keyRepository.createUserKey({
+    const key = await keyRepository.createUserKey({
         user_id: session.user.id,
         public_key: publicKey,
         device_name: deviceName,
         status: 'active',
         expires_at: expiresAt
     })
+
+    // Log key creation
+    const logResult = await logUserKeyCreation(session.user.id, session.user.entity_id, key.id, deviceName, expiresInDays, key.created_at, publicKey)
+
+    if (!logResult.success) throw new Error('Failed to log user key creation')
+
 }
 
-export async function revokeDeviceKey(keyId: string) {
+export async function revokeDeviceKey(keyId: string, signature: string, date: Date, signaturePayload: string) {
     const session = await sessionDetails()
     if (!session) redirect('/login')
     
     const key = await keyRepository.getUserKeyById(keyId)
     if (!key || key.user_id !== session.user.id) throw new Error('Unauthorized')
 
-    return await keyRepository.revokeUserKey(keyId)
+    const logResult = await logUserKeyRevoke(session.user.id, session.user.entity_id, keyId, date, signature, key.public_key, signaturePayload)
+
+    if (!logResult.success) throw new Error('Failed to log user key revoke. Aborting revocation.')
+
+    await keyRepository.revokeUserKey(keyId)
+
 }
 
 export async function verifyAndSubmitSignature(

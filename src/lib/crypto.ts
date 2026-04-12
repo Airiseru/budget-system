@@ -22,12 +22,19 @@ export async function generateKeyPair(): Promise<{
     }
 }
 
-export async function signFormData(
-    formData: object,
+export async function signData(
+    formData: object | string,
     privateKey: CryptoKey
 ): Promise<string> {
-    const canonical = JSON.stringify(formData, Object.keys(formData).sort())
-    const data = new TextEncoder().encode(canonical)
+    let data: Uint8Array<ArrayBuffer>
+
+    if (typeof formData !== 'string') {
+        const canonical = JSON.stringify(formData, Object.keys(formData).sort())
+        data = new TextEncoder().encode(canonical)
+    }
+    else {
+        data = new TextEncoder().encode(formData)
+    }
     
     const signature = await crypto.subtle.sign(
         keySettings,
@@ -39,7 +46,7 @@ export async function signFormData(
 }
 
 export async function verifySignature(
-    formData: object,
+    formData: object | string,
     signatureBase64: string,
     publicKeyBase64: string
 ): Promise<boolean> {
@@ -53,8 +60,16 @@ export async function verifySignature(
             ['verify']
         )
 
-        const canonical = JSON.stringify(formData, Object.keys(formData).sort())
-        const data = new TextEncoder().encode(canonical)
+        let data: Uint8Array<ArrayBuffer>
+
+        if (typeof formData !== 'string') {
+            const canonical = JSON.stringify(formData, Object.keys(formData).sort())
+            data = new TextEncoder().encode(canonical)
+        }
+        else {
+            data = new TextEncoder().encode(formData)
+        }
+
         const signature = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0))
 
         return await crypto.subtle.verify(

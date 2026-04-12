@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { setSigningPin } from '@/src/actions/keys'
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
 
-export function SetPin({ hasPin }: { hasPin: boolean }) {
+export function SetPinForm({ hasPin }: { hasPin: boolean }) {
     const [pin, setPin] = useState('')
     const [confirmPin, setConfirmPin] = useState('')
     const [showPin, setShowPin] = useState(false)

@@ -2,7 +2,7 @@ import { requireMinAccessLevel } from '@/src/actions/auth'
 import { getUserKeys, hasSigningPin } from '@/src/actions/keys'
 import { DeviceKeyBanner } from '@/components/ui/digital-signatures/DeviceKeyBanner'
 import { DeviceKeysSettings } from '@/components/ui/digital-signatures/DeviceKeysSettings'
-import { SetPin } from '@/components/ui/digital-signatures/setPin'
+import { SetPinForm } from '@/components/ui/digital-signatures/SetPin'
 import BackButton from '@/components/ui/BackButton'
 
 export default async function KeysSettingsPage() {
@@ -30,7 +30,7 @@ export default async function KeysSettingsPage() {
 
             <hr className="border-border" />
 
-            <SetPin hasPin={hasPinAlready} />
+            <SetPinForm hasPin={hasPinAlready} />
 
             <hr className="border-border" />
 

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { getPrivateKey } from '@/src/lib/device-key-store'
-import { signFormData } from '@/src/lib/crypto'
+import { signData } from '@/src/lib/crypto'
 import { verifyAndSubmitSignature, getUserKeys } from '@/src/actions/keys'
 import { Button } from '@/components/ui/button'
 import { PenLine, ShieldCheck, Eye, EyeOff } from 'lucide-react'
@@ -49,7 +49,7 @@ export function SignButton({ formId, formData, userId, signatoryRole, onApproved
                 return
             }
 
-            const signature = await signFormData(formData, privateKey)
+            const signature = await signData(formData, privateKey)
 
             await verifyAndSubmitSignature(
                 pin,

@@ -30,7 +30,6 @@ export type AuditLogEntryPayload = {
     record_id: string | null
     payload: Record<string, unknown> | string | null
     changed_at: string
-    prev_hash: string | null
 }
 
 export type AuditEventType =

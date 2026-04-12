@@ -13,7 +13,7 @@ import {
     REQUIRES_SIGNATURE
 } from "../../../types/audit"
 
-export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | null): Promise<AuditLog> {
+export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
     let editedLog: NewAuditLog = {
         ...log,
         table_name: log.table_name ?? null,
@@ -62,7 +62,6 @@ export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: 
             record_id: log.record_id ?? "NULL",
             payload: log.payload ?? "NULL",
             changed_at: changedAt.toISOString(),
-            prev_hash: prevHash ?? "NULL",
         })
 
         editedLog.changed_at = changedAt

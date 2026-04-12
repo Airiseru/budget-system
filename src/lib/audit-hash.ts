@@ -6,7 +6,6 @@ export function computeAuditEntryHash(entry: AuditLogEntryPayload): string {
     entry.table_name = entry.table_name ?? "NULL"
     entry.record_id = entry.record_id ?? "NULL"
     entry.payload = entry.payload ?? "NULL"
-    entry.prev_hash = entry.prev_hash ?? "NULL"
 
     // Stringify stored keys
     const stringEntry = JSON.stringify(entry, Object.keys(entry).sort())
@@ -23,7 +22,7 @@ export function buildSignaturePayload(log: AuditLogEntryPayload): string {
         table_name: log.table_name ?? null,
         record_id: log.record_id ?? null,
         changed_at: log.changed_at,
-        data: log.payload ?? null,
+        payload: log.payload ?? null,
     }, Object.keys(log).sort())
 }
 
@@ -50,7 +49,6 @@ export function verifyChain(logs: AuditLog[]): {
             record_id: log.record_id ?? "NULL",
             payload: log.payload ?? "NULL",
             changed_at: (new Date(log.changed_at)).toISOString(),
-            prev_hash: log.prev_hash ?? "NULL",
         })
 
         if (expected !== log.hash) {
