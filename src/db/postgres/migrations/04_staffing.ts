@@ -36,7 +36,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     await db.schema
         .createTable('compensations')
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
-        .addColumn('position_id', 'uuid', (col) => 
+        .addColumn('staff_id', 'uuid', (col) => 
             col.references('positions.id').onDelete('cascade').notNull()
         )
         .addColumn('name', 'text', (col) => col.notNull())
@@ -49,14 +49,14 @@ export async function up(db: Kysely<any>): Promise<void> {
     // Create B-tree index
     await db.schema.createIndex('idx_pap_id').on('positions').column('pap_id').execute()
     await db.schema.createIndex('idx_staffing_summary_id').on('positions').column('staffing_summary_id').execute()
-    await db.schema.createIndex('idx_comp_position_id').on('compensations').column('position_id').execute()
+    await db.schema.createIndex('idx_comp_staff_id').on('compensations').column('staff_id').execute()
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
     // Drop indexes
     await db.schema.dropIndex('idx_pap_id').execute()
     await db.schema.dropIndex('idx_staffing_summary_id').execute()
-    await db.schema.dropIndex('idx_comp_position_id').execute()
+    await db.schema.dropIndex('idx_comp_staff_id').execute()
 
     // Drop tables
 	await db.schema.dropTable('compensations').execute()

@@ -26,6 +26,9 @@ export default async function HomePage() {
                     <Link href="/forms/staff/">Form 204 (Staffing)</Link>
                 </Button>
                 <Button variant="outline">
+                    <Link href="/forms/retirees/">Form 205 (Retiree)</Link>
+                </Button>
+                <Button variant="outline">
                     <Link href="/home/settings/">Settings</Link>
                 </Button>
                 <LogoutButton></LogoutButton>

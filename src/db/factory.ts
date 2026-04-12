@@ -3,6 +3,7 @@ import * as PostgreEntityRepository from '@/src/db/postgres/repositories/entityR
 import * as PostgreKeyRepository from '@/src/db/postgres/repositories/keyRepository'
 import * as PostgreFormRepository from '@/src/db/postgres/repositories/formRepository'
 import * as PostgreStaffingRepository from '@/src/db/postgres/repositories/staffingRepository'
+import * as PostgreRetireeRepository from '@/src/db/postgres/repositories/retireeRepository'
 
 export function createPapRepository(dbType: string) {
     switch (dbType) {
@@ -44,6 +45,15 @@ export function createStaffingRepository(dbType: string) {
     switch (dbType) {
         case 'postgres':
             return PostgreStaffingRepository
+        default:
+            throw new Error(`Unsupported database type: ${dbType}`)
+    }
+}
+
+export function createRetireeRepository(dbType: string) {
+    switch (dbType) {
+        case 'postgres':
+            return PostgreRetireeRepository
         default:
             throw new Error(`Unsupported database type: ${dbType}`)
     }

@@ -1,5 +1,5 @@
 import { db } from '../database'
-import { StaffingSummary, NewStaffingSummary, Position, NewPosition, StaffingSummaryWithPositions, NewCompensation } from '../../../types/staffing'
+import { StaffingSummary, NewStaffingSummary, Position, NewPosition, StaffingSummaryWithPositions, NewCompensation, Compensation } from '../../../types/staffing'
 
 import { jsonArrayFrom } from 'kysely/helpers/postgres'
 
@@ -45,8 +45,8 @@ export async function createStaffingSubmission(
         const form = await trx.insertInto('forms')
             .values({ 
                 entity_id: entityId, 
-                type: 'BP',
-                codename: 'bp204',
+                type: 'bp_staffing',
+                codename: 'BP Form 204',
                 auth_status: auth_status
             })
             .returning('id')
@@ -241,17 +241,34 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
     const positions = await db
         .selectFrom('positions')
         .where('staffing_summary_id', '=', id)
-        .selectAll()
+        .select((eb) => [
+            'id',
+            'staffing_summary_id',
+            'pap_id',
+            'tier',
+            'staff_type',
+            'organizational_unit',
+            'position_title',
+            'salary_grade',
+            'num_positions',
+            'months_employed',
+            'total_salary',
+            jsonArrayFrom(
+                eb.selectFrom('compensations')
+                    .select(['id', 'staff_id', 'name', 'amount'])
+                    .whereRef('compensations.staff_id', '=', 'positions.id')
+            ).as('compensations')
+        ])
         .execute();
 
     return {
         ...summary,
-        positions
+        positions 
     };
 }
 
 export async function getStaffingWithFormById(id: string) {
-    return await db
+    const summary = await db
         .selectFrom('staffing_summaries')
         .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
         .where('staffing_summaries.id', '=', id)
@@ -266,6 +283,35 @@ export async function getStaffingWithFormById(id: string) {
             'forms.auth_status as auth_status'
         ])
         .executeTakeFirst();
+
+    if (!summary) return null;
+
+    // Fetch positions using your "staffing_summary_id" key
+    const positions = await db
+        .selectFrom('positions')
+        .where('staffing_summary_id', '=', id)
+        .selectAll()
+        .execute();
+
+    const positionIds = positions.map(p => p.id);
+    
+    let compensations: Compensation[] = [];
+    if (positionIds.length > 0) {
+        compensations = await db
+            .selectFrom('compensations')
+            // Using "staff_id" as defined in your CompensationTable
+            .where('staff_id', 'in', positionIds) 
+            .selectAll()
+            .execute();
+    }
+
+    return {
+        ...summary,
+        positions: positions.map(pos => ({
+            ...pos,
+            compensations: compensations.filter(c => c.staff_id === pos.id)
+        }))
+    };
 }
 
 export async function getStaffingDetails(formId: string) {

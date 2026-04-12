@@ -76,9 +76,21 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
     const addCompensation = (posIndex: number) => {
         const updatedPositions = [...formData.positions];
+        const currentComps = updatedPositions[posIndex].compensations;
+
+        // Find the first compensation name that hasn't been used yet
+        const nextAvailable = compensationNames.find(name => 
+            !currentComps.some(c => c.name === name)
+        );
+
+        if (!nextAvailable) {
+            alert("All available compensation types have been added.");
+            return;
+        }
+
         updatedPositions[posIndex].compensations = [
-            ...updatedPositions[posIndex].compensations,
-            { name: "PERA", amount: 2000 } // Default PERA is a nice UX touch
+            ...currentComps,
+            { name: nextAvailable, amount: 0 }
         ];
         setFormData({ ...formData, positions: updatedPositions });
     };
@@ -203,6 +215,15 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
         </thead>
     );
 
+    // Helper to get available compensation names for a specific position
+    const getAvailableCompNames = (posIndex: number, currentCompName: string) => {
+        const usedNames = formData.positions[posIndex].compensations
+            .map(c => c.name)
+            .filter(name => name !== currentCompName); // Allow the current one to stay in the list
+        
+        return compensationNames.filter(name => !usedNames.includes(name));
+    };
+
     const renderPositionRow = (pos: any, index: number) => (
     <>
         <tr key={index} className="hover:bg-gray-50/50">
@@ -271,45 +292,66 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
         </tr>
         {/* COMPENSATIONS SUB-ROW */}
         {pos.compensations && pos.compensations.length > 0 && (
-            <tr className="bg-slate-50/50">
-                <td colSpan={5} className="p-2 pb-4 pl-12 border-b grid grid-cols-3">
-                    <div className="flex flex-wrap gap-2">
-                        {pos.compensations.map((comp: any, cIdx: number) => (
-                            <div key={cIdx} className="flex items-center gap-1 bg-white border rounded shadow-sm p-1">
-                                <select 
-                                    className="text-[10px] font-bold border-none bg-transparent focus:ring-0"
-                                    value={comp.name}
-                                    onChange={(e) => handleCompensationChange(index, cIdx, 'name', e.target.value)}
-                                >
-                                    {compensationNames.map(n => <option key={n} value={n}>{n}</option>)}
-                                </select>
-                                <input 
-                                    type="number"
-                                    className="w-20 text-[10px] border-none bg-transparent focus:ring-0 text-right font-mono"
-                                    value={comp.amount}
-                                    onChange={(e) => handleCompensationChange(index, cIdx, 'amount', parseFloat(e.target.value))}
-                                />
-                                <button 
-                                    type="button"
-                                    onClick={() => removeCompensation(index, cIdx)}
-                                    className="text-red-400 hover:text-red-600 px-1"
-                                >
-                                    ×
-                                </button>
-                            </div>
-                        ))}
+            <tr className="bg-slate-50/80 border-b">
+                <td colSpan={5} className="p-4 pl-12">
+                    <div className="bg-white border rounded-lg overflow-hidden shadow-sm">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-slate-100 text-[10px] uppercase font-bold text-slate-500">
+                                <tr>
+                                    <th className="px-3 py-2 border-b">Benefit / Allowance Type</th>
+                                    <th className="px-3 py-2 border-b w-40 text-right">Amount (PHP)</th>
+                                    <th className="px-3 py-2 border-b w-10"></th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y">
+                                {pos.compensations.map((comp: any, cIdx: number) => (
+                                    <tr key={cIdx} className="hover:bg-slate-50 transition-colors">
+                                        <td className="px-3 py-2">
+                                            <select 
+                                                className="w-full text-sm font-medium border-none bg-transparent focus:ring-0 p-0"
+                                                value={comp.name}
+                                                onChange={(e) => handleCompensationChange(index, cIdx, 'name', e.target.value)}
+                                            >
+                                                {/* Dynamically filter the dropdown options */}
+                                                {getAvailableCompNames(index, comp.name).map(n => (
+                                                    <option key={n} value={n}>{n}</option>
+                                                ))}
+                                            </select>
+                                        </td>
+                                        <td className="px-3 py-2">
+                                            <input 
+                                                type="number"
+                                                className="w-full text-sm border-none bg-transparent focus:ring-0 text-right font-mono p-0"
+                                                value={comp.amount}
+                                                onChange={(e) => handleCompensationChange(index, cIdx, 'amount', parseFloat(e.target.value))}
+                                            />
+                                        </td>
+                                        <td className="px-3 py-2 text-center">
+                                            <button 
+                                                type="button"
+                                                onClick={() => removeCompensation(index, cIdx)}
+                                                className="text-slate-400 hover:text-red-500 transition-colors font-bold text-lg"
+                                            >
+                                                ×
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </td>
             </tr>
         )}
-        <tr>
-            <td colSpan={5} className="p-2 align-middle text-center">
+        <tr className="border-b">
+            <td colSpan={5} className="px-12 py-2">
                 <button 
                     type="button"
                     onClick={() => addCompensation(index)}
-                    className="text-[10px] bg-blue-500 text-white border border-blue-200 px-2 py-1 rounded hover:bg-blue-700 font-bold uppercase w-full h-12"
+                    disabled={pos.compensations.length >= compensationNames.length}
+                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider flex items-center gap-1 disabled:opacity-30"
                 >
-                    + Compensation
+                    <span className="text-sm">+</span> Add Specific Allowance
                 </button>
             </td>
         </tr>

@@ -1,4 +1,4 @@
-import StaffForm from "@/components/ui/StaffingForm";
+import StaffForm from "@/components/ui/staff/StaffingForm";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { createPapRepository } from "@/src/db/factory";
 import { redirect } from "next/navigation";

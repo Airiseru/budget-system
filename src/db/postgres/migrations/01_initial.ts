@@ -31,7 +31,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
         // Link to the Entity submitting the form
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').notNull())
-        .addColumn('type', 'text', (col) => col.notNull()) // e.g., 'staffing', 'bp205'
+        .addColumn('type', 'text', (col) => col.notNull()) // e.g., 'bp204', 'bp205'
         .addColumn('codename', 'text')
         .addColumn('auth_status', 'text', (col) => col.defaultTo('draft'))
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
