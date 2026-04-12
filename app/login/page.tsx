@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/src/lib/auth-client";
+import { logUserLogin } from "@/src/actions/audit";
 import BackButton from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/button"
 import { Eye, EyeOff } from 'lucide-react'
@@ -33,6 +34,17 @@ export default function LoginPage() {
             setError(error.message || "Invalid email or password. Please try again.")
             setIsLoading(false)
             return
+        }
+
+        // Log user login
+        if (data?.user?.id && data?.user?.entity_id) {
+            const auditLog = await logUserLogin(data.user.id, data.user.entity_id)
+
+            if (!auditLog?.success) {
+                setError("Login succeeded, but the security audit log failed. Please contact IT.");
+                setIsLoading(false);
+                return; // Block entry if the black box is broken
+            }
         }
 
         // Route the user based on the role
