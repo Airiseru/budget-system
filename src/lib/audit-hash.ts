@@ -1,5 +1,5 @@
 import { createHash } from "crypto"
-import { AuditLog, AuditLogEntryPayload, SignaturePayload } from "../types/audit"
+import { AuditLog, AuditLogEntryPayload } from "../types/audit"
 
 export function computeAuditEntryHash(entry: AuditLogEntryPayload): string {
     // Replace null values with strings

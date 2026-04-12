@@ -29,7 +29,7 @@ export const auth = betterAuth({
                 input: true,
             },
             role: {
-                type: ['unverified', 'admin', 'dbm', 'agency'],
+                type: ['unverified', 'admin', 'dbm', 'agency', 'archived'],
                 required: true,
                 defaultValue: 'unverified',
                 input: false,
@@ -51,6 +51,11 @@ export const auth = betterAuth({
                 input: true
             },
             workflow_role: {
+                type: "string",
+                required: false,
+                input: false
+            },
+            deleted_at: {
                 type: "string",
                 required: false,
                 input: false
@@ -91,4 +96,9 @@ export const auth = betterAuth({
             updatedAt: "updated_at"
         },
     },
+    advanced: {
+        database: {
+            generateId: () => crypto.randomUUID(),
+        }
+    }
 })

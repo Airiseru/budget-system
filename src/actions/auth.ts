@@ -127,7 +127,13 @@ export async function signup(state: UserFormState, formData: FormData): Promise<
     try {
         if (!responseData.user.id || !responseData.user.entity_id) return
 
-        logUserSignUp(responseData.user.id, responseData.user.entity_id)
+        const userData = {
+            name: responseData.user.name,
+            email: responseData.user.email,
+            position: responseData.user.position
+        }
+
+        logUserSignUp(responseData.user.id, responseData.user.entity_id, userData, responseData.user.created_at)
     } catch (error) {
         console.error("Failed to create audit log for user signup", error)
     }

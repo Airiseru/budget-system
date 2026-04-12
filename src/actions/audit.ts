@@ -1,7 +1,7 @@
 "use server"
 
 import { createAuditRepository, createKeyRepository } from "@/src/db/factory"
-import { NewAuditLog } from "../types/audit"
+import { NewAuditLog, SignedLogInput } from "../types/audit"
 import { sessionWithEntity } from "./auth"
 import { redirect } from 'next/navigation'
 import { computeDiff, isDiffEmpty } from "../lib/diff"
@@ -21,15 +21,31 @@ async function executeAudit(log: Omit<NewAuditLog, 'hash'>, signingPayload: Sign
     }
 }
 
-export async function logUserSignUp(userId: string, entityId: string) {
+async function createSignedLog(
+    input: SignedLogInput
+) {
+    return await executeAudit({
+        entity_id: input.entityId,
+        user_id: input.userId,
+        event_type: input.eventType,
+        table_name: input.tableName,
+        record_id: input.recordId,
+        payload: input.payload,
+        changed_at: input.changed_at,
+        public_key_snapshot: input.publicKeySnapshot,
+        signature: input.signature
+    }, input.signaturePayload)
+}
+
+export async function logUserSignUp(userId: string, entityId: string, userData: Record<string, unknown>, date: Date) {
     return await executeAudit({
         entity_id: entityId,
         user_id: userId,
         event_type: 'SIGNUP',
         table_name: 'users',
         record_id: userId,
-        payload: { action: "signup" }, 
-        changed_at: new Date()
+        payload: userData, 
+        changed_at: date ? date : new Date()
     })
 }
 
@@ -81,21 +97,83 @@ export async function logUserKeyRevoke(userId: string, entityId: string, keyId: 
         if (key.status !== 'active') throw new Error('Key is no longer active')
         if (key.expires_at && key.expires_at < new Date()) throw new Error('Key has expired')
 
-        return await executeAudit({
-            entity_id: entityId,
-            user_id: userId,
-            event_type: 'REVOKE_KEY',
-            table_name: 'user_keys',
-            record_id: keyId,
+        return await createSignedLog({
+            entityId,
+            userId,
+            eventType: 'REVOKE_KEY',
+            tableName: 'user_keys',
+            recordId: keyId,
             payload: {
                 status: 'revoked'
             },
             changed_at: date,
-            public_key_snapshot: key.public_key || publicKey,
-            signature
+            publicKeySnapshot: key.public_key || publicKey,
+            signature,
+            signaturePayload
         })
     } catch (error) {
         console.error("Failed to log user key revoke", error)
         return { success: false, error: "Failed to log user key revoke" }
     }
 }
+
+export async function logNewForm(
+    userId: string,
+    entityId: string,
+    tableName: string,
+    recordId: string,
+    formData: Record<string, unknown>,
+    date: Date
+) {
+    return await executeAudit({
+        entity_id: entityId,
+        user_id: userId,
+        event_type: 'NEW_FORM',
+        table_name: tableName,
+        record_id: recordId,
+        payload: formData,
+        changed_at: date
+    })
+}
+
+export async function logSaveFormEdits(
+    userId: string,
+    entityId: string,
+    tableName: string,
+    recordId: string,
+    oldData: Record<string, unknown>,
+    newData: Record<string, unknown>,
+    date: Date
+) {
+    const diff = computeDiff(oldData, newData)
+    if (isDiffEmpty(diff)) return { success: true }
+    return await executeAudit({
+        entity_id: entityId,
+        user_id: userId,
+        event_type: 'SAVE_DRAFT',
+        table_name: tableName,
+        record_id: recordId,
+        payload: diff,
+        changed_at: date
+    })
+}
+
+export async function logSubmitForm(
+    userId: string,
+    entityId: string,
+    tableName: string,
+    recordId: string,
+    formData: Record<string, unknown>,
+    date: Date
+) {
+    return await executeAudit({
+        entity_id: entityId,
+        user_id: userId,
+        event_type: 'SUBMIT',
+        table_name: tableName,
+        record_id: recordId,
+        payload: formData,
+        changed_at: date
+    })
+}
+

@@ -289,8 +289,8 @@ export async function getFullEntityById(
 }
     
 // USERS
-export async function getAllUsers(): Promise<Partial<User>[]> {
-    return await db
+export async function getAllUsers(active_only: boolean = true): Promise<Partial<User>[]> {
+    const query = db
         .selectFrom('users')
         .select([
             'users.id as id',
@@ -301,7 +301,12 @@ export async function getAllUsers(): Promise<Partial<User>[]> {
             'users.role as role',
             'users.access_level as access_level',
         ])
-        .execute()
+
+    if (active_only) {
+        query.where('users.deleted_at', 'is', null)
+    }
+    
+    return await query.execute()
 }
 
 export async function getUserById(id: string): Promise<User> {
@@ -395,5 +400,5 @@ export async function updateUser(id: string, updateWith: UserUpdate): Promise<vo
 }
 
 export async function deleteUser(id: string): Promise<void> {
-    await db.deleteFrom('users').where('id', '=', id).returningAll().executeTakeFirst()
+    await db.updateTable('users').set({ deleted_at: new Date(), role: 'archived' }).where('id', '=', id).executeTakeFirstOrThrow()
 }
