@@ -3,6 +3,28 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { z } from "zod";
+
+// Schema for a single retiree row
+const RetireeRowSchema = z.object({
+  id: z.string(),
+  name: z.string().min(1, "Full Name is required"),
+  is_gsis_member: z.boolean(),
+  retirement_law: z.string(),
+  position: z.string().min(1, "Position is required"),
+  salary_grade: z.coerce.number().min(1).max(33),
+  date_of_birth: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Birth Date"),
+  original_appointment: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Appointment Date"),
+  retirement_effectivity: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Effectivity Date"),
+  highest_monthly_salary: z.coerce.number().min(0, "Salary cannot be negative"),
+});
+
+// Schema for the entire form submission
+const BP205Schema = z.object({
+  retirees: z.array(RetireeRowSchema).min(1, "At least one retiree must be listed"),
+});
+
+type RetireeRow = z.infer<typeof RetireeRowSchema>;
 
 interface Props {
   entityId: string;
@@ -10,22 +32,22 @@ interface Props {
   isEditing?: boolean;
 }
 
-interface RetireeRow {
-  id: string;
-  name: string;
-  is_gsis_member: boolean;
-  retirement_law: string;
-  position: string;
-  salary_grade: number;
-  date_of_birth: string;
-  original_appointment: string;
-  retirement_effectivity: string;
-  highest_monthly_salary: number;
-  number_vacation_leave?: number;
-  number_sick_leave?: number;
-  total_credible_service?: number;
-  number_gratuity_months?: number;
-}
+// interface RetireeRow {
+//   id: string;
+//   name: string;
+//   is_gsis_member: boolean;
+//   retirement_law: string;
+//   position: string;
+//   salary_grade: number;
+//   date_of_birth: string;
+//   original_appointment: string;
+//   retirement_effectivity: string;
+//   highest_monthly_salary: number;
+//   number_vacation_leave?: number;
+//   number_sick_leave?: number;
+//   total_credible_service?: number;
+//   number_gratuity_months?: number;
+// }
 
 const BP205EntryGrid = ({ entityId, initialData, isEditing = false }: Props) => {
   const router = useRouter();
@@ -60,13 +82,26 @@ const BP205EntryGrid = ({ entityId, initialData, isEditing = false }: Props) => 
     setIsLoading(true);
     setError(null);
 
+    // 1. Validate the retirees array using Zod
+    const validation = BP205Schema.safeParse({ retirees });
+
+    if (!validation.success) {
+      // 2. Format the error message (gets the first error found)
+      const firstError = validation.error.issues[0];
+      const rowNum = parseInt(firstError.path[1] as string) + 1;
+      setError(`Row ${rowNum}: ${firstError.message}`);
+      setIsLoading(false);
+      return;
+    }
+
+    // 3. If validation passes, use validation.data (it's now cleaned/coerced)
     const payload = {
       entityId,
       listData: {
         fiscal_year: fiscalYear,
-        is_mandatory: true, // You can make this a toggle in the UI
+        is_mandatory: true,
       },
-      retirees: retirees,
+      retirees: validation.data.retirees,
       auth_status: submitAction
     };
 
@@ -108,6 +143,14 @@ const BP205EntryGrid = ({ entityId, initialData, isEditing = false }: Props) => 
       retirement_effectivity: "", 
       highest_monthly_salary: 0 
     }]);
+  };
+
+  const removeRow = (id: string) => {
+    if (retirees.length > 1) {
+      setRetirees(retirees.filter(r => r.id !== id));
+    } else {
+      setError("You must have at least one row.");
+    }
   };
 
   return (
@@ -236,9 +279,13 @@ const BP205EntryGrid = ({ entityId, initialData, isEditing = false }: Props) => 
                   </div>
                 </td>
                 <td className="p-1 text-center">
-                  <button className="text-slate-300 hover:text-red-500 transition-colors p-1">
-                    <Trash2 size={16} />
-                  </button>
+                   <button 
+                      type="button" // Important to prevent form submission
+                      onClick={() => removeRow(row.id)}
+                      className="text-slate-300 hover:text-red-500 transition-colors p-1"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                 </td>
               </tr>
             ))}
