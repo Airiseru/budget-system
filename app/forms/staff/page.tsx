@@ -51,11 +51,13 @@ export default async function StaffingPage() {
                                 <Button variant="outline" aria-label="Go Back">Go Back</Button>
                             </Link>
                         </ButtonGroup>
+                        {session?.user.access_level === 'encode' && (
                         <ButtonGroup>
                             <Link href="/forms/staff/new">
                                 <Button variant="outline">Create New Staffing Form</Button>
                             </Link>
                         </ButtonGroup>
+                        )}
                     </ButtonGroup>
                     <h1 className="text-xl opacity-50">No Staffing Forms submitted yet.</h1>
                 </div>
@@ -71,11 +73,13 @@ export default async function StaffingPage() {
                             <Button variant="outline" aria-label="Go Back">Go Back</Button>
                         </Link>
                     </ButtonGroup>
+                    {session?.user.access_level === 'encode' && (
                     <ButtonGroup>
                         <Link href="/forms/staff/new">
                             <Button variant="outline">Create New Staffing Form</Button>
                         </Link>
                     </ButtonGroup>
+                    )}
                 </ButtonGroup>
 
                 <h1 className="text-2xl font-bold mb-6">Staffing Submissions</h1>

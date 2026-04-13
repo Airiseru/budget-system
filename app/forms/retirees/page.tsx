@@ -54,11 +54,13 @@ export default async function RetireesPage() {
                                 <Button variant="outline" aria-label="Go Back">Go Back</Button>
                             </Link>
                         </ButtonGroup>
+                        {session?.user.access_level === 'encode' && (
                         <ButtonGroup>
                             <Link href="/forms/retirees/new">
                                 <Button variant="outline">Create New Retiree Form (BP 205)</Button>
                             </Link>
                         </ButtonGroup>
+                        )}
                     </ButtonGroup>
                     <h1 className="text-xl opacity-50 font-medium">No BP Form 205 submissions found for your entity.</h1>
                 </div>
@@ -74,11 +76,13 @@ export default async function RetireesPage() {
                             <Button variant="outline" aria-label="Go Back">Go Back</Button>
                         </Link>
                     </ButtonGroup>
+                    {session?.user.access_level === 'encode' && (
                     <ButtonGroup>
                         <Link href="/forms/retirees/new">
                             <Button variant="outline">Create New Retiree Form (BP 205)</Button>
                         </Link>
                     </ButtonGroup>
+                    )}
                 </ButtonGroup>
 
                 <div className="mb-8">

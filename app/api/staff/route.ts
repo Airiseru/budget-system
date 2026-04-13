@@ -1,5 +1,7 @@
 import { createStaffingRepository } from '@/src/db/factory'
 import { NextResponse } from 'next/server'
+import { auth } from "@/src/lib/auth"; 
+import { headers } from "next/headers";
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +22,17 @@ const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE ||
 // }
 
 export async function POST(req: Request) {
+    const session = await auth.api.getSession({
+        headers: await headers()
+    });
+
+    // 2. Check if user is logged in AND has 'encode' access
+    if (!session || session.user.access_level !== 'encode') {
+        return NextResponse.json(
+            { error: "Unauthorized: Only encoders can create new forms." },
+            { status: 403 }
+        );
+    }
     try {
         const body = await req.json();
         

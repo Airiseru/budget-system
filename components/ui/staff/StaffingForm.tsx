@@ -204,7 +204,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
     }
 
     const TableHeader = () => (
-        <thead className="bg-slate-100 border-b text-slate-600">
+        <thead className="bg-muted/50 border-b text-muted-foreground">
             <tr>
                 <th className="p-3 w-1/4 font-semibold text-xs uppercase">Target PAP</th>
                 <th className="p-3 w-1/4 font-semibold text-xs uppercase">Position / Unit</th>
@@ -226,10 +226,10 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
     const renderPositionRow = (pos: any, index: number) => (
     <>
-        <tr key={index} className="hover:bg-gray-50/50">
+        <tr key={index} className="hover:bg-muted/50">
             <td className="p-2 border-r align-top">
                 <select
-                    className="w-full p-1 border rounded bg-white"
+                    className="w-full p-1 border rounded bg-card"
                     value={pos.pap_id}
                     onChange={(e) => handlePapChange(index, e.target.value)}
                     required
@@ -240,7 +240,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                     ))}
                 </select>
                 <select
-                    className="w-full mt-2 p-1 border rounded bg-slate-50 text-xs font-medium"
+                    className="w-full mt-2 p-1 border rounded bg-muted/50 text-xs font-medium"
                     value={pos.staff_type}
                     onChange={(e) => handlePositionChange(index, 'staff_type', e.target.value)}
                 >
@@ -259,7 +259,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                 />
                 <input 
                     placeholder="Org Unit (e.g. HR Dept)"
-                    className="w-full p-1 border rounded text-xs text-gray-500 italic"
+                    className="w-full p-1 border rounded text-xs text-primary-500 italic"
                     value={pos.organizational_unit} 
                     onChange={(e) => handlePositionChange(index, 'organizational_unit', e.target.value)} 
                 />
@@ -284,7 +284,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
             <td className="p-2 border-r">
                 <input 
                     placeholder="SG"
-                    className="w-full p-1 border rounded"
+                    className="w-full p-1 border rounded text-center"
                     value={pos.salary_grade} 
                     onChange={(e) => handlePositionChange(index, 'salary_grade', e.target.value)} 
                 />
@@ -292,11 +292,11 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
         </tr>
         {/* COMPENSATIONS SUB-ROW */}
         {pos.compensations && pos.compensations.length > 0 && (
-            <tr className="bg-slate-50/80 border-b">
+            <tr className="bg-muted/50/80 border-b">
                 <td colSpan={5} className="p-4 pl-12">
-                    <div className="bg-white border rounded-lg overflow-hidden shadow-sm">
+                    <div className="bg-card border rounded-lg overflow-hidden shadow-sm">
                         <table className="w-full text-left border-collapse">
-                            <thead className="bg-slate-100 text-[10px] uppercase font-bold text-slate-500">
+                            <thead className="bg-muted/50 text-[10px] uppercase font-bold text-muted-500">
                                 <tr>
                                     <th className="px-3 py-2 border-b">Benefit / Allowance Type</th>
                                     <th className="px-3 py-2 border-b w-40 text-right">Amount (PHP)</th>
@@ -305,7 +305,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                             </thead>
                             <tbody className="divide-y">
                                 {pos.compensations.map((comp: any, cIdx: number) => (
-                                    <tr key={cIdx} className="hover:bg-slate-50 transition-colors">
+                                    <tr key={cIdx} className="hover:bg-muted/50 transition-colors">
                                         <td className="px-3 py-2">
                                             <select 
                                                 className="w-full text-sm font-medium border-none bg-transparent focus:ring-0 p-0"
@@ -330,7 +330,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                                             <button 
                                                 type="button"
                                                 onClick={() => removeCompensation(index, cIdx)}
-                                                className="text-slate-400 hover:text-red-500 transition-colors font-bold text-lg"
+                                                className="text-muted-400 hover:text-red-500 transition-colors font-bold text-lg"
                                             >
                                                 ×
                                             </button>
@@ -349,7 +349,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                     type="button"
                     onClick={() => addCompensation(index)}
                     disabled={pos.compensations.length >= compensationNames.length}
-                    className="text-[10px] text-blue-600 hover:text-blue-800 font-bold uppercase tracking-wider flex items-center gap-1 disabled:opacity-30"
+                    className="text-[10px] text-primary-600 hover:text-primary-800 font-bold uppercase tracking-wider flex items-center gap-1 disabled:opacity-30"
                 >
                     <span className="text-sm">+</span> Add Specific Allowance
                 </button>
@@ -372,7 +372,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
             return (
                 <div key={type} className="mt-4">
-                    <div className="bg-slate-200 px-3 py-1 text-[10px] font-bold text-slate-700 uppercase tracking-widest border-x border-t rounded-t-sm">
+                    <div className="bg-muted-200 px-3 py-1 text-[10px] font-bold text-muted-700 uppercase tracking-widest border-x border-t rounded-t-sm">
                         {type} Positions
                     </div>
                     <div className="border rounded-b-lg overflow-hidden shadow-sm">
@@ -426,10 +426,10 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
             if (pos.pap_id !== "") return null; // Only show rows without a PAP
 
             return (
-                <tr key={index} className="bg-amber-50/30 border-amber-200">
+                <tr key={index} className="">
                     <td className="p-2 border-r align-top">
                         <select
-                            className="w-full p-1 border rounded bg-white border-amber-300 focus:ring-amber-500 font-medium"
+                            className="w-full p-1 border rounded bg-card border-amber-300 focus:ring-amber-500 font-medium"
                             value={pos.pap_id}
                             onChange={(e) => handlePapChange(index, e.target.value)}
                             required
@@ -441,7 +441,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                         </select>
                         {/* Staff Type Selector */}
                         <select
-                            className="w-full mt-2 p-1 border rounded bg-white text-xs font-semibold text-amber-700 border-amber-200"
+                            className="w-full mt-2 p-1 border rounded bg-card text-xs font-semibold text-amber-700 border-amber-200"
                             value={pos.staff_type}
                             onChange={(e) => handlePositionChange(index, 'staff_type', e.target.value)}
                         >
@@ -461,7 +461,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                         />
                         <input 
                             placeholder="Organizational Unit"
-                            className="w-full p-1 border rounded text-xs italic bg-white/50"
+                            className="w-full p-1 border rounded text-xs italic bg-card/50"
                             value={pos.organizational_unit} 
                             onChange={(e) => handlePositionChange(index, 'organizational_unit', e.target.value)} 
                             required
@@ -476,7 +476,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                                 value={pos.months_employed} 
                                 onChange={(e) => handlePositionChange(index, 'months_employed', parseInt(e.target.value))} 
                             />
-                            <span className="text-[10px] text-gray-400 uppercase font-bold">Months</span>
+                            <span className="text-[10px] text-primary-400 uppercase font-bold">Months</span>
                         </div>
                     </td>
                     <td className="p-2 border-r align-middle">
@@ -500,7 +500,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                         <button 
                             type="button"
                             onClick={() => removeRow(index)}
-                            className="absolute -right-2 -top-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-sm hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+                            className="absolute -right-2 -top-2 bg-red-500 text-primary rounded-full w-5 h-5 flex items-center justify-center text-[10px] shadow-sm hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
                         >
                             ✕
                         </button>
@@ -522,10 +522,10 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
             if (currentPosTier !== tier) return null;
 
             return (
-                <tr key={index} className="hover:bg-gray-50/50">
+                <tr key={index} className="hover:bg-muted/50">
                     <td className="p-2 border-r">
                         <select
-                            className="w-full p-1 border rounded bg-white"
+                            className="w-full p-1 border rounded bg-card"
                             value={pos.pap_id}
                             // USE THE NEW HANDLER HERE
                             onChange={(e) => handlePapChange(index, e.target.value)}
@@ -537,7 +537,6 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                             ))}
                         </select>
                     </td>
-                    {/* ... rest of your inputs (Position, Qty, Salary) ... */}
                     <td className="p-2 border-r">
                         <input 
                             className="w-full p-1 border rounded"
@@ -568,11 +567,11 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
     return (
         <div className="max-w-4xl mx-auto mt-8 px-4"> {/* Increased width for the table */}
-            <div className="mb-6 p-4 bg-slate-50 border-l-4 border-slate-400 rounded-r-lg shadow-sm">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-widest">Logged-in Agency</span>
-                <h2 className="text-lg font-semibold text-slate-800">{entityName}</h2>
+            <div className="mb-6 p-4 bg-muted/50 border-l-4 border-muted-400 rounded-r-lg shadow-sm">
+                <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">Logged-in Agency</span>
+                <h2 className="text-lg font-semibold text-muted-800">{entityName}</h2>
             </div>
-            <h1 className="text-2xl font-bold mb-6 text-gray-800">
+            <h1 className="text-2xl font-bold mb-6 text-primary-800">
                 {isEditing ? 'Edit Form 204' : 'Create Form 204'}
             </h1>
 
@@ -582,27 +581,27 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                 </div>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-xl shadow-sm border">
+            <form onSubmit={handleSubmit} className="space-y-6 bg-card p-6 rounded-xl shadow-sm border">
                 <div>
-                    <label className="block text-sm font-semibold mb-1 text-gray-700">Fiscal Year</label>
+                    <label className="block text-sm font-semibold mb-1 text-primary-700">Fiscal Year</label>
                     <input 
                         name="fiscal_year" 
                         type="number"
                         value={formData.fiscal_year} 
                         onChange={handleHeaderChange} 
-                        className="border p-2 w-full rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="border p-2 w-full rounded focus:ring-2 focus:ring-primary-500 outline-none"
                         required
                     />
                 </div>
 
                 <div className="mt-6 space-y-8">
-                    <label className="block text-sm font-bold mb-2 text-gray-700 uppercase tracking-wide">
+                    <label className="block text-sm font-bold mb-2 text-primary-700 uppercase tracking-wide">
                         Position Details
                     </label>
 
                     {/* UNASSIGNED SECTION - Keep as is but use renderPositionRow */}
                     <div className="space-y-2">
-                        <div className="bg-amber-600 text-white px-4 py-2 rounded-t-lg font-bold text-xs">
+                        <div className="bg-amber-600 text-primary px-4 py-2 rounded-t-lg font-bold text-xs">
                             NEW ENTRIES (UNASSIGNED)
                         </div>
                         <table className="w-full text-sm text-left border table-fixed">
@@ -613,7 +612,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
 
                     {/* TIER 1 SECTION */}
                     <div className="mt-10">
-                        <h3 className="text-sm font-black text-blue-800 border-b-2 border-blue-600 pb-1 mb-2">
+                        <h3 className="text-sm font-black text-primary-800 border-b-2 border-primary-600 pb-1 mb-2">
                             TIER 1: ONGOING PROGRAMS
                         </h3>
                         {renderTierGroups(1)}
@@ -631,7 +630,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                 <button 
                     type="button" 
                     onClick={addRow}
-                    className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1 transition-colors"
+                    className="mt-3 text-sm font-medium text-primary-600 hover:text-primary-800 flex items-center gap-1 transition-colors"
                 >
                     <span className="text-lg">+</span> Add Position Row
                 </button>
@@ -643,7 +642,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                             type="submit"
                             onClick={() => setSubmitAction("draft")}
                             disabled={isLoading}
-                            className="bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80 transition-all"
+                            className="bg-accent-foreground text-primary px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80 transition-all"
                         >
                             {isLoading && submitAction === "draft" ? 'Saving...' : isEditing ? 'Update Draft' : 'Save Draft'}
                         </button>
@@ -652,7 +651,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                             type="submit"
                             onClick={() => setSubmitAction("pending_personnel")}
                             disabled={isLoading}
-                            className="bg-secondary-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-secondary-foreground/80 transition-all"
+                            className="bg-secondary-foreground text-primary px-4 py-2 rounded disabled:opacity-50 hover:bg-secondary-foreground/80 transition-all"
                         >
                             {isLoading && submitAction === "pending_personnel" ? 'Submitting...' : "Submit Form"}
                         </button>
@@ -660,7 +659,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
                         <button
                             type="button"
                             onClick={() => router.push('/forms/staff')}
-                            className="bg-gray-200 px-4 py-2 rounded disabled:opacity-50 hover:bg-gray-100 transition-all"
+                            className="bg-primary-200 px-4 py-2 rounded disabled:opacity-50 hover:bg-primary-100 transition-all"
                         >
                             Cancel
                         </button>
