@@ -11,16 +11,31 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('record_id', 'uuid')
         .addColumn('payload', 'jsonb')
         .addColumn('changed_at', 'timestamptz', (col) => col.defaultTo(sql`now()`).notNull())
+        .addColumn('nonce', 'varchar')
         .addColumn('prev_hash', 'text')
         .addColumn('hash', 'text', (col) => col.notNull())
         .addColumn('public_key_snapshot', 'text')
         .addColumn('signature', 'text')
         .execute()
 
+    await db.schema
+        .createTable('merkle_roots')
+        .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+        .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').notNull())
+        .addColumn('root_hash', 'text', (col) => col.notNull())
+        .addColumn('log_count', 'integer', (col) => col.notNull())
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`).notNull())
+        .execute()
+
     // Create composite index for search queries
     await db.schema.createIndex('audit_logs_target_idx')
         .on('audit_logs')
         .columns(['table_name', 'record_id'])
+        .execute()
+
+    await db.schema.createIndex('idx_merkle_roots_entity_id_created_at')
+        .on('merkle_roots')
+        .columns(['entity_id', 'created_at'])
         .execute()
 
     // Create B-tree indexes
@@ -79,9 +94,11 @@ export async function down(db: Kysely<any>): Promise<void> {
 
     // Drop indexes
     await db.schema.dropIndex('idx_audit_logs_entity_id').execute()
+    await db.schema.dropIndex('idx_merkle_roots_entity_id_created_at').execute()
     await db.schema.dropIndex('audit_logs_target_idx').execute()
     await db.schema.dropIndex('idx_audit_logs_changed_at').execute()
 
     // Drop tables
     await db.schema.dropTable('audit_logs').execute()
+    await db.schema.dropTable('merkle_roots').execute()
 }

@@ -69,7 +69,7 @@ export async function requireAccessLevel(level: string) {
 }
 
 export async function requireMinAccessLevel(minimumLevel: string, returnSession: boolean = false) {
-    const session = await sessionDetails()
+    const session = await sessionWithEntity()
     if (!session) redirect('/login')
 
     const userLevelIndex = UserAccessLevels.indexOf(session.user.access_level)

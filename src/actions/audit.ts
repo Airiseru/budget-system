@@ -31,7 +31,7 @@ async function createSignedLog(
         table_name: input.tableName,
         record_id: input.recordId,
         payload: input.payload,
-        changed_at: input.changed_at,
+        changed_at: input.changedAt,
         public_key_snapshot: input.publicKeySnapshot,
         signature: input.signature
     }, input.signaturePayload)
@@ -73,6 +73,92 @@ export async function logUserLogout(userId: string, entityId: string) {
     })
 }
 
+export async function logSetUserPin(
+    userId: string,
+    entityId: string
+) {
+    return await executeAudit({
+        entity_id: entityId,
+        user_id: userId,
+        event_type: 'SET_PIN',
+        table_name: 'users',
+        record_id: userId,
+        payload: null,
+        changed_at: new Date()
+    })
+}
+
+export async function logUpdateUserPin(
+    userId: string,
+    entityId: string
+) {
+    return await executeAudit({
+        entity_id: entityId,
+        user_id: userId,
+        event_type: 'UPDATE_PIN',
+        table_name: 'users',
+        record_id: userId,
+        payload: null,
+        changed_at: new Date()
+    })
+}
+
+export async function logEntity(
+    userId: string,
+    entityId: string,
+    eventType: AuditEventType,
+    tableName: string,
+    recordId: string,
+    payload: Record<string, unknown>,
+    date: Date,
+    signature: string,
+    publicKeySnapshot: string,
+    signaturePayload: string
+) {
+    if (eventType !== 'CREATE_ENTITY' && eventType !== 'EDIT') return { success: false, error: "Invalid event type" }
+
+    return await createSignedLog({
+        entityId,
+        userId,
+        eventType: eventType,
+        tableName: tableName,
+        recordId: recordId,
+        payload: payload,
+        changedAt: date,
+        publicKeySnapshot,
+        signature,
+        signaturePayload
+    })
+}
+
+export async function logUserStatusUpdate(
+    userId: string,
+    entityId: string,
+    eventType: AuditEventType,
+    tableName: string,
+    recordId: string,
+    payload: Record<string, unknown>,
+    date: Date,
+    signature: string,
+    publicKeySnapshot: string,
+    signaturePayload: string
+) {
+    if (eventType !== 'CREATE_ENTITY' && eventType !== 'EDIT') return { success: false, error: "Invalid event type" }
+
+    return await createSignedLog({
+        entityId,
+        userId,
+        eventType: eventType,
+        tableName: tableName,
+        recordId: recordId,
+        payload: payload,
+        changedAt: date,
+        publicKeySnapshot,
+        signature,
+        signaturePayload
+    })
+}
+
 export async function logUserKeyCreation(userId: string, entityId: string, keyId: string, deviceName: string, expiresInDays: number, date: Date, publicKey: string) {
     return await executeAudit({
         entity_id: entityId,
@@ -82,10 +168,10 @@ export async function logUserKeyCreation(userId: string, entityId: string, keyId
         record_id: keyId,
         payload: {
             device_name: deviceName,
-            expires_in_days: expiresInDays
+            expires_in_days: expiresInDays,
+            public_key: publicKey
         },
         changed_at: date,
-        public_key_snapshot: publicKey
     })
 }
 
@@ -106,7 +192,7 @@ export async function logUserKeyRevoke(userId: string, entityId: string, keyId: 
             payload: {
                 status: 'revoked'
             },
-            changed_at: date,
+            changedAt: date,
             publicKeySnapshot: key.public_key || publicKey,
             signature,
             signaturePayload
@@ -128,7 +214,7 @@ export async function logNewForm(
     return await executeAudit({
         entity_id: entityId,
         user_id: userId,
-        event_type: 'NEW_FORM',
+        event_type: 'CREATE_FORM',
         table_name: tableName,
         record_id: recordId,
         payload: formData,
@@ -150,7 +236,7 @@ export async function logSaveFormEdits(
     return await executeAudit({
         entity_id: entityId,
         user_id: userId,
-        event_type: 'SAVE_DRAFT',
+        event_type: 'EDIT_FORM',
         table_name: tableName,
         record_id: recordId,
         payload: diff,
@@ -169,7 +255,7 @@ export async function logSubmitForm(
     return await executeAudit({
         entity_id: entityId,
         user_id: userId,
-        event_type: 'SUBMIT',
+        event_type: 'SUBMIT_FORM',
         table_name: tableName,
         record_id: recordId,
         payload: formData,
@@ -177,3 +263,45 @@ export async function logSubmitForm(
     })
 }
 
+export async function logFormSignatories(
+    userId: string,
+    entityId: string,
+    tableName: string,
+    recordId: string,
+    eventType: AuditEventType,
+    oldStatus: string,
+    newStatus: string,
+    formStateHash: string,
+    date: Date,
+    signature: string,
+    publicKey: string,
+    signaturePayload: string,
+) {
+    if (eventType !== 'SIGN' && eventType !== 'APPROVE_FORM') return { success: false, error: "Invalid event type" }
+
+    try {
+        return await createSignedLog({
+            entityId,
+            userId,
+            eventType: 'SIGN',
+            tableName,
+            recordId,
+            payload: {
+                from_status: oldStatus,
+                to_status: newStatus,
+                form_state_hash: formStateHash
+            },
+            changedAt: date,
+            publicKeySnapshot: publicKey,
+            signature,
+            signaturePayload
+        })
+    } catch (error) {
+        console.error(`Failed to log form signatories for event type ${eventType}`, error)
+        return { success: false, error: "Failed to log form signatories" }
+    }
+}
+
+export async function getFormIntegrity(tableName: string, recordId: string) {
+    return await AuditRepository.verifyFormIntegrity(tableName, recordId)
+}

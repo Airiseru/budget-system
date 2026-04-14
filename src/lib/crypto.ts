@@ -1,3 +1,4 @@
+import { canonicalStringify } from "./canonical"
 const keySettings = {
     name: 'ECDSA',
     namedCurve: 'P-256',
@@ -29,7 +30,7 @@ export async function signData(
     let data: Uint8Array<ArrayBuffer>
 
     if (typeof formData !== 'string') {
-        const canonical = JSON.stringify(formData, Object.keys(formData).sort())
+        const canonical = canonicalStringify(formData)
         data = new TextEncoder().encode(canonical)
     }
     else {
@@ -63,7 +64,7 @@ export async function verifySignature(
         let data: Uint8Array<ArrayBuffer>
 
         if (typeof formData !== 'string') {
-            const canonical = JSON.stringify(formData, Object.keys(formData).sort())
+            const canonical = canonicalStringify(formData)
             data = new TextEncoder().encode(canonical)
         }
         else {

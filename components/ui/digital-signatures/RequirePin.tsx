@@ -14,7 +14,7 @@ export type ActionPayload = {
     event_type: AuditEventType
     table_name: string | null
     record_id: string | null
-    payload: any | null
+    payload: Record<string, unknown> | string | null
 }
 
 type Props = {

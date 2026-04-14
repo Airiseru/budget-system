@@ -6,7 +6,7 @@ import { SetPinForm } from '@/components/ui/digital-signatures/SetPin'
 import BackButton from '@/components/ui/BackButton'
 
 export default async function KeysSettingsPage() {
-    const session = await requireMinAccessLevel('encode', true) as { user: { id: string } }
+    const session = await requireMinAccessLevel('encode', true) as { user: { id: string, entity_id: string } }
 
     const [keys, hasPinAlready] = await Promise.all([
         getUserKeys(),
@@ -34,7 +34,7 @@ export default async function KeysSettingsPage() {
 
             <hr className="border-border" />
 
-            <DeviceKeysSettings keys={keys} userId={session.user.id} />
+            <DeviceKeysSettings keys={keys} entityId={session.user.entity_id} userId={session.user.id} />
         </main>
     )
 }
