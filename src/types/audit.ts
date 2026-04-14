@@ -88,6 +88,12 @@ export type SignaturePayload = {
     data: string | Diff | Record<string, unknown> | null
 }
 
+export type FormSignaturePayload = {
+    from_status: string
+    to_status: string
+    form_state_hash: string
+}
+
 export type SignedLogInput = {
     entityId: string
     userId: string

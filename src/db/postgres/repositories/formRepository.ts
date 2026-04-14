@@ -18,9 +18,15 @@ export async function createForm(form: NewForm): Promise<Form> {
 }
 
 export async function updateFormAuthStatus(formId: string, authStatus: string) {
-    return await db
+    const date = new Date()
+    const res = await db
         .updateTable('forms')
-        .set({ auth_status: authStatus })
+        .set({ auth_status: authStatus, updated_at: date })
         .where('id', '=', formId)
         .execute()
+
+    return {
+        ...res,
+        updated_at: date
+    }
 }

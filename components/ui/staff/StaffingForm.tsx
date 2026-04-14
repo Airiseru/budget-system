@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from "next/navigation"
 import { StaffingSummary, StaffingSummaryWithPositions } from "@/src/types/staffing"
+import React from "react"
 
 interface PapOption {
     id: string;
@@ -12,6 +13,7 @@ interface PapOption {
 interface StaffingSummaryProps {
     staff?: StaffingSummaryWithPositions;
     availablePaps: { id: string; title: string, tier: number }[];
+    userId: string;
     entityId: string;   // Added
     entityName: string; // Added
 }
@@ -36,7 +38,7 @@ type PositionFormInput = {
     }[];
 };
 
-export default function StaffForm({ staff, availablePaps, entityId, entityName }: StaffingSummaryProps) {
+export default function StaffForm({ staff, availablePaps, userId, entityId, entityName }: StaffingSummaryProps) {
     const router = useRouter()
     const isEditing = !!staff
 
@@ -169,6 +171,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
         setIsLoading(true);
 
         const payload = {
+            userId: userId,
             entityId: entityId, // This now uses the ID from your Server Action
             summary: {
                 fiscal_year: formData.fiscal_year,
@@ -225,7 +228,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
     };
 
     const renderPositionRow = (pos: any, index: number) => (
-    <>
+    <React.Fragment key={pos.id ?? index}>
         <tr key={index} className="hover:bg-gray-50/50">
             <td className="p-2 border-r align-top">
                 <select
@@ -356,7 +359,7 @@ export default function StaffForm({ staff, availablePaps, entityId, entityName }
             </td>
         </tr>
         
-    </>
+    </React.Fragment>
 );
 
     const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];

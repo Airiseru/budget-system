@@ -100,7 +100,7 @@ export async function createStaffingSubmission(
                 .execute();
         }
 
-        return { formId: form.id, summaryId: summary.id };
+        return { formId: form.id, summaryId: summary.id, createdAt: summary.created_at };
     });
 }
 

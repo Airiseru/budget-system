@@ -24,6 +24,7 @@ async function executeAudit(log: Omit<NewAuditLog, 'hash'>, signingPayload: Sign
 async function createSignedLog(
     input: SignedLogInput
 ) {
+    console.log(`CREATE SIGNED LOG INPUT:`, input)
     return await executeAudit({
         entity_id: input.entityId,
         user_id: input.userId,
@@ -281,11 +282,11 @@ export async function logFormSignatories(
 
     try {
         return await createSignedLog({
-            entityId,
-            userId,
-            eventType: 'SIGN',
-            tableName,
-            recordId,
+            entityId: entityId,
+            userId: userId,
+            eventType: eventType,
+            tableName: tableName,
+            recordId: recordId,
             payload: {
                 from_status: oldStatus,
                 to_status: newStatus,
@@ -293,8 +294,8 @@ export async function logFormSignatories(
             },
             changedAt: date,
             publicKeySnapshot: publicKey,
-            signature,
-            signaturePayload
+            signature: signature,
+            signaturePayload: signaturePayload
         })
     } catch (error) {
         console.error(`Failed to log form signatories for event type ${eventType}`, error)

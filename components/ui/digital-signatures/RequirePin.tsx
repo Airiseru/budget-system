@@ -72,7 +72,8 @@ export function RequirePin({
             })
 
             // Generate the signature
-            const signature = await signData(signaturePayload, privateKey)
+            const output = await signData(signaturePayload, privateKey)
+            const signature = output.signature
 
             // Pass the locked data back to the parent component to handle the server action
             await onSuccess({ 

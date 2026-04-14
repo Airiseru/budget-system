@@ -16,7 +16,8 @@ export default async function NewStaffingPage() {
 
     return (
         <StaffForm 
-            availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))} 
+            availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
+            userId={session.user.id}
             entityId={session.user.entity_id} 
             entityName={session.user_entity.entity_name || "Unknown Agency"} 
         />

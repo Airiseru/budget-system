@@ -1,8 +1,7 @@
-// forms/staff/[id]/page.tsx
-
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow"
-import { getCurrentSignatoryRole, canSign } from "@/src/lib/workflows"
+import { getCurrentSignatoryRole, canSign, getNextStatus } from "@/src/lib/workflows"
 import { createStaffingRepository, createKeyRepository, createFormRepository, createPapRepository } from "@/src/db/factory"
+import { submitForm } from "@/src/actions/form"
 import { sessionWithEntity } from "@/src/actions/auth"
 import { redirect, notFound } from "next/navigation"
 import { SignSection } from "@/components/ui/digital-signatures/SignSection"
@@ -68,6 +67,8 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const userCanSign = currentSignatoryRole
         ? canSign(summary.auth_status ?? "", session.user.access_level, session.user.workflow_role ?? "", currentSignatoryRole, workflow)
         : false
+    
+    const nextSignatoryRole = getNextStatus(summary.auth_status ?? "", workflow) || "approved"
 
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(summary.id ?? "", session.user.id)
     const allSignatures = await KeyRepo.getSignatoriesByFormId(summary.id ?? "")
@@ -77,7 +78,9 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const updateAuthStatus = async () => {
         "use server"
         if (summary.auth_status !== 'draft') return
-        await FormRepo.updateFormAuthStatus(summary.id ?? "", "pending_personnel")
+
+        await submitForm(summary.id ?? "", summary, session.user.id, summary.entity_id, 'staffing_summaries', nextSignatoryRole)
+
         revalidatePath(`/forms/staff/${id}`)
     }
 
@@ -212,13 +215,16 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
             {/* Sign section */}
             <SignSection 
                 formId={summary.id ?? ""} 
-                formData={formData} 
-                userId={session.user.id} 
+                tableName={'staffing_summaries'}
+                formData={summary} 
+                userId={session.user.id}
+                entityId={entityId}
                 authStatus={summary.auth_status ?? ""} 
                 userCanSign={userCanSign && !existingSignature} 
                 signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")} 
                 alreadySigned={!!existingSignature} 
-                signatories={allSignatures} 
+                signatories={allSignatures}
+                workflow={workflow}
             />
 
             {/* Danger Zone (Keep existing) */}

@@ -1,16 +1,20 @@
 'use client'
 
+import { Workflow, getNextSignatoryRole, getNextStatus } from '@/src/lib/workflows'
 import { SignButton } from './SignButton'
 import { SignatureVerificationBadge } from './SignatureVerificationBadge'
 import { ShieldCheck } from 'lucide-react'
 
 type Props = {
     formId: string
+    tableName: string
     formData: object
     userId: string
+    entityId: string
     authStatus: string
     userCanSign: boolean
     signatoryRole?: string
+    nextSignatoryRole?: string
     alreadySigned: boolean
     signatories?: {
         id: string
@@ -18,6 +22,7 @@ type Props = {
         role: string
         created_at: Date
     }[]
+    workflow: Workflow
 }
 
 const roleLabels: Record<string, string> = {
@@ -26,23 +31,37 @@ const roleLabels: Record<string, string> = {
     agency_head: 'Agency Head',
 }
 
+const roleToAuthStatus: Record<string, string> = {
+    personnel_officer: 'pending_personnel',
+    budget_officer: 'pending_budget',
+    chief_accountant: 'pending_chief_accountant',
+    office_head: 'pending_office_head',
+    agency_head: 'pending_agency_head',
+    approved: 'approved',
+}
+
 const statusMessages: Record<string, string> = {
     draft: 'This form is in draft.',
     pending_personnel: "Waiting for Personnel Officer's signature.",
     pending_budget: "Waiting for Budget Officer's signature.",
+    pending_chief_accountant: "Waiting for Chief Accountant's signature.",
+    pending_office_head: "Waiting for Office Head's signature.",
     pending_agency_head: "Waiting for Agency Head's approval.",
     approved: 'This form has been fully approved.',
 }
 
 export function SignSection({
     formId,
+    tableName,
     formData,
     userId,
+    entityId,
     authStatus,
     userCanSign,
     signatoryRole,
     alreadySigned,
     signatories = [],
+    workflow
 }: Props) {
     return (
         <div className="border border-border rounded-lg p-6 space-y-4">
@@ -58,9 +77,15 @@ export function SignSection({
                 <div className="space-y-2">
                     {signatories.map(sig => (
                         <SignatureVerificationBadge
+                            userId={userId}
+                            entityId={entityId}
+                            formId={formId}
+                            tableName={tableName}
                             key={sig.id}
                             signatoryId={sig.id}
                             formData={formData}
+                            signatoryRole={roleToAuthStatus[sig.role]}
+                            nextRole={getNextStatus(roleToAuthStatus[sig.role], workflow) ?? ''}
                             signerName={`${sig.user_name} (${roleLabels[sig.role] ?? sig.role})`}
                             signedAt={sig.created_at}
                         />
@@ -82,10 +107,14 @@ export function SignSection({
                         Sign as {roleLabels[signatoryRole]}
                     </p>
                     <SignButton
+                        entityId={entityId}
+                        tableName={tableName}
                         formId={formId}
                         formData={formData}
                         userId={userId}
                         signatoryRole={signatoryRole}
+                        fromAuthStatus={authStatus}
+                        toAuthStatus={getNextStatus(authStatus, workflow) ?? ''}
                     />
                 </div>
             ) : authStatus !== 'approved' ? (

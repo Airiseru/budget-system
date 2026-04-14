@@ -33,6 +33,9 @@ export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: 
 
     if (requiresSignature) {
         if (!log.public_key_snapshot || !log.signature || !signingPayload) {
+            console.log(`public_key_snapshot: ${!log.public_key_snapshot}`)
+            console.log(`signature: ${!log.signature}`)
+            console.log(`signingPayload: ${!signingPayload}`)
             throw new Error(`${log.event_type} requires a digital signature`)
         }
 
@@ -76,6 +79,8 @@ export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: 
         editedLog.changed_at = changedAt
         editedLog.prev_hash = prevHash
         editedLog.hash = newHash
+
+        console.log(`[AUDIT] Logging ${log.event_type} with payload ${canonicalStringify(log.payload)}`)
 
         return await trx
             .insertInto('audit_logs')
@@ -252,7 +257,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
 
         // Clean current state for comparison
         const { 
-            auth_status, entity_id, created_at, updated_at, submission_date, 
+            auth_status, entity_id, created_at, updated_at,
             ...cleanCurrentState 
         } = rawCurrentState as any
 

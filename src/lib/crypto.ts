@@ -25,12 +25,17 @@ export async function generateKeyPair(): Promise<{
 
 export async function signData(
     formData: object | string,
-    privateKey: CryptoKey
-): Promise<string> {
+    privateKey: CryptoKey,
+    returnData: boolean = false
+): Promise<{
+    signature: string
+    signaturePayload?: string
+}> {
     let data: Uint8Array<ArrayBuffer>
+    let canonical: string = ""
 
     if (typeof formData !== 'string') {
-        const canonical = canonicalStringify(formData)
+        canonical = canonicalStringify(formData)
         data = new TextEncoder().encode(canonical)
     }
     else {
@@ -43,7 +48,19 @@ export async function signData(
         data
     )
 
-    return btoa(String.fromCharCode(...new Uint8Array(signature)))
+    const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+
+    if (returnData) {
+        return {
+            signature: signatureBase64,
+            signaturePayload: canonical
+        }
+    }
+    else {
+        return {
+            signature: signatureBase64
+        }
+    }
 }
 
 export async function verifySignature(

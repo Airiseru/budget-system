@@ -3,8 +3,8 @@ import { AuditLog, AuditEventType, AuditLogEntryPayload } from "../types/audit"
 import { canonicalStringify } from "./canonical"
 import { MerkleTree } from "merkletreejs"
 
-export function sha256(data: string): Buffer {
-    return createHash('sha256').update(data).digest()
+export function sha256(data: string): string {
+    return createHash('sha256').update(data).digest('hex')
 }
 
 export function computeAuditEntryHash(entry: AuditLogEntryPayload): string {
