@@ -16,7 +16,12 @@ const RetireeRowSchema = z.object({
   date_of_birth: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Birth Date"),
   original_appointment: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Appointment Date"),
   retirement_effectivity: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Effectivity Date"),
-  highest_monthly_salary: z.coerce.number().min(0, "Salary cannot be negative"),
+  highest_monthly_salary: z.coerce.number().min(0),
+  // New Fields
+  number_vacation_leave: z.coerce.number().min(0).default(0),
+  number_sick_leave: z.coerce.number().min(0).default(0),
+  total_credible_service: z.coerce.number().min(0).default(0),
+  number_gratuity_months: z.coerce.number().min(0).default(0),
 });
 
 // Schema for the entire form submission
@@ -69,6 +74,10 @@ const BP205EntryGrid = ({ entityId, entityName, initialData, isEditing = false }
       original_appointment: "",
       retirement_effectivity: "",
       highest_monthly_salary: 0,
+      number_vacation_leave: 0,
+      number_sick_leave: 0,
+      total_credible_service: 0,
+      number_gratuity_months: 0,
     }
   ]);
 
@@ -142,7 +151,11 @@ const BP205EntryGrid = ({ entityId, entityName, initialData, isEditing = false }
       date_of_birth: "",
       original_appointment: "",
       retirement_effectivity: "", 
-      highest_monthly_salary: 0 
+      highest_monthly_salary: 0,
+      number_vacation_leave: 0,
+      number_sick_leave: 0,
+      total_credible_service: 0,
+      number_gratuity_months: 0
     }]);
   };
 
@@ -211,18 +224,22 @@ const BP205EntryGrid = ({ entityId, entityName, initialData, isEditing = false }
         {/* Spreadsheet Grid */}
         <div className="border border-border rounded-b-lg overflow-x-auto bg-card shadow-sm">
           <table className="w-full text-sm border-collapse min-w-[1500px]">
-            <thead>
+            <thead className="bg-muted/50 border-b text-[11px] uppercase tracking-wider text-muted-foreground font-bold">
               <tr className="bg-muted/50 border-b text-[11px] uppercase tracking-wider text-muted-foreground font-bold">
                 <th className="p-2 border-r w-10 text-center">#</th>
-                <th className="p-2 border-r text-left w-64">Full Name (Last, First, M.I.)</th>
-                <th className="p-2 border-r text-center w-24">GSIS?</th>
-                <th className="p-2 border-r text-left w-32">Ret. Law</th>
-                <th className="p-2 border-r text-left w-48">Position Title</th>
-                <th className="p-2 border-r text-center w-16">SG</th>
-                <th className="p-2 border-r text-center w-40">Date of Birth</th>
-                <th className="p-2 border-r text-center w-40">Original Appointment Date</th>
-                <th className="p-2 border-r text-center w-40">Effectivity Date</th>
-                <th className="p-2 border-r text-right w-40">Monthly Salary</th>
+                <th className="p-2 border-r text-left w-64">Full Name</th>
+                <th className="p-2 border-r text-center w-16">GSIS?</th>
+                <th className="p-2 border-r text-left w-24">Ret. Law</th>
+                <th className="p-2 border-r text-left w-40">Position</th>
+                <th className="p-2 border-r text-center w-12">SG</th>
+                <th className="p-2 border-r text-center w-32">DOB</th>
+                <th className="p-2 border-r text-center w-32">Orig. Appt</th>
+                <th className="p-2 border-r text-center w-32">Effectivity</th>
+                <th className="p-2 border-r text-right w-32">Monthly Sal.</th>
+                <th className="p-2 border-r text-center w-20">VL Credits</th>
+                <th className="p-2 border-r text-center w-20">SL Credits</th>
+                <th className="p-2 border-r text-center w-24">Total Credible Service</th>
+                <th className="p-2 border-r text-center w-24">No. of Gratuity Months</th>
                 <th className="p-2 text-center w-12">Action</th>
               </tr>
             </thead>
@@ -288,6 +305,40 @@ const BP205EntryGrid = ({ entityId, entityName, initialData, isEditing = false }
                       <span className="text-muted-400 pl-1 text-xs">₱</span>
                       <input type="number" value={row.highest_monthly_salary} onChange={(e) => handleInputChange(row.id, 'highest_monthly_salary', e.target.value)} className="w-full p-1.5 text-right focus:bg-card focus:outline-none font-mono" placeholder="0.00" />
                     </div>
+                  </td>
+                  <td className="p-1 border-r">
+                    <input 
+                      type="number" 
+                      step="0.001"
+                      value={row.number_vacation_leave} 
+                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                      onChange={(e) => handleInputChange(row.id, 'number_vacation_leave', e.target.value)} 
+                    />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input 
+                      type="number" 
+                      value={row.number_sick_leave} 
+                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                      onChange={(e) => handleInputChange(row.id, 'number_sick_leave', e.target.value)} 
+                    />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input 
+                      type="number" 
+                      step="0.1"
+                      value={row.total_credible_service} 
+                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                      onChange={(e) => handleInputChange(row.id, 'total_credible_service', e.target.value)} 
+                    />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input 
+                      type="number" 
+                      value={row.number_gratuity_months} 
+                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                      onChange={(e) => handleInputChange(row.id, 'number_gratuity_months', e.target.value)} 
+                    />
                   </td>
                   <td className="p-1 text-center">
                     <button 
