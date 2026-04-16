@@ -233,7 +233,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
 
         for (const log of formLogsWithProofs) {
-            const payload = log.payload as any;
+            const payload = log.payload as any
 
             if (log.event_type === 'CREATE_FORM') {
                 reconstructedState = JSON.parse(JSON.stringify(payload))
