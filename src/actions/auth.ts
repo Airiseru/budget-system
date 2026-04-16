@@ -3,6 +3,7 @@
 import { auth } from "@/src/lib/auth"
 import { headers } from "next/headers"
 import { createEntityRepository } from "../db/factory"
+import { logUserSignUp, logUserLogout } from "./audit"
 import { SignupFormSchema, UserFormState } from "../lib/validations/user"
 import { redirect } from "next/navigation"
 import * as z from 'zod'
@@ -68,7 +69,7 @@ export async function requireAccessLevel(level: string) {
 }
 
 export async function requireMinAccessLevel(minimumLevel: string, returnSession: boolean = false) {
-    const session = await sessionDetails()
+    const session = await sessionWithEntity()
     if (!session) redirect('/login')
 
     const userLevelIndex = UserAccessLevels.indexOf(session.user.access_level)
@@ -120,11 +121,39 @@ export async function signup(state: UserFormState, formData: FormData): Promise<
         }
     }
 
+    const responseData = await response.json()
+
+    // Log user signup
+    try {
+        if (!responseData.user.id || !responseData.user.entity_id) return
+
+        const userData = {
+            name: responseData.user.name,
+            email: responseData.user.email,
+            position: responseData.user.position
+        }
+
+        logUserSignUp(responseData.user.id, responseData.user.entity_id, userData, responseData.user.created_at)
+    } catch (error) {
+        console.error("Failed to create audit log for user signup", error)
+    }
+
     // Redirect to login page
     redirect('/login')
 }
 
 export async function logout() {
+    const session = await sessionDetails()
+
+    // Log user logout
+    if (session?.user) {
+        try {
+            logUserLogout(session.user.id, session.user.entity_id)
+        } catch (error) {
+            console.error("Failed to create audit log for user logout", error)
+        }
+    }
+
     await auth.api.signOut({
         headers: await headers() 
     })

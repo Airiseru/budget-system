@@ -1,4 +1,5 @@
 import { EntitiesTable, UserTable, SessionTable, AccountTable, VerificationTable, DepartmentsTable, AgenciesTable, OperatingUnitsTable } from "./entities"
+import { AuditLogTable, MerkleRootTable } from "./audit";
 import { FormTable, FormPapsTable } from "./forms";
 import { UserKeyTable, SignatoryTable } from "./keys"
 import { PapTable, PapLocationTable } from "./pap";
@@ -7,6 +8,8 @@ import { RetireeRecordTable, RetireesListTable } from "./retirees";
 
 export interface Database {
     entities: EntitiesTable
+    audit_logs: AuditLogTable
+    merkle_roots: MerkleRootTable
     users: UserTable
     sessions: SessionTable
     accounts: AccountTable

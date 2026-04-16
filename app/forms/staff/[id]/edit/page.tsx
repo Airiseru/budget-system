@@ -1,21 +1,35 @@
 import StaffForm from "@/components/ui/staff/StaffingForm";
 import { sessionWithEntity } from "@/src/actions/auth";
-import { createPapRepository } from "@/src/db/factory";
-import { redirect } from "next/navigation";
+import { createStaffingRepository, createPapRepository } from "@/src/db/factory";
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
 import Link from "next/link";
 import { ModeToggle } from "@/components/ui/system-toggle";
+import { notFound, redirect } from 'next/navigation'
 
-export default async function NewStaffingPage() {
+const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
+
+export default async function EditStaffPage({ params }: { params: Promise<{ id: string }> }) {
+    // 1. Resolve params
+    const { id } = await params
+    
+    // 2. Auth Check
     const session = await sessionWithEntity();
-
-    // 1. AUTH GUARD: If no session OR no entity_id, redirect to login
     if (!session || !session.user?.entity_id) {
         redirect("/login");
     }
 
-    if (!session || session.user.access_level !== 'encode') {
+    // 3. Fetch Staff Record
+    const staff = await StaffingRepo.getStaffingById(id);
+    if (!staff) notFound();
+
+    // This will now pass type checking and logic
+    if (staff.auth_status !== 'draft') {
+        redirect(`/forms/staff/${id}?error=locked`);
+    }
+
+    // 5. Authorization Check (Role based)
+    if (session.user.access_level !== 'encode') {
         redirect('/forms/staff?error=unauthorized');
     }
 
@@ -33,7 +47,8 @@ export default async function NewStaffingPage() {
                 </ButtonGroup>
             </ButtonGroup>
             <StaffForm 
-                availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
+                staff={staff}
+                availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))} 
                 userId={session.user.id}
                 entityId={session.user.entity_id} 
                 entityName={session.user_entity.entity_name || "Unknown Agency"} 

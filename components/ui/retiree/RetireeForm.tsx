@@ -3,83 +3,91 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { RetireeRecordTable } from '@/src/types/retirees';
 import { z } from "zod";
-
-// Schema for a single retiree row
-const RetireeRowSchema = z.object({
-  id: z.string(),
-  name: z.string().min(1, "Full Name is required"),
-  is_gsis_member: z.boolean(),
-  retirement_law: z.string(),
-  position: z.string().min(1, "Position is required"),
-  salary_grade: z.coerce.number().min(1).max(33),
-  date_of_birth: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Birth Date"),
-  original_appointment: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Appointment Date"),
-  retirement_effectivity: z.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Effectivity Date"),
-  highest_monthly_salary: z.coerce.number().min(0),
-  // New Fields
-  number_vacation_leave: z.coerce.number().min(0).default(0),
-  number_sick_leave: z.coerce.number().min(0).default(0),
-  total_credible_service: z.coerce.number().min(0).default(0),
-  number_gratuity_months: z.coerce.number().min(0).default(0),
-});
-
-// Schema for the entire form submission
-const BP205Schema = z.object({
-  retirees: z.array(RetireeRowSchema).min(1, "At least one retiree must be listed"),
-});
+import { RetireeRowSchema, BP205Schema } from '@/src/schemas/retiree.schema';
 
 type RetireeRow = z.infer<typeof RetireeRowSchema>;
 
-interface Props {
-  entityId: string;
-  entityName: string;
-  initialData?: any; // For editing existing drafts
-  isEditing?: boolean;
+interface RetireeFormInitialData {
+  id: string;
+  fiscal_year: number;
+  is_mandatory: boolean;
+  entity_id: string;
+  auth_status: string | null;
+  retirees: {
+    id: string;
+    name: string;
+    is_gsis_member: boolean;
+    retirement_law: string;
+    position: string;
+    salary_grade: number;
+    date_of_birth: Date; // Note: Date object from DB
+    original_appointment: Date;
+    retirement_effectivity: Date;
+    highest_monthly_salary: number | string;
+    number_vacation_leave: number | null;
+    number_sick_leave: number | null;
+    total_credible_service: number | null;
+    number_gratuity_months: number | null;
+    retirees_list_id: string;
+  }[];
 }
 
-// interface RetireeRow {
-//   id: string;
-//   name: string;
-//   is_gsis_member: boolean;
-//   retirement_law: string;
-//   position: string;
-//   salary_grade: number;
-//   date_of_birth: string;
-//   original_appointment: string;
-//   retirement_effectivity: string;
-//   highest_monthly_salary: number;
-//   number_vacation_leave?: number;
-//   number_sick_leave?: number;
-//   total_credible_service?: number;
-//   number_gratuity_months?: number;
-// }
+interface Props {
+  retireeData?: RetireeFormInitialData; // Use the interface here
+  entityId: string;
+  entityName: string;
+}
 
-const BP205EntryGrid = ({ entityId, entityName, initialData, isEditing = false }: Props) => {
+const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel'>('draft');
   const [error, setError] = useState<string | null>(null);
 
-  // Initialize with initialData if editing, else one empty row
-  const [retirees, setRetirees] = useState<RetireeRow[]>([
-    {
-      id: crypto.randomUUID(),
-      name: "",
-      is_gsis_member: true,
-      retirement_law: "RA 8291",
-      position: "",
-      salary_grade: 1,
-      date_of_birth: "",
-      original_appointment: "",
-      retirement_effectivity: "",
-      highest_monthly_salary: 0,
-      number_vacation_leave: 0,
-      number_sick_leave: 0,
-      total_credible_service: 0,
-      number_gratuity_months: 0,
+  const isEditing = !!retireeData
+
+  const [retirees, setRetirees] = useState<RetireeRow[]>(() => {
+    // Check if we are in "Edit Mode" via the retiree prop
+    if (retireeData && retireeData.retirees && retireeData.retirees.length > 0) {
+        return retireeData.retirees.map((r) => ({
+            ...r,
+            // 1. Convert DB Timestamps/Dates to YYYY-MM-DD for HTML inputs
+            date_of_birth: r.date_of_birth ? new Date(r.date_of_birth).toISOString().split('T')[0] : "",
+            original_appointment: r.original_appointment ? new Date(r.original_appointment).toISOString().split('T')[0] : "",
+            retirement_effectivity: r.retirement_effectivity ? new Date(r.retirement_effectivity).toISOString().split('T')[0] : "",
+            
+            // 2. Ensure numbers are actual numbers (Kysely numeric types can return as strings)
+            salary_grade: Number(r.salary_grade),
+            highest_monthly_salary: Number(r.highest_monthly_salary),
+            number_vacation_leave: Number(r.number_vacation_leave ?? 0),
+            number_sick_leave: Number(r.number_sick_leave ?? 0),
+            total_credible_service: Number(r.total_credible_service ?? 0),
+            number_gratuity_months: Number(r.number_gratuity_months ?? 0),
+        }));
     }
-  ]);
+
+    // Default Row for "Create Mode"
+    return [{
+        id: crypto.randomUUID(),
+        name: "",
+        is_gsis_member: true,
+        retirement_law: "RA 8291",
+        position: "",
+        salary_grade: 1,
+        date_of_birth: "",
+        original_appointment: "",
+        retirement_effectivity: "",
+        highest_monthly_salary: 0,
+        number_vacation_leave: 0,
+        number_sick_leave: 0,
+        total_credible_service: 0,
+        number_gratuity_months: 0,
+    }];
+});
+
+
 
   const [fiscalYear, setFiscalYear] = useState(2026);
 
@@ -115,7 +123,7 @@ const BP205EntryGrid = ({ entityId, entityName, initialData, isEditing = false }
       auth_status: submitAction
     };
 
-    const endpoint = isEditing ? `/api/retirees/${initialData.id}` : '/api/retirees';
+    const endpoint = isEditing ? `/api/retirees/${retireeData.id}` : '/api/retirees';
     const method = isEditing ? 'PUT' : 'POST';
 
     try {

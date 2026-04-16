@@ -2,22 +2,29 @@
 
 import { useState } from 'react'
 import { getPrivateKey } from '@/src/lib/device-key-store'
-import { signFormData } from '@/src/lib/crypto'
-import { verifyAndSubmitSignature, getUserKeys } from '@/src/actions/keys'
+import { signData } from '@/src/lib/crypto'
+import { sha256, buildSignaturePayload } from '@/src/lib/audit-hash'
+import { verifyAndSubmitSignature, getUserKeys, verifySigningPin } from '@/src/actions/keys'
+import { FormSignaturePayload } from '@/src/types/audit'
+import { canonicalStringify } from '@/src/lib/canonical'
 import { Button } from '@/components/ui/button'
 import { PenLine, ShieldCheck, Eye, EyeOff } from 'lucide-react'
 
 type Props = {
     formId: string
+    tableName: string
     formData: object
     userId: string
+    entityId: string
     signatoryRole: string
+    fromAuthStatus?: string
+    toAuthStatus?: string
     onApproved?: () => void
 }
 
 type Step = 'idle' | 'pin' | 'signing' | 'signed'
 
-export function SignButton({ formId, formData, userId, signatoryRole, onApproved }: Props) {
+export function SignButton({ formId, tableName, formData, userId, entityId, signatoryRole, fromAuthStatus, toAuthStatus, onApproved }: Props) {
     const [step, setStep] = useState<Step>('idle')
     const [pin, setPin] = useState('')
     const [showPin, setShowPin] = useState(false)
@@ -41,6 +48,13 @@ export function SignButton({ formId, formData, userId, signatoryRole, onApproved
                 return
             }
 
+            // Verify if PIN is correct
+            if (!await verifySigningPin(pin)) {
+                setError('Incorrect PIN')
+                setStep('pin')
+                return
+            }
+
             const keys = await getUserKeys()
             const activeKey = keys.find(k => k.status === 'active')
             if (!activeKey) {
@@ -49,15 +63,47 @@ export function SignButton({ formId, formData, userId, signatoryRole, onApproved
                 return
             }
 
-            const signature = await signFormData(formData, privateKey)
+            const date = new Date()
+
+            const {
+                auth_status, entity_id, created_at, updated_at,
+                ...cleanFormData
+            } = formData as any
+
+            const payload: FormSignaturePayload = {
+                from_status: fromAuthStatus ?? signatoryRole,
+                to_status: toAuthStatus ?? 'approved',
+                form_state_hash: sha256(canonicalStringify(cleanFormData)),
+            }
+
+            console.log(`form data in SIGN BUTTON`, cleanFormData)
+
+            const signaturePayload = buildSignaturePayload({
+                entity_id: entityId,
+                user_id: userId,
+                event_type: 'SIGN',
+                table_name: tableName,
+                record_id: formId,
+                payload: payload,
+                changed_at: date.toISOString(),
+            })
+
+            console.log('signaturePayload in SIGN BUTTON', signaturePayload)
+
+            const output = await signData(signaturePayload, privateKey, true)
+            const signature = output.signature
 
             await verifyAndSubmitSignature(
                 pin,
+                tableName,
                 formId,
+                payload,
                 activeKey.id,
                 activeKey.public_key,
+                date,
                 signatoryRole,
-                signature
+                signature,
+                signaturePayload as string
             )
 
             setStep('signed')

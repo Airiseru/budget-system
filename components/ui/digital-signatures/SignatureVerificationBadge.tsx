@@ -2,22 +2,53 @@
 
 import { useEffect, useState } from 'react'
 import { verifyFormSignature } from '@/src/actions/keys'
+import { buildSignaturePayload, sha256 } from '@/src/lib/audit-hash'
+import { canonicalStringify } from '@/src/lib/canonical'
 import { ShieldCheck, ShieldX, Shield } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 
 type Props = {
+    userId: string
+    entityId: string
+    tableName: string
+    formId: string
     signatoryId: string
     formData: object
     signerName: string
+    signatoryRole: string
+    nextRole: string
     signedAt: Date
 }
 
-export function SignatureVerificationBadge({ signatoryId, formData, signerName, signedAt }: Props) {
+export function SignatureVerificationBadge({ userId, entityId, tableName, formId, signatoryId, formData, signerName, signatoryRole, nextRole, signedAt }: Props) {
     const [status, setStatus] = useState<'loading' | 'valid' | 'invalid'>('loading')
     const [details, setDetails] = useState<string | null>(null)
 
+    const {
+        auth_status, entity_id, created_at, updated_at,
+        ...cleanFormData
+    } = formData as any
+
+    console.log(`form data in INTEGRITY BADGE: ${canonicalStringify(cleanFormData)}`)
+
+    const signaturePayload = buildSignaturePayload({
+        entity_id: entityId,
+        user_id: userId,
+        event_type: 'SIGN',
+        table_name: tableName,
+        record_id: formId,
+        payload: {
+            from_status: signatoryRole,
+            to_status: nextRole,
+            form_state_hash: sha256(canonicalStringify(cleanFormData)),
+        },
+        changed_at: signedAt.toISOString(),
+    })
+
+    console.log(`signaturePayload in INTEGRITY BADGE: ${signaturePayload}`)
+
     useEffect(() => {
-        verifyFormSignature(signatoryId, formData)
+        verifyFormSignature(signatoryId, signaturePayload)
             .then(result => {
                 if (result.isValid) {
                     setStatus('valid')

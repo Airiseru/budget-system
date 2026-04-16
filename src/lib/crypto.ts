@@ -1,3 +1,4 @@
+import { canonicalStringify } from "./canonical"
 const keySettings = {
     name: 'ECDSA',
     namedCurve: 'P-256',
@@ -22,12 +23,24 @@ export async function generateKeyPair(): Promise<{
     }
 }
 
-export async function signFormData(
-    formData: object,
-    privateKey: CryptoKey
-): Promise<string> {
-    const canonical = JSON.stringify(formData, Object.keys(formData).sort())
-    const data = new TextEncoder().encode(canonical)
+export async function signData(
+    formData: object | string,
+    privateKey: CryptoKey,
+    returnData: boolean = false
+): Promise<{
+    signature: string
+    signaturePayload?: string
+}> {
+    let data: Uint8Array<ArrayBuffer>
+    let canonical: string = ""
+
+    if (typeof formData !== 'string') {
+        canonical = canonicalStringify(formData)
+        data = new TextEncoder().encode(canonical)
+    }
+    else {
+        data = new TextEncoder().encode(formData)
+    }
     
     const signature = await crypto.subtle.sign(
         keySettings,
@@ -35,11 +48,23 @@ export async function signFormData(
         data
     )
 
-    return btoa(String.fromCharCode(...new Uint8Array(signature)))
+    const signatureBase64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
+
+    if (returnData) {
+        return {
+            signature: signatureBase64,
+            signaturePayload: canonical
+        }
+    }
+    else {
+        return {
+            signature: signatureBase64
+        }
+    }
 }
 
 export async function verifySignature(
-    formData: object,
+    formData: object | string,
     signatureBase64: string,
     publicKeyBase64: string
 ): Promise<boolean> {
@@ -53,8 +78,16 @@ export async function verifySignature(
             ['verify']
         )
 
-        const canonical = JSON.stringify(formData, Object.keys(formData).sort())
-        const data = new TextEncoder().encode(canonical)
+        let data: Uint8Array<ArrayBuffer>
+
+        if (typeof formData !== 'string') {
+            const canonical = canonicalStringify(formData)
+            data = new TextEncoder().encode(canonical)
+        }
+        else {
+            data = new TextEncoder().encode(formData)
+        }
+
         const signature = Uint8Array.from(atob(signatureBase64), c => c.charCodeAt(0))
 
         return await crypto.subtle.verify(

@@ -26,12 +26,23 @@ export async function PUT(
 ) {
     const { id } = await params
     const body = await request.json()
+
+    // 1. Check current status in DB before updating
+    const existing = await StaffingRepository.getStaffingWithFormById(id)
     
-    // In your repository, you'll need an updateStaffingSubmission function
-    // that handles updating the summary and potentially syncing the position rows.
-    const result = await StaffingRepository.updateStaffingSubmission(id, body)
-    
-    return NextResponse.json(result)
+    if (!existing) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 })
+    }
+
+    if (existing.auth_status !== 'draft') {
+        return NextResponse.json(
+            { error: "Only drafts can be modified." }, 
+            { status: 403 } // 403 Forbidden
+        )
+    }
+
+    await StaffingRepository.updateStaffingSubmission(id, body)
+    return NextResponse.json({ success: true })
 }
 
 export async function DELETE(

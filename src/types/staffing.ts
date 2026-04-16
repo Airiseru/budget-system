@@ -55,4 +55,5 @@ export interface PositionWithCompensations extends Position {
 
 export interface StaffingSummaryWithPositions extends StaffingSummary {
     positions: PositionWithCompensations[];
+    auth_status: string | null;
 }

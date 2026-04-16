@@ -2,6 +2,7 @@ import { createStaffingRepository } from '@/src/db/factory'
 import { NextResponse } from 'next/server'
 import { auth } from "@/src/lib/auth"; 
 import { headers } from "next/headers";
+import { logNewForm, logSubmitForm } from '@/src/actions/audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
         const body = await req.json();
         
         // Destructure the payload sent by the form
-        const { entityId, summary, positions, auth_status } = body;
+        const { userId, entityId, summary, positions, auth_status } = body;
 
         // Ensure you pass 'summary' (which contains fiscal_year) 
         // to your repository function, not the whole body.
@@ -47,6 +48,38 @@ export async function POST(req: Request) {
             positions,
             auth_status ?? "draft"
         );
+
+        // Log form creation
+        const logResult = await logNewForm(
+            userId,
+            entityId,
+            'staffing_summaries',
+            result.formId,
+            {
+                ...summary,
+                positions
+            },
+            result.createdAt
+        )
+        
+        if (!logResult.success) throw new Error('Failed to log form creation')
+
+        if (auth_status === 'pending_personnel') {
+            // Log form submission
+            const submitResult = await logSubmitForm(
+                userId,
+                entityId,
+                'staffing_summaries',
+                result.formId,
+                {
+                    ...summary,
+                    positions
+                },
+                result.createdAt
+            )
+            
+            if (!submitResult.success) throw new Error('Failed to log form submission')
+        }
 
         return Response.json(result);
     } catch (error) {

@@ -2,11 +2,11 @@ import { requireMinAccessLevel } from '@/src/actions/auth'
 import { getUserKeys, hasSigningPin } from '@/src/actions/keys'
 import { DeviceKeyBanner } from '@/components/ui/digital-signatures/DeviceKeyBanner'
 import { DeviceKeysSettings } from '@/components/ui/digital-signatures/DeviceKeysSettings'
-import { SetPin } from '@/components/ui/digital-signatures/setPin'
+import { SetPinForm } from '@/components/ui/digital-signatures/setPin'
 import BackButton from '@/components/ui/BackButton'
 
 export default async function KeysSettingsPage() {
-    const session = await requireMinAccessLevel('encode', true) as { user: { id: string } }
+    const session = await requireMinAccessLevel('encode', true) as { user: { id: string, entity_id: string } }
 
     const [keys, hasPinAlready] = await Promise.all([
         getUserKeys(),
@@ -30,11 +30,11 @@ export default async function KeysSettingsPage() {
 
             <hr className="border-border" />
 
-            <SetPin hasPin={hasPinAlready} />
+            <SetPinForm hasPin={hasPinAlready} />
 
             <hr className="border-border" />
 
-            <DeviceKeysSettings keys={keys} userId={session.user.id} />
+            <DeviceKeysSettings keys={keys} entityId={session.user.entity_id} userId={session.user.id} />
         </main>
     )
 }

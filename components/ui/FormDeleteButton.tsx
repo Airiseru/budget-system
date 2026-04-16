@@ -13,18 +13,11 @@ export default function FormDeleteButton({ id, onDelete }: FormDeleteButtonProps
 
     const handleDelete = async () => {
         const confirmed = window.confirm(
-            "Are you sure you want to delete this staffing plan? This cannot be undone."
+            "Are you sure you want to delete this? This cannot be undone."
         );
 
         if (confirmed) {
-            try {
-                await onDelete(id);
-                // The server action handles the redirect, but as a backup:
-                router.push('/forms/staff');
-            } catch (error) {
-                alert("Failed to delete the form. Please try again.");
-                console.log(error)
-            }
+            await onDelete(id);
         }
     };
 
