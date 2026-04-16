@@ -340,35 +340,3 @@ export async function deleteStaffingForm(summaryId: string) {
         .where('id', '=', summaryId)
         .execute();
 }
-
-export async function getStaffingWithPositions(summaryId: string) {
-    // 1. Get the Summary Header (Join with form to get auth_status)
-    const summary = await db
-        .selectFrom('staffing_summaries')
-        .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
-        .select([
-            'staffing_summaries.id',
-            'staffing_summaries.fiscal_year',
-            'staffing_summaries.submission_date',
-            'forms.auth_status',
-            'forms.entity_id',
-        ])
-        .where('staffing_summaries.id', '=', summaryId)
-        .executeTakeFirst();
-
-    if (!summary) return null;
-
-    // 2. Get all the Position rows for this specific summary
-    const positions = await db
-        .selectFrom('positions')
-        .selectAll()
-        .where('staffing_summary_id', '=', summaryId)
-        .execute();
-
-    // 3. Combine them into one object for the frontend
-    return {
-        ...summary,
-        positions: positions
-    };
-}
-

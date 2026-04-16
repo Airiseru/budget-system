@@ -11,7 +11,7 @@ export async function GET(
     const { id } = await params
     
     // This should return the summary AND its positions
-    const staffing = await StaffingRepository.getStaffingWithPositions(id)
+    const staffing = await StaffingRepository.getStaffingWithFormById(id)
 
     if (!staffing) {
         return new NextResponse('Staffing Summary not found', { status: 404 })

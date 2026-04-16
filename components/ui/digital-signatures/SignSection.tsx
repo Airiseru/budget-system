@@ -1,6 +1,6 @@
 'use client'
 
-import { Workflow, getNextSignatoryRole, getNextStatus } from '@/src/lib/workflows'
+import { Workflow, getNextStatus } from '@/src/lib/workflows'
 import { SignButton } from './SignButton'
 import { SignatureVerificationBadge } from './SignatureVerificationBadge'
 import { ShieldCheck } from 'lucide-react'
@@ -77,15 +77,12 @@ export function SignSection({
                 <div className="space-y-2">
                     {signatories.map(sig => (
                         <SignatureVerificationBadge
-                            userId={userId}
                             entityId={entityId}
                             formId={formId}
                             tableName={tableName}
                             key={sig.id}
                             signatoryId={sig.id}
                             formData={formData}
-                            signatoryRole={roleToAuthStatus[sig.role]}
-                            nextRole={getNextStatus(roleToAuthStatus[sig.role], workflow) ?? ''}
                             signerName={`${sig.user_name} (${roleLabels[sig.role] ?? sig.role})`}
                             signedAt={sig.created_at}
                         />

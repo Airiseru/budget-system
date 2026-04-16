@@ -7,6 +7,7 @@ import { sha256, buildSignaturePayload } from '@/src/lib/audit-hash'
 import { verifyAndSubmitSignature, getUserKeys, verifySigningPin } from '@/src/actions/keys'
 import { FormSignaturePayload } from '@/src/types/audit'
 import { canonicalStringify } from '@/src/lib/canonical'
+import { cleanDataBasedOnTable } from '@/src/lib/validations'
 import { Button } from '@/components/ui/button'
 import { PenLine, ShieldCheck, Eye, EyeOff } from 'lucide-react'
 
@@ -65,18 +66,13 @@ export function SignButton({ formId, tableName, formData, userId, entityId, sign
 
             const date = new Date()
 
-            const {
-                auth_status, entity_id, created_at, updated_at,
-                ...cleanFormData
-            } = formData as any
+            const cleanFormData = cleanDataBasedOnTable(tableName, formData)
 
             const payload: FormSignaturePayload = {
                 from_status: fromAuthStatus ?? signatoryRole,
                 to_status: toAuthStatus ?? 'approved',
                 form_state_hash: sha256(canonicalStringify(cleanFormData)),
             }
-
-            console.log(`form data in SIGN BUTTON`, cleanFormData)
 
             const signaturePayload = buildSignaturePayload({
                 entity_id: entityId,
@@ -87,8 +83,6 @@ export function SignButton({ formId, tableName, formData, userId, entityId, sign
                 payload: payload,
                 changed_at: date.toISOString(),
             })
-
-            console.log('signaturePayload in SIGN BUTTON', signaturePayload)
 
             const output = await signData(signaturePayload, privateKey, true)
             const signature = output.signature
