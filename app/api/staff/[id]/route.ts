@@ -1,10 +1,9 @@
-import { createStaffingRepository } from '@/src/db/factory'
+import { createStaffingRepository, createFormRepository } from '@/src/db/factory'
 import { NextResponse } from 'next/server'
-import { logSaveFormEdits } from '@/src/actions/audit';
-import { up } from '@/src/db/postgres/migrations/02_pap';
-
+import { logSaveFormEdits, logSubmitForm } from '@/src/actions/audit'
 export const dynamic = 'force-dynamic';
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
+const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export async function GET(
     request: Request,
@@ -53,8 +52,7 @@ export async function PUT(
         return NextResponse.json({ error: "Update failed" }, { status: 500 })
     }
 
-
-    // Log form update
+    // Log form edit
     const logResult = await logSaveFormEdits(
         body.userId,
         body.entityId,
@@ -67,6 +65,20 @@ export async function PUT(
 
     if (!logResult.success) {
         return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
+    }
+
+    if (body.auth_status !== 'draft') {
+        const result = await FormRepository.updateFormAuthStatus(id, body.auth_status)
+
+        // Log form update
+        const submitResult = await logSubmitForm(
+            body.userId,
+            body.entityId,
+            'staffing_summaries',
+            id,
+            updated,
+            result.updated_at
+        )
     }
 
     return NextResponse.json({ success: true })

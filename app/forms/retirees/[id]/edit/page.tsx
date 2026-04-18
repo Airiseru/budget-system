@@ -24,7 +24,6 @@ export default async function EditRetireePage({ params }: { params: { id: string
         redirect(`/forms/retirees/${id}?error=locked`);
     }
 
-
     if (!session || session.user.access_level !== 'encode') {
         redirect('/forms/retirees?error=unauthorized');
     }
@@ -40,7 +39,7 @@ export default async function EditRetireePage({ params }: { params: { id: string
                 </ButtonGroup>
             </ButtonGroup>
             {/* Pass the entityId here */}
-            <BP205EntryGrid retireeData={retireeData} entityId={session.user.entity_id} entityName={session.user_entity.entity_name || "Unknown Agency"}  />
+            <BP205EntryGrid retireeData={retireeData} userId={session.user.id} entityId={session.user.entity_id} entityName={session.user_entity.entity_name || "Unknown Agency"}  />
         </main>
     );
 }

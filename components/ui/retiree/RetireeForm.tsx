@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { z } from "zod";
-import { RetireeRowSchema, BP205Schema } from '@/src/schemas/retiree.schema';
+import { RetireeRowSchema, BP205Schema } from '@/src/lib/validations/retiree.schema';
 
 type RetireeRow = z.infer<typeof RetireeRowSchema>;
 
@@ -35,11 +35,12 @@ interface RetireeFormInitialData {
 
 interface Props {
   retireeData?: RetireeFormInitialData; // Use the interface here
+  userId: string
   entityId: string;
   entityName: string;
 }
 
-const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
+const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel'>('draft');
@@ -86,15 +87,13 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
     }];
 });
 
-
-
   const [fiscalYear, setFiscalYear] = useState(2026);
 
   const handleInputChange = (id: string, field: string, value: any) => {
     setRetirees((prev: any) => prev.map((r: any) => r.id === id ? { ...r, [field]: value } : r));
   };
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
@@ -113,6 +112,7 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
 
     // 3. If validation passes, use validation.data (it's now cleaned/coerced)
     const payload = {
+      userId,
       entityId,
       listData: {
         fiscal_year: fiscalYear,
@@ -135,7 +135,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
       if (response.ok) {
         const data = await response.json();
         router.refresh();
-        router.push(`/forms/retirees/${data.formId}`);
+        const endpoint = data.formId ? `/forms/retirees/${data.formId}` : '/forms/retirees'
+        router.push(endpoint)
       } else {
         const err = await response.json();
         setError(err.error || "Failed to save");
@@ -283,7 +284,7 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                     <input type="text" value={row.position} className="w-full p-1.5 focus:bg-card focus:outline-none" placeholder="Administrative Officer V" onChange={(e) => handleInputChange(row.id, 'position', e.target.value)}  />
                   </td>
                   <td className="p-1 border-r">
-                    <input type="number" value={row.salary_grade} className="w-full p-1.5 text-center focus:bg-card focus:outline-none" placeholder="18" onChange={(e) => handleInputChange(row.id, 'salary_grade', e.target.value)} />
+                    <input type="number" value={row.salary_grade} min="1" max="33" className="w-full p-1.5 text-center focus:bg-card focus:outline-none" placeholder="18" onChange={(e) => handleInputChange(row.id, 'salary_grade', e.target.value)} />
                   </td>
                   <td className="p-1 border-r">
                     <input 
@@ -310,12 +311,13 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                   <td className="p-1 border-r">
                     <div className="flex items-center">
                       <span className="text-muted-400 pl-1 text-xs">₱</span>
-                      <input type="number" value={row.highest_monthly_salary} onChange={(e) => handleInputChange(row.id, 'highest_monthly_salary', e.target.value)} className="w-full p-1.5 text-right focus:bg-card focus:outline-none font-mono" placeholder="0.00" />
+                      <input type="number" min="0" value={row.highest_monthly_salary} onChange={(e) => handleInputChange(row.id, 'highest_monthly_salary', e.target.value)} className="w-full p-1.5 text-right focus:bg-card focus:outline-none font-mono" placeholder="0.00" />
                     </div>
                   </td>
                   <td className="p-1 border-r">
                     <input 
-                      type="number" 
+                      type="number"
+                      min="0"
                       step="0.001"
                       value={row.number_vacation_leave} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
@@ -325,6 +327,7 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                   <td className="p-1 border-r">
                     <input 
                       type="number" 
+                      min="0"
                       value={row.number_sick_leave} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
                       onChange={(e) => handleInputChange(row.id, 'number_sick_leave', e.target.value)} 

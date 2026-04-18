@@ -1,5 +1,5 @@
 import { staffingFormSchema } from "@/src/lib/validations/staffing.schema"
-import { RetireesListSchema } from "./retirees"
+import { retireeFormSchema } from "@/src/lib/validations/retiree.schema"
 
 export function cleanDataBasedOnTable(tableName: string, data: any) {
     switch (tableName) {
@@ -7,7 +7,7 @@ export function cleanDataBasedOnTable(tableName: string, data: any) {
             return staffingFormSchema.parse(data)
         }
         case 'retirees_list': {
-            return RetireesListSchema.parse(data)
+            return retireeFormSchema.parse(data)
         }
         default: {
             console.warn(`No validation for table ${tableName}`)

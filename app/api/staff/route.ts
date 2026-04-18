@@ -64,7 +64,7 @@ export async function POST(req: Request) {
         
         if (!logResult.success) throw new Error('Failed to log form creation')
 
-        if (auth_status === 'pending_personnel') {
+        if (auth_status !== 'draft') {
             // Log form submission
             const submitResult = await logSubmitForm(
                 userId,

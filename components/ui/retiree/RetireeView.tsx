@@ -51,14 +51,14 @@ export default function RetireeView({
                 <div className="flex flex-row gap-2">
                     <Link 
                         href={`/forms/retirees/${formData.id}/edit`}
-                        className="flex items-center gap-2 bg-secondary-foreground hover:bg-secondary-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
+                        className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
                     >
                         <Pencil size={14} />
                         Edit Form
                     </Link>
                     <div className="flex justify-end gap-2">
                         <form action={updateAuthStatus}>
-                            <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                            <button type="submit" className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80">
                                 Submit Form
                             </button>
                         </form>
@@ -173,7 +173,7 @@ export default function RetireeView({
 
             <SignSection 
                 formId={data.id ?? ""} 
-                tableName="retiree_summaries" 
+                tableName="retirees_list" 
                 formData={data} 
                 userId={session.user.id} 
                 entityId={data.entity_id}

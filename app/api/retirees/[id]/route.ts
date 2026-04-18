@@ -5,7 +5,11 @@ import {
     updateRetireeListMetadata, 
     getRetireesFormById 
 } from '@/src/db/postgres/repositories/retireeRepository';
-import { BP205Schema } from '@/src/schemas/retiree.schema'; 
+import { BP205Schema } from '@/src/lib/validations/retiree.schema'; 
+import { logSaveFormEdits, logSubmitForm } from '@/src/actions/audit';
+import { createFormRepository } from '@/src/db/factory'
+
+const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -52,6 +56,46 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             updateRetireeListMetadata(id, listData),
             updateRetirees(id, retireesWithId as any) 
         ]);
+
+        const updated = await getRetireesFormById(id)
+
+        if (!updated) {
+            return NextResponse.json({ error: "Update failed" }, { status: 500 });
+        }
+
+        // Log form update
+        const logResult = await logSaveFormEdits(
+            body.userId,
+            body.entityId,
+            'retirees_list',
+            id,
+            current,
+            updated,
+            updated.updated_at
+        )
+
+        if (!logResult.success) {
+            return NextResponse.json({ error: "Failed to log form update" }, { status: 500 });
+        }
+
+        if (body.auth_status !== 'draft') {
+            const result = await FormRepository.updateFormAuthStatus(id, body.auth_status)
+
+            // Log form submission
+            const submitResult = await logSubmitForm(
+                body.userId,
+                body.entityId,
+                'retirees_list',
+                id,
+                updated,
+                result.updated_at
+            )
+
+            if (!submitResult.success) {
+                return NextResponse.json({ error: "Failed to log form submission" }, { status: 500 });
+            }
+        }
+            
 
         return NextResponse.json({ formId: id });
 

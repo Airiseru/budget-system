@@ -237,6 +237,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
 
             if (log.event_type === 'CREATE_FORM') {
                 reconstructedState = JSON.parse(JSON.stringify(payload))
+                console.log(`CREATE FORM RECONSTRUCTED STATE:`, reconstructedState)
             }
             else if (log.event_type === 'EDIT_FORM') {
                 // Delta: Apply diff to current reconstructed state
@@ -249,8 +250,11 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                 if (reconstructedState) {
                     // Clean payload to remove id and foreign keys
                     const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
+                    console.log('cleaned payload is ok')
+                    console.log(`reconstructed state: ${JSON.stringify(reconstructedState)}`)
 
                     const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
+                    console.log('cleaned reconstructed state is ok')
 
                     const historyMatch = isEqual(cleanedReconstructedState, cleanedPayload)
                     if (!historyMatch) {
@@ -356,7 +360,7 @@ export async function getPayloadOfFormSignEvent(
         .select(['payload'])
         .execute()
 
-    console.log(`RESULT: ${JSON.stringify(result)}`)
+    console.log(`RESULT IN PAYLOAD OF SIGN EVENT: ${JSON.stringify(result)}`)
 
     if (result.length === 0) return "Form not signed by user"
 
