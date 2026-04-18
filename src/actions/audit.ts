@@ -234,6 +234,8 @@ export async function logSaveFormEdits(
 ) {
     const diff = computeDiff(oldData, newData)
     if (isDiffEmpty(diff)) return { success: true }
+    console.log(`DIFF: ${JSON.stringify(diff)}`)
+
     return await executeAudit({
         entity_id: entityId,
         user_id: userId,

@@ -6,6 +6,7 @@ import FormDeleteButton from "@/components/ui/FormDeleteButton";
 import Link from "next/link";
 import { Pencil, ArrowLeft } from "lucide-react";
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
+import BackButton from "../BackButton";
 
 const statusLabels: Record<string, string> = {
     draft: 'Draft',
@@ -124,29 +125,23 @@ export default function StaffingView({
     return (
         <main className="m-6 max-w-none px-4 md:px-8 md:my-12 space-y-8">
             <div className="flex justify-between items-center mb-6">
-                <Link 
-                    href="/forms/staff" 
-                    className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                    <ArrowLeft size={16} />
-                    Back to List
-                </Link>
-                {summary.auth_status === 'draft' && (
-                <div className="flex flex-row gap-2">
-                    <Link 
-                        href={`/forms/staff/${formData.id}/edit`}
-                        className="flex items-center gap-2 bg-secondary-foreground hover:bg-secondary-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
-                    >
-                        <Pencil size={14} />
-                        Edit Form
-                    </Link>
-                    
-                    <div className="flex justify-end gap-2">
+                <BackButton url="/forms/staff" label="Back to List"></BackButton>
+                {summary.auth_status === 'draft' && session.user.access_level === 'encode' && (
+                    <div className="flex flex-row gap-2">
+                        <Link 
+                            href={`/forms/staff/${formData.id}/edit`}
+                            className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
+                        >
+                            <Pencil size={14} />
+                            Edit Form
+                        </Link>
+                        
+                        <div className="flex justify-end gap-2">
                             <form action={updateAuthStatus}>
-                                <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">Submit Form</button>
+                                <button type="submit" className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80">Submit Form</button>
                             </form>
+                        </div>
                     </div>
-                </div>
                 )}
             </div>
             <div className="justify-center">
@@ -175,12 +170,12 @@ export default function StaffingView({
 
             <SignSection 
                 formId={summary.id ?? ""} 
-                tableName="retiree_summaries" 
-                formData={formData} 
+                tableName={'staffing_summaries'} 
+                formData={summary} 
                 userId={session.user.id} 
                 entityId={summary.entity_id}
                 authStatus={summary.auth_status ?? ""} 
-                userCanSign={userCanSign} 
+                userCanSign={userCanSign && !existingSignature}
                 signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")} 
                 alreadySigned={!!existingSignature} 
                 signatories={allSignatures} 

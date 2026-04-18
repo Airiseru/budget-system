@@ -1,18 +1,21 @@
 'use server'
 
 import bcrypt from 'bcrypt'
-import { createEntityRepository, createKeyRepository, createFormRepository } from '../db/factory'
+import { createEntityRepository, createKeyRepository, createFormRepository, createAuditRepository } from '../db/factory'
 import { requireMinAccessLevel, sessionDetails, sessionWithEntity } from './auth'
 import { redirect } from 'next/navigation'
 import { verifySignature } from '../lib/crypto'
 import { getWorkflow, canSign, getNextStatus } from '../lib/workflows'
 import { logUserKeyCreation, logUserKeyRevoke, logFormSignatories } from './audit'
 import { FormSignaturePayload } from '../types/audit'
+import { sha256, buildSignaturePayload } from '../lib/audit-hash'
 import { canonicalStringify } from '../lib/canonical'
+import { cleanDataBasedOnTable } from '../lib/validations'
 
 const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 const keyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 const formRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
+const auditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export async function setSigningPin(pin: string) {
     const session = await sessionDetails()
@@ -175,16 +178,48 @@ export async function verifyAndSubmitSignature(
     }
 }
 
-export async function verifyFormSignature(signatoryId: string, formData: object | string) {
+export async function verifyFormSignature(entityId: string, formId: string, tableName: string, signatoryId: string, formData: object | string) {
     const signatory = await keyRepository.getSignatoryWithKey(signatoryId)
     if (!signatory) throw new Error('Invalid signatory')
+
+    const formPayload = await auditRepository.getPayloadOfFormSignEvent(signatory.user_id, entityId, tableName, formId)
+
+    if (!formPayload) {
+        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Form signature not found." }
+    }
+
+    if (formPayload === "Form not signed by user") {
+        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Form has not been officially signed by respective officer." }
+    }
+    else if (formPayload === "Multiple signatures of user found for form") {
+        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Respective officer has signed multiple times." }
+    }
+
+    const cleanFormData = cleanDataBasedOnTable(tableName, formData)
+    const form_state_hash = sha256(canonicalStringify(cleanFormData))
+
+    if ((formPayload as { from_status: string; to_status: string; form_state_hash: string; }).form_state_hash !== form_state_hash) {
+        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Respective officer has signed the form but contains different data from current form." }
+    }
 
     let signaturePayload = ''
 
     if (typeof formData === 'string') {
         signaturePayload = formData
     } else {
-        signaturePayload = canonicalStringify(formData)
+        signaturePayload = buildSignaturePayload({
+            entity_id: entityId,
+            user_id: signatory.user_id,
+            event_type: 'SIGN',
+            table_name: tableName,
+            record_id: formId,
+            payload: {
+                from_status: (formPayload as FormSignaturePayload).from_status,
+                to_status: (formPayload as FormSignaturePayload).to_status,
+                form_state_hash: form_state_hash,
+            },
+            changed_at: signatory.created_at.toISOString()
+        })
     }
 
     const cryptoValid = await verifySignature(

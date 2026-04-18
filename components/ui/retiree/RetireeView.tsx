@@ -174,11 +174,11 @@ export default function RetireeView({
             <SignSection 
                 formId={data.id ?? ""} 
                 tableName="retiree_summaries" 
-                formData={formData} 
+                formData={data} 
                 userId={session.user.id} 
                 entityId={data.entity_id}
                 authStatus={data.auth_status ?? ""} 
-                userCanSign={userCanSign} 
+                userCanSign={userCanSign && !existingSignature}
                 signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")} 
                 alreadySigned={!!existingSignature} 
                 signatories={allSignatures} 

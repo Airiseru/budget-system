@@ -2,13 +2,9 @@
 
 import { useState } from 'react'
 import { useRouter } from "next/navigation"
-import { StaffingSummary, StaffingSummaryWithPositions } from "@/src/types/staffing"
-import { staffingFormSchema } from '@/src/schemas/staffing.schema'
-
-interface PapOption {
-    id: string;
-    title: string;
-}
+import { StaffingSummaryWithPositions } from "@/src/types/staffing"
+import { staffingFormSchema } from '@/src/lib/validations/staffing.schema'
+import React from 'react'
 
 interface StaffingSummaryProps {
     staff?: StaffingSummaryWithPositions;
@@ -26,7 +22,7 @@ type PositionFormInput = {
     staff_type: string;
     organizational_unit: string;
     position_title: string;
-    salary_grade: string;
+    salary_grade: number;
     num_positions: number;
     months_employed: number;
     total_salary: number;
@@ -55,9 +51,9 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                 pap_id: "", 
                 position_title: "", 
                 num_positions: 1, 
-                salary_grade: "", 
+                salary_grade: 1,
                 total_salary: 0,
-                staff_type: "Casual", 
+                staff_type: "Casual",
                 organizational_unit: "Main Office",
                 months_employed: 12,
                 compensations: [] 
@@ -191,7 +187,7 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
         const path = `positions.${index}`;
 
         return (
-            <>
+            <React.Fragment key={pos.id ?? index}>
                 <tr key={`pos-${index}`} className="hover:bg-muted/50 border-b border-dotted">
                     <td className="p-2 border-r align-top">
                         <select
@@ -232,6 +228,8 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                     <td className="p-2 border-r align-top">
                         <input 
                             type="number"
+                            min="1"
+                            max="12"
                             className={`w-full p-1 border rounded text-center ${getFieldStyle(`${path}.months_employed`)}`}
                             value={pos.months_employed} 
                             onChange={(e) => handlePositionChange(index, 'months_employed', parseInt(e.target.value))} 
@@ -240,23 +238,28 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                     <td className="p-2 border-r align-top">
                         <input 
                             type="number"
+                            min="1"
                             className={`w-full p-1 border rounded text-center ${getFieldStyle(`${path}.num_positions`)}`}
                             value={pos.num_positions} 
                             onChange={(e) => handlePositionChange(index, 'num_positions', parseInt(e.target.value))} 
                         />
                     </td>
                     <td className="p-2 border-r align-top">
-                        <input 
+                        <input
+                            type="number"
+                            min="1"
+                            max="33"
                             placeholder="SG"
                             className={`w-full p-1 border rounded text-center ${getFieldStyle(`${path}.salary_grade`)}`}
                             value={pos.salary_grade} 
-                            onChange={(e) => handlePositionChange(index, 'salary_grade', e.target.value)} 
+                            onChange={(e) => handlePositionChange(index, 'salary_grade', parseInt(e.target.value))}
                         />
                         <button type="button" onClick={() => removeRow(index)} className="absolute -right-2 -top-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity">✕</button>
                     </td>
                     <td className="p-2 align-top relative group">
                         <input 
                             type="number"
+                            min="0"
                             className={`w-full p-1 border rounded text-center ${getFieldStyle(`${path}.total_salary`)}`}
                             value={pos.total_salary} 
                             onChange={(e) => {
@@ -311,6 +314,7 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                                                 <td className="px-3 py-2">
                                                     <input 
                                                         type="number"
+                                                        min="0"
                                                         className={`w-full text-sm border rounded text-right p-1 ${getFieldStyle(`${path}.compensations.${cIdx}.amount`)}`}
                                                         value={comp.amount}
                                                         onChange={(e) => handleCompensationChange(index, cIdx, 'amount', parseFloat(e.target.value))}
@@ -332,7 +336,7 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                          <button type="button" onClick={() => addCompensation(index)} className="bg-primary-foreground p-2 rounded text-[10px] text-primary font-bold uppercase">+ Add Allowance</button>
                     </td>
                 </tr>
-            </>
+            </React.Fragment>
         );
     };
 
@@ -340,7 +344,7 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
         setFormData({
             ...formData,
             positions: [...formData.positions, { 
-                pap_id: "", position_title: "", num_positions: 1, salary_grade: "", total_salary: 0,
+                pap_id: "", position_title: "", num_positions: 1, salary_grade: 1, total_salary: 0,
                 staff_type: "Casual", organizational_unit: "", months_employed: 12, compensations: []
             }]
         });
@@ -466,8 +470,8 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                 <div className="flex justify-between items-center bg-slate-50 p-4 rounded-lg border">
                     <button type="button" onClick={addRow} className="text-sm font-bold text-primary-600 hover:underline">+ Add New Position Row</button>
                     <div className="flex gap-3">
-                        <button type="submit" onClick={() => setSubmitAction("draft")} className="px-6 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition-all font-medium">Save Draft</button>
-                        <button type="submit" onClick={() => setSubmitAction("pending_personnel")} className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-all font-medium">Submit Form</button>
+                        <button type="submit" onClick={() => setSubmitAction("draft")} className="px-6 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition-all font-medium" disabled={isLoading}>Save Draft</button>
+                        <button type="submit" onClick={() => setSubmitAction("pending_personnel")} className="px-6 py-2 bg-accent-foreground text-white rounded-md hover:bg-blue-700 transition-all font-medium" disabled={isLoading}>Submit Form</button>
                     </div>
                 </div>
             </form>

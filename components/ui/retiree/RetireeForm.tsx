@@ -3,7 +3,6 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { RetireeRecordTable } from '@/src/types/retirees';
 import { z } from "zod";
 import { RetireeRowSchema, BP205Schema } from '@/src/schemas/retiree.schema';
 

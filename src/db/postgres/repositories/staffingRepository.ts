@@ -134,25 +134,25 @@ export async function updateStaffingSubmission(
     return await db.transaction().execute(async (trx) => {
         if (payload.auth_status) {
             await trx.updateTable('forms')
-                .set({ auth_status: payload.auth_status })
+                .set({ auth_status: payload.auth_status, updated_at: new Date() })
                 .where('id', '=', summaryId)
-                .execute();
+                .execute()
         }
 
         await trx.updateTable('staffing_summaries')
             .set({ fiscal_year: payload.summary.fiscal_year })
             .where('id', '=', summaryId)
-            .execute();
+            .execute()
 
         await trx.deleteFrom('positions')
             .where('staffing_summary_id', '=', summaryId)
-            .execute();
+            .execute()
 
         if (payload.positions.length > 0) {
-            const enrichedPositions = await injectTiers(trx, payload.positions);
+            const enrichedPositions = await injectTiers(trx, payload.positions)
             
             for (const pos of enrichedPositions) {
-                const { compensations, tier, ...positionData } = pos as any;
+                const { compensations, tier, ...positionData } = pos as any
 
                 const insertedPosition = await trx.insertInto('positions')
                     .values({
@@ -161,7 +161,7 @@ export async function updateStaffingSubmission(
                         staffing_summary_id: summaryId
                     })
                     .returning('id')
-                    .executeTakeFirstOrThrow();
+                    .executeTakeFirstOrThrow()
 
                 if (compensations && compensations.length > 0) {
                     await trx.insertInto('compensations')
@@ -170,11 +170,11 @@ export async function updateStaffingSubmission(
                             amount: comp.amount,
                             staff_id: insertedPosition.id
                         })))
-                        .execute();
+                        .execute()
                 }
             }
         }
-        return { success: true };
+        return { success: true }
     });
 }
 
@@ -188,23 +188,42 @@ export async function updateFormAuthStatus(formId: string, authStatus: string) {
 
 // --- READ ---
 
-export async function getStaffingById(id: string): Promise<StaffingSummaryWithPositions | null> {
+export async function getStaffingById(id: string): Promise<StaffingSummaryWithPositions | undefined> {
     const summary = await db
         .selectFrom('staffing_summaries')
         .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
-        .selectAll('staffing_summaries')
-        .select('forms.auth_status as auth_status')
         .where('staffing_summaries.id', '=', id)
+        .selectAll()
         .executeTakeFirst();
 
-    if (!summary) return null;
+    if (!summary) return undefined;
 
-    // Call the helper function directly (not using 'this')
-    const positions = await getPositionsWithCompensations(id);
+    const positions = await db
+        .selectFrom('positions')
+        .where('staffing_summary_id', '=', id)
+        .select((eb) => [
+            'id',
+            'staffing_summary_id',
+            'pap_id',
+            'tier',
+            'staff_type',
+            'organizational_unit',
+            'position_title',
+            'salary_grade',
+            'num_positions',
+            'months_employed',
+            'total_salary',
+            jsonArrayFrom(
+                eb.selectFrom('compensations')
+                    .select(['id', 'staff_id', 'name', 'amount'])
+                    .whereRef('compensations.staff_id', '=', 'positions.id')
+            ).as('compensations')
+        ])
+        .execute();
 
     return {
         ...summary,
-        positions: positions as any
+        positions 
     };
 }
 
@@ -266,43 +285,11 @@ export async function getAllStaffingSummaries(
         .execute()
 }
 
-export async function getStaffingWithPositions(summaryId: string) {
-    // 1. Get the Summary Header (Join with form to get auth_status)
-    const summary = await db
-        .selectFrom('staffing_summaries')
-        .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
-        .select([
-            'staffing_summaries.id',
-            'staffing_summaries.fiscal_year',
-            'staffing_summaries.submission_date',
-            'forms.auth_status',
-            'forms.entity_id',
-        ])
-        .where('staffing_summaries.id', '=', summaryId)
-        .executeTakeFirst();
-
-    if (!summary) return null;
-
-    // 2. Get all the Position rows for this specific summary
-    const positions = await db
-        .selectFrom('positions')
-        .selectAll()
-        .where('staffing_summary_id', '=', summaryId)
-        .execute();
-
-    // 3. Combine them into one object for the frontend
-    return {
-        ...summary,
-        positions: positions
-    };
-}
-
 export async function getStaffingWithFormById(id: string) {
-    // This is the one you are likely calling in page.tsx
     const summary = await db
         .selectFrom('staffing_summaries')
-        .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
         .where('staffing_summaries.id', '=', id)
+        .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
         .select([
             'staffing_summaries.id as id',
             'staffing_summaries.created_at as created_at',
@@ -317,14 +304,55 @@ export async function getStaffingWithFormById(id: string) {
 
     if (!summary) return null;
 
-    const positions = await getPositionsWithCompensations(id);
+    // Fetch positions using your "staffing_summary_id" key
+    const positions = await db
+        .selectFrom('positions')
+        .where('staffing_summary_id', '=', id)
+        .selectAll()
+        .execute()
+
+    const positionIds = positions.map(p => p.id);
+    
+    let compensations: Compensation[] = [];
+    if (positionIds.length > 0) {
+        compensations = await db
+            .selectFrom('compensations')
+            // Using "staff_id" as defined in your CompensationTable
+            .where('staff_id', 'in', positionIds) 
+            .selectAll()
+            .execute()
+    }
 
     return {
         ...summary,
-        positions
+        positions: positions.map(pos => ({
+            ...pos,
+            compensations: compensations.filter(c => c.staff_id === pos.id)
+        }))
     };
 }
 
+export async function getStaffingDetails(formId: string) {
+    return await db.selectFrom('positions')
+        .where('staffing_summary_id', '=', formId)
+        .select((eb) => [
+            'id',
+            'position_title',
+            'salary_grade',
+            'num_positions',
+            'total_salary',
+            jsonArrayFrom(
+                eb.selectFrom('compensations')
+                    .select(['name', 'amount'])
+                    .whereRef('compensations.staff_id', '=', 'positions.id')
+            ).as('compensations')
+        ])
+        .execute();
+}
+
+/**
+ * DELETE: Removes the entire submission by targeting the parent 'form' entry.
+ */
 export async function deleteStaffingForm(summaryId: string) {
     await db.deleteFrom('forms')
         .where('id', '=', summaryId)

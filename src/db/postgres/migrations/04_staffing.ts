@@ -26,7 +26,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('staff_type', 'text', (col) => col.notNull())
         .addColumn('organizational_unit', 'text', (col) => col.notNull())
         .addColumn('position_title', 'text', (col) => col.notNull())
-        .addColumn('salary_grade', 'text', (col) => col.notNull())
+        .addColumn('salary_grade', 'integer', (col) => col.notNull())
         .addColumn('num_positions', 'integer', (col) => col.notNull())
         .addColumn('months_employed', 'integer', (col) => col.notNull())
         .addColumn('total_salary', 'numeric', (col) => col.notNull())

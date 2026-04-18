@@ -2,6 +2,7 @@
 
 import { createFormRepository } from "@/src/db/factory"
 import { logSubmitForm } from "./audit"
+import { sessionWithEntity } from "./auth"
 
 const formRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -14,6 +15,11 @@ export async function submitForm(
     newStatus: string,
 ) {
     try {
+        const session = await sessionWithEntity()
+
+        if (!session) throw new Error('Unauthorized')
+        if (session.user.access_level !== 'encode') throw new Error('Unauthorized')
+        
         const result = await formRepository.updateFormAuthStatus(formId, newStatus)
 
         // Log the result

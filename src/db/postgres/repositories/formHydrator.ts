@@ -1,10 +1,12 @@
 import { db } from "../database"
 import * as StaffingRepository from "./staffingRepository"
+import { staffingFormSchema } from "@/src/lib/validations/staffing.schema"
 
 export async function fetchHydratedFormState(tableName: string, recordId: string) {
     switch (tableName) {
         case 'staffing_summaries': {
-            return await StaffingRepository.getStaffingWithPositions(recordId)
+            const staffing = await StaffingRepository.getStaffingWithFormById(recordId)
+            return staffingFormSchema.parse(staffing)
         }
 
         default: {
