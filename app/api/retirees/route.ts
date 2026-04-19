@@ -30,6 +30,12 @@ export async function POST(req: Request) {
             auth_status
         );
 
+        const newRetirees = await repo.getRetireesFormById(result.formId);
+
+        if (!newRetirees) {
+            return NextResponse.json({ error: "Create failed" }, { status: 500 });
+        }
+
         // Log form creation
         const logResult = await logNewForm(
             session.user.id,
@@ -37,9 +43,9 @@ export async function POST(req: Request) {
             'retirees_list',
             result.formId,
             {
-                fiscal_year: listData.fiscal_year,
-                is_mandatory: listData.is_mandatory,
-                retirees: retirees
+                fiscal_year: newRetirees.fiscal_year,
+                is_mandatory: newRetirees.is_mandatory,
+                retirees: newRetirees.retirees
             },
             result.createdAt
         )
@@ -53,9 +59,9 @@ export async function POST(req: Request) {
                 'retirees_list',
                 result.formId,
                 {
-                    fiscal_year: listData.fiscal_year,
-                    is_mandatory: listData.is_mandatory,
-                    ...retirees
+                    fiscal_year: newRetirees.fiscal_year,
+                    is_mandatory: newRetirees.is_mandatory,
+                    retirees: newRetirees.retirees
                 },
                 result.createdAt
             )

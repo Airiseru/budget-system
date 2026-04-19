@@ -24,8 +24,11 @@ export interface RetireeRecordTable {
     // Leave Credits for Terminal Leave Pay (TLP) calculation
     number_vacation_leave: number | null
     number_sick_leave: number | null
+    tlb_constant_factor: number
+    tlb_amount: number
     total_credible_service: number | null
     number_gratuity_months: number | null
+    rg_amount: number | null
 }
 
 export type RetireesList = Selectable<RetireesListTable>

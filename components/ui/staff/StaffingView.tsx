@@ -4,17 +4,10 @@ import { SignSection } from "@/components/ui/digital-signatures/SignSection";
 import { Badge } from "@/components/ui/badge";
 import FormDeleteButton from "@/components/ui/FormDeleteButton";
 import Link from "next/link";
-import { Pencil, ArrowLeft } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
 import BackButton from "../BackButton";
-
-const statusLabels: Record<string, string> = {
-    draft: 'Draft',
-    pending_personnel: 'Pending Personnel Officer',
-    pending_budget: 'Pending Budget Officer',
-    pending_agency_head: 'Pending Agency Head',
-    approved: 'Approved',
-};
+import { statusLabels } from "@/src/lib/constants"
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 

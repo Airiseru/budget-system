@@ -5,6 +5,7 @@ import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { z } from "zod";
 import { RetireeRowSchema, BP205Schema } from '@/src/lib/validations/retiree.schema';
+import { TLB_FACTOR } from '@/src/lib/constants';
 
 type RetireeRow = z.infer<typeof RetireeRowSchema>;
 
@@ -29,6 +30,7 @@ interface RetireeFormInitialData {
     number_sick_leave: number | null;
     total_credible_service: number | null;
     number_gratuity_months: number | null;
+    rg_amount: number | null;
     retirees_list_id: string;
   }[];
 }
@@ -65,6 +67,7 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
             number_sick_leave: Number(r.number_sick_leave ?? 0),
             total_credible_service: Number(r.total_credible_service ?? 0),
             number_gratuity_months: Number(r.number_gratuity_months ?? 0),
+            rg_amount: Number(r.rg_amount ?? 0),
         }));
     }
 
@@ -84,6 +87,7 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
         number_sick_leave: 0,
         total_credible_service: 0,
         number_gratuity_months: 0,
+        rg_amount: 0,
     }];
 });
 
@@ -163,7 +167,8 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
       number_vacation_leave: 0,
       number_sick_leave: 0,
       total_credible_service: 0,
-      number_gratuity_months: 0
+      number_gratuity_months: 0,
+      rg_amount: 0
     }]);
   };
 
@@ -176,7 +181,7 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
   };
 
   return (
-    <div>
+    <div className="p-6 mx-auto space-y-6">
       <div className="mb-6 p-4 bg-muted/50 border-l-4 border-muted-400 rounded-r-lg shadow-sm">
           <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">Logged-in Agency</span>
           <h2 className="text-lg font-semibold text-muted-800">{entityName}</h2>
@@ -240,7 +245,7 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
                 <th className="p-2 border-r text-left w-24">Ret. Law</th>
                 <th className="p-2 border-r text-left w-40">Position</th>
                 <th className="p-2 border-r text-center w-12">SG</th>
-                <th className="p-2 border-r text-center w-32">DOB</th>
+                <th className="p-2 border-r text-center w-32">Date of Birth</th>
                 <th className="p-2 border-r text-center w-32">Orig. Appt</th>
                 <th className="p-2 border-r text-center w-32">Effectivity</th>
                 <th className="p-2 border-r text-right w-32">Monthly Sal.</th>
@@ -248,6 +253,7 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
                 <th className="p-2 border-r text-center w-20">SL Credits</th>
                 <th className="p-2 border-r text-center w-24">Total Credible Service</th>
                 <th className="p-2 border-r text-center w-24">No. of Gratuity Months</th>
+                <th className="p-2 border-r text-center w-24">Retirement Gratuity Amount</th>
                 <th className="p-2 text-center w-12">Action</th>
               </tr>
             </thead>
@@ -318,7 +324,7 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
                     <input 
                       type="number"
                       min="0"
-                      step="0.001"
+                      step="0.1"
                       value={row.number_vacation_leave} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
                       onChange={(e) => handleInputChange(row.id, 'number_vacation_leave', e.target.value)} 
@@ -335,7 +341,8 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
                   </td>
                   <td className="p-1 border-r">
                     <input 
-                      type="number" 
+                      type="number"
+                      min="0"
                       step="0.1"
                       value={row.total_credible_service} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
@@ -343,11 +350,22 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
                     />
                   </td>
                   <td className="p-1 border-r">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
+                      min="0"
                       value={row.number_gratuity_months} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
                       onChange={(e) => handleInputChange(row.id, 'number_gratuity_months', e.target.value)} 
+                    />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input 
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={row.rg_amount} 
+                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                      onChange={(e) => handleInputChange(row.id, 'rg_amount', e.target.value)} 
                     />
                   </td>
                   <td className="p-1 text-center">
@@ -369,7 +387,7 @@ const BP205EntryGrid = ({ retireeData, userId, entityId, entityName }: Props) =>
         <div className="flex justify-between items-start text-xs text-muted-500 px-2">
           <p>* Ensure "Effectivity Date" falls within FY 2026 for TLP eligibility.</p>
           <div className="text-right">
-              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary)*( Number(r.number_vacation_leave) + Number(r.number_sick_leave))*TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
       </form>

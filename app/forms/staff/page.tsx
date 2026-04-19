@@ -6,6 +6,7 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
+import { statusLabels } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +18,6 @@ const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'ou
     pending_budget: 'secondary',
     pending_agency_head: 'secondary',
     approved: 'default',
-}
-
-const statusLabels: Record<string, string> = {
-    draft: 'Draft',
-    pending_personnel: 'Pending Personnel Officer',
-    pending_budget: 'Pending Budget Officer',
-    pending_agency_head: 'Pending Agency Head',
-    approved: 'Approved',
 }
 
 export default async function StaffingPage() {

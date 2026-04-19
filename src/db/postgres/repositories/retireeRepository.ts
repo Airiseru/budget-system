@@ -1,5 +1,5 @@
 import { db } from '../database'
-
+import { TLB_FACTOR } from '@/src/lib/constants';
 import { NewRetireeRecord, NewRetireesList } from '@/src/types/retirees';
 
 export async function createRetireeSubmission(
@@ -36,8 +36,8 @@ export async function createRetireeSubmission(
                 .values(retirees.map(retiree => ({
                     ...retiree,
                     retirees_list_id: list.id,
-                    tlb_constant_factor: 0.0481927,
-                    tlb_amount: retiree.highest_monthly_salary * ((retiree.number_vacation_leave ?? 0) + (retiree.number_sick_leave ?? 0)) * 0.0481927,
+                    tlb_constant_factor: TLB_FACTOR,
+                    tlb_amount: retiree.highest_monthly_salary * ((retiree.number_vacation_leave ?? 0) + (retiree.number_sick_leave ?? 0)) * TLB_FACTOR,
                 })))
                 .execute();
         }
@@ -117,8 +117,8 @@ export async function updateRetirees(formId: string, retirees: NewRetireeRecord[
                 retirees_list_id: formId,
                 // Ensure ID is generated if not provided
                 id: r.id ?? crypto.randomUUID(),
-                tlb_constant_factor: 0.0481927,
-                tlb_amount: r.highest_monthly_salary * ((r.number_vacation_leave ?? 0) + (r.number_sick_leave ?? 0)) * 0.0481927,
+                tlb_constant_factor: TLB_FACTOR,
+                tlb_amount: r.highest_monthly_salary * ((r.number_vacation_leave ?? 0) + (r.number_sick_leave ?? 0)) * TLB_FACTOR,
             }));
 
             await trx

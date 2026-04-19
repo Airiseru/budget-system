@@ -3,16 +3,11 @@
 import { Badge } from '@/components/ui/badge';
 import { SignSection } from '@/components/ui/digital-signatures/SignSection';
 import Link from 'next/link';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { Pencil } from 'lucide-react';
 import FormDeleteButton from '../FormDeleteButton';
-import { RETIREE_WORKFLOW } from '@/src/lib/workflows/retiree-flow';
-
-const statusLabels: Record<string, string> = {
-    draft: 'Draft',
-    pending_personnel: 'Pending Personnel Officer',
-    pending_budget: 'Pending Budget Officer',
-    approved: 'Approved',
-};
+import { RETIREE_WORKFLOW } from '@/src/lib/workflows/retiree-flow'
+import BackButton from '../BackButton'
+import { statusLabels } from '@/src/lib/constants'
 
 interface RetireeViewProps {
     data: any; // Use your RetireeFormInitialData interface for better type safety
@@ -40,13 +35,7 @@ export default function RetireeView({
     return (
         <main className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex justify-between items-center mb-6">
-                <Link 
-                    href="/forms/retirees" 
-                    className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                    <ArrowLeft size={16} />
-                    Back to List
-                </Link>
+                <BackButton url="/forms/retirees" label="Back to List"/>
                 {data.auth_status === 'draft' && (
                 <div className="flex flex-row gap-2">
                     <Link 
@@ -95,7 +84,7 @@ export default function RetireeView({
             <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left border-collapse">
-                        <thead className="bg-slate-50 text-slate-600 font-medium border-b text-[10px] uppercase">
+                        <thead className="bg-accent-foreground text-white font-medium border-b text-[10px] uppercase">
                             <tr>
                                 <th className="px-3 py-3 border-r w-10 text-center">#</th>
                                 <th className="px-3 py-3 border-r min-w-[200px]">Personnel Details</th>
@@ -103,7 +92,9 @@ export default function RetireeView({
                                 <th className="px-3 py-3 border-r text-center">Leave Credits (V/S)</th>
                                 <th className="px-3 py-3 border-r text-center">Service / Gratuity</th>
                                 <th className="px-3 py-3 border-r">Dates (DOB/Eff)</th>
-                                <th className="px-3 py-3 text-right">Monthly Salary</th>
+                                <th className="px-3 py-3 border-r text-right">Monthly Salary</th>
+                                <th className="px-3 py-3 border-r text-right">Terminal Leave Amount</th>
+                                <th className="px-3 py-3 text-right">Retirement Gratuity Amount</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y">
@@ -116,7 +107,7 @@ export default function RetireeView({
                                     {/* Column 1: Name & Position */}
                                     <td className="px-3 py-3 border-r">
                                         <div className="font-bold text-slate-900">{retiree.name}</div>
-                                        <div className="text-[11px] text-blue-600 font-medium uppercase">
+                                        <div className="text-[11px] text-secondary-foreground font-medium uppercase">
                                             SG {retiree.salary_grade} — {retiree.position}
                                         </div>
                                     </td>
@@ -124,7 +115,7 @@ export default function RetireeView({
                                     {/* Column 2: Law & GSIS */}
                                     <td className="px-3 py-3 border-r text-center space-y-1">
                                         <div className="text-xs font-semibold">{retiree.retirement_law}</div>
-                                        <Badge variant={retiree.is_gsis_member ? "secondary" : "outline"} className="text-[9px]">
+                                        <Badge variant={retiree.is_gsis_member ? "secondary" : "outline"} className="text-[9px] bg-gray-200 text-accent-foreground">
                                             {retiree.is_gsis_member ? "GSIS MEMBER" : "NON-GSIS"}
                                         </Badge>
                                     </td>
@@ -141,7 +132,7 @@ export default function RetireeView({
 
                                     {/* Column 4: Service & Gratuity */}
                                     <td className="px-3 py-3 border-r text-center">
-                                        <div className="text-xs font-semibold">{retiree.total_credible_service ?? '0'} Yrs</div>
+                                        <div className="text-xs font-semibold">{retiree.total_credible_service ?? '0'} Years</div>
                                         <div className="text-[10px] text-slate-500">{retiree.number_gratuity_months ?? '0'} Mos. Gratuity</div>
                                     </td>
 
@@ -153,17 +144,27 @@ export default function RetireeView({
                                     </td>
 
                                     {/* Column 6: Salary */}
-                                    <td className="px-3 py-3 text-right font-mono text-slate-900 font-bold">
+                                    <td className="px-3 py-3 border-r text-right font-mono text-slate-900 font-bold">
                                         ₱{Number(retiree.highest_monthly_salary).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+
+                                    {/* Column 7: Terminal Leave */}
+                                    <td className="px-3 py-3 border-r text-right font-mono text-slate-900 font-bold">
+                                        ₱{Number(retiree.tlb_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                    </td>
+
+                                    {/* Column 8: Retirement Gratuity Amount */}
+                                    <td className="px-3 py-3 text-right font-mono text-slate-900 font-bold">
+                                        ₱{Number(retiree.rg_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                     </td>
                                 </tr>
                             ))}
                         </tbody>
                         <tfoot className="bg-slate-50 font-bold border-t">
                             <tr>
-                                <td colSpan={8} className="px-4 py-3 text-right text-slate-500 uppercase text-[10px]">Total Monthly Requirement</td>
-                                <td className="px-4 py-3 text-right text-lg text-blue-700 font-mono">
-                                    ₱{data.retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                <td colSpan={8} className="px-4 py-3 text-right uppercase text-[10px]">Total Monthly Requirement</td>
+                                <td className="px-4 py-3 text-right text-lg text-accent-foreground font-mono">
+                                    ₱{data.retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary) + Number(r.tlb_amount) + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                 </td>
                             </tr>
                         </tfoot>

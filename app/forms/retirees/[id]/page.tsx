@@ -8,8 +8,7 @@ import { canSign } from '@/src/lib/workflows';
 import { revalidatePath } from 'next/cache';
 import RetireeView from '@/components/ui/retiree/RetireeView';
 
-const RetireeRepo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres');
-const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
+const RetireeRepo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function RetireeDetailsPage({ params }: { params: Promise<{ id: string }> }) {

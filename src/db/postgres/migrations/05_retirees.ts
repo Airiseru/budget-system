@@ -36,6 +36,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('tlb_amount', 'numeric', (col) => col.notNull())
         .addColumn('total_credible_service', 'decimal')
         .addColumn('number_gratuity_months', 'integer')
+        .addColumn('rg_amount', 'numeric')
         .execute()
 
     // Create B-tree index
