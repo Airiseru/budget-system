@@ -79,6 +79,10 @@ export async function PUT(
             updated,
             result.updated_at
         )
+
+        if (!submitResult.success) {
+            return NextResponse.json({ error: "Failed to log form submission" }, { status: 500 })
+        }
     }
 
     return NextResponse.json({ success: true })

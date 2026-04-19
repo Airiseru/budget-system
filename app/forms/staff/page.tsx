@@ -48,7 +48,7 @@ export default async function StaffingPage() {
                         <ModeToggle />
                         <ButtonGroup>
                             <Link href="/home">
-                                <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                                <Button variant="outline" aria-label="Home">Home</Button>
                             </Link>
                         </ButtonGroup>
                         {session?.user.access_level === 'encode' && (
@@ -70,7 +70,7 @@ export default async function StaffingPage() {
                     <ModeToggle />
                     <ButtonGroup>
                         <Link href="/home">
-                            <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                            <Button variant="outline" aria-label="Home">Home</Button>
                         </Link>
                     </ButtonGroup>
                     {session?.user.access_level === 'encode' && (

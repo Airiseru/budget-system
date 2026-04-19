@@ -2,7 +2,7 @@ import BP205EntryGrid from "@/components/ui/retiree/RetireeForm";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
-import Link from "next/link";
+import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
 import { createRetireeRepository } from "@/src/db/factory";
 import { notFound, redirect } from 'next/navigation'
@@ -33,9 +33,7 @@ export default async function EditRetireePage({ params }: { params: { id: string
             <ButtonGroup className='my-4'>
                 <ModeToggle/>
                 <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline" aria-label="Go Back">Go Back</Button>
-                    </Link>
+                    <BackButton url="/forms/retirees" label="Back to List"></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
             {/* Pass the entityId here */}

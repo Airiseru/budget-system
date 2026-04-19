@@ -1,9 +1,8 @@
 import StaffForm from "@/components/ui/staff/StaffingForm";
 import { sessionWithEntity } from "@/src/actions/auth";
-import { createStaffingRepository, createPapRepository } from "@/src/db/factory";
-import { Button } from '@/components/ui/button'
+import { createStaffingRepository, createPapRepository } from "@/src/db/factory"
 import { ButtonGroup } from "@/components/ui/button-group"
-import Link from "next/link";
+import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
 import { notFound, redirect } from 'next/navigation'
 
@@ -41,9 +40,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
             <ButtonGroup className='my-4'>
                 <ModeToggle/>
                 <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline" aria-label="Go Back">Go Back</Button>
-                    </Link>
+                    <BackButton url="/forms/staff" label="Back to List"></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
             <StaffForm 

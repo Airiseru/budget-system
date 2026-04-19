@@ -471,7 +471,7 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                     <button type="button" onClick={addRow} className="text-sm font-bold text-primary-600 hover:underline">+ Add New Position Row</button>
                     <div className="flex gap-3">
                         <button type="submit" onClick={() => setSubmitAction("draft")} className="px-6 py-2 bg-slate-800 text-white rounded-md hover:bg-slate-700 transition-all font-medium" disabled={isLoading}>Save Draft</button>
-                        <button type="submit" onClick={() => setSubmitAction("pending_personnel")} className="px-6 py-2 bg-accent-foreground text-white rounded-md hover:bg-blue-700 transition-all font-medium" disabled={isLoading}>Submit Form</button>
+                        <button type="submit" onClick={() => setSubmitAction("pending_personnel")} className="px-6 py-2 bg-accent-foreground text-white rounded-md hover:bg-accent-foreground/80 transition-all font-medium" disabled={isLoading}>Submit Form</button>
                     </div>
                 </div>
             </form>

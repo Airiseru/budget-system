@@ -1,4 +1,3 @@
-// app/forms/retirees/page.tsx
 import { createRetireeRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -50,7 +49,7 @@ export default async function RetireesPage() {
                         <ModeToggle />
                         <ButtonGroup>
                             <Link href="/home">
-                                <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                                <Button variant="outline" aria-label="Home">Home</Button>
                             </Link>
                         </ButtonGroup>
                         {session?.user.access_level === 'encode' && (
@@ -72,7 +71,7 @@ export default async function RetireesPage() {
                     <ModeToggle />
                     <ButtonGroup>
                         <Link href="/home">
-                            <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                            <Button variant="outline" aria-label="Home">Home</Button>
                         </Link>
                     </ButtonGroup>
                     {session?.user.access_level === 'encode' && (
