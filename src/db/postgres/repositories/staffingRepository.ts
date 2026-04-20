@@ -210,6 +210,8 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
             'organizational_unit',
             'position_title',
             'salary_grade',
+            'step',
+            'monthly_base_salary',
             'num_positions',
             'months_employed',
             'total_salary',

@@ -29,6 +29,8 @@ export interface PositionTable {
     organizational_unit: string
     position_title: string
     salary_grade: number
+    step: number
+    monthly_base_salary: number
     num_positions: number
     months_employed: number
     total_salary: number

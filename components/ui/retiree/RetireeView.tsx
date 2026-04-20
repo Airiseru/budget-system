@@ -7,7 +7,7 @@ import { Pencil } from 'lucide-react';
 import FormDeleteButton from '../FormDeleteButton';
 import { RETIREE_WORKFLOW } from '@/src/lib/workflows/retiree-flow'
 import BackButton from '../BackButton'
-import { statusLabels } from '@/src/lib/constants'
+import { STATUS_LABELS } from '@/src/lib/constants'
 
 interface RetireeViewProps {
     data: any; // Use your RetireeFormInitialData interface for better type safety
@@ -59,7 +59,7 @@ export default function RetireeView({
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight">FY {data.fiscal_year} Retiree List Details</h1>
                     <Badge className="mt-2 py-1.5 px-4 rounded-full">
-                        {statusLabels[data.auth_status ?? ""] ?? data.auth_status}
+                        {STATUS_LABELS[data.auth_status ?? ""] ?? data.auth_status}
                     </Badge>
                 </div>
             </div>

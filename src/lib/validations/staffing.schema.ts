@@ -12,6 +12,8 @@ export const positionSchema = z.object({
     staff_type: z.string().min(1, "Staff type is required"),
     organizational_unit: z.string().min(1, "Org unit is required"),
     salary_grade: z.number().min(1, "Salary grade is required").max(33, "Salary grade must be between 1 and 33"),
+    step: z.number().min(1, "Step is required").max(8, "Step must be between 1 and 8"),
+    monthly_base_salary: z.coerce.number().min(0.01, "Amount must be greater than 0"),
     total_salary: z.coerce.number().min(0.01, "Amount must be greater than 0"),
     num_positions: z.number().min(1, "Qty must be at least 1"),
     months_employed: z.number().min(1).max(12),

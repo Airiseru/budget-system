@@ -7,13 +7,13 @@ import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
 import BackButton from "../BackButton";
-import { statusLabels } from "@/src/lib/constants"
+import { STATUS_LABELS } from "@/src/lib/constants"
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
 const compensationNames = [
-    'PERA', 'RATA', 'Clothing Allowance', 'Mid Year Bonus', 
-    'End Year Bonus', 'Cash Gift', 'PEI', 'RLIP', 'Pag-IBIG', 'ECiP', 'PHIC'
+    'PERA', 'RATA', 'Clothing Allowance', 'Mid-Year Bonus', 
+    'Year-End Bonus', 'Cash Gift', 'PEI', 'RLIP', 'Pag-IBIG', 'ECiP', 'PHIC'
 ];
 
 interface StaffingViewProps {
@@ -141,7 +141,7 @@ export default function StaffingView({
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight">FY {summary.fiscal_year} Staffing Plan</h1>
                     <Badge className="mt-2 py-1.5 px-4 rounded-full">
-                        {statusLabels[summary.auth_status ?? ""] ?? summary.auth_status}
+                        {STATUS_LABELS[summary.auth_status ?? ""] ?? summary.auth_status}
                     </Badge>
                 </div>
             </div>

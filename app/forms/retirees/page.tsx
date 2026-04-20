@@ -6,7 +6,7 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
-import { statusLabels } from '@/src/lib/constants'
+import { STATUS_LABELS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
@@ -103,7 +103,7 @@ export default async function RetireesPage() {
                                                 : ''
                                             }
                                         >
-                                            {statusLabels[list.auth_status ?? 'draft'] ?? list.auth_status}
+                                            {STATUS_LABELS[list.auth_status ?? 'draft'] ?? list.auth_status}
                                         </Badge>
                                     </div>
 

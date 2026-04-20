@@ -23,6 +23,8 @@ type PositionFormInput = {
     organizational_unit: string;
     position_title: string;
     salary_grade: number;
+    step: number;
+    monthly_base_salary: number;
     num_positions: number;
     months_employed: number;
     total_salary: number;
@@ -52,6 +54,8 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
                 position_title: "", 
                 num_positions: 1, 
                 salary_grade: 1,
+                step: 1,
+                monthly_base_salary: 0,
                 total_salary: 0,
                 staff_type: "Casual",
                 organizational_unit: "Main Office",
@@ -92,8 +96,8 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
     };
 
     const compensationNames = [
-        'PERA', 'RATA', 'Clothing Allowance', 'Mid Year Bonus', 
-        'End Year Bonus', 'Cash Gift', 'PEI', 'RLIP', 'Pag-IBIG', 'ECiP', 'PHIC'
+        'PERA', 'RATA', 'Clothing Allowance', 'Mid-Year Bonus', 
+        'Year-End Bonus', 'Cash Gift', 'PEI', 'RLIP', 'Pag-IBIG', 'ECiP', 'PHIC', 'Medical Allowance'
     ];
 
     // ===========================
@@ -344,7 +348,9 @@ export default function StaffForm({ staff, availablePaps, userId, entityId, enti
         setFormData({
             ...formData,
             positions: [...formData.positions, { 
-                pap_id: "", position_title: "", num_positions: 1, salary_grade: 1, total_salary: 0,
+                pap_id: "", position_title: "", num_positions: 1, salary_grade: 1, 
+                step: 1, monthly_base_salary: 0,
+                total_salary: 0,
                 staff_type: "Casual", organizational_unit: "", months_employed: 12, compensations: []
             }]
         });

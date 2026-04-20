@@ -1,43 +1,18 @@
-export const statusLabels: Record<string, string> = {
+export const STATUS_LABELS: Record<string, string> = {
     draft: 'Draft',
     pending_personnel: 'Pending Personnel Officer',
     pending_budget: 'Pending Budget Officer',
     pending_agency_head: 'Pending Agency Head',
     approved: 'Approved',
 }
+
 export const TLB_FACTOR = 0.0481927
-export const SALARY_GRADE_STEP_ONE = {
-    1: 14634,
-    2: 15522,
-    3: 16486,
-    4: 17506,
-    5: 18581,
-    6: 19716,
-    7: 20914,
-    8: 22423,
-    9: 24329,
-    10: 26917,
-    11: 31705,
-    12: 33947,
-    13: 36125,
-    14: 38764,
-    15: 42178,
-    16: 45694,
-    17: 49562,
-    18: 53818,
-    19: 59153,
-    20: 66052,
-    21: 73303,
-    22: 81796,
-    23: 91306,
-    24: 102603,
-    25: 116643,
-    26: 131807,
-    27: 148940,
-    28: 167129,
-    29: 187531,
-    30: 210718,
-    31: 300961,
-    32: 356237,
-    33: 449157
-}
+
+export const MAX_SG = 33
+export const MAX_STEP = 8
+
+export const VALID_COMPENSATION_NAMES = [
+    'PERA', 'RATA', 'Clothing Allowance', 'Mid-Year Bonus',
+    'Year-End Bonus', 'Cash Gift', 'PEI', 'RLIP',
+    'Pag-IBIG', 'ECiP', 'PHIC', 'Medical Allowance',
+]

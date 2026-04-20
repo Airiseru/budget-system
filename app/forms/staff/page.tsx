@@ -6,7 +6,7 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
-import { statusLabels } from '@/src/lib/constants'
+import { STATUS_LABELS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
@@ -91,7 +91,7 @@ export default async function StaffingPage() {
                                                 : ''
                                             }
                                         >
-                                            {statusLabels[summary.auth_status ?? 'draft'] ?? summary.auth_status}
+                                            {STATUS_LABELS[summary.auth_status ?? 'draft'] ?? summary.auth_status}
                                         </Badge>
                                     </div>
 
