@@ -15,5 +15,5 @@ export const VALID_COMPENSATION_NAMES = [
     'PERA', 'RATA', 'Clothing Allowance', 'Mid-Year Bonus',
     'Year-End Bonus', 'Cash Gift', 'PEI', 'RLIP',
     'Pag-IBIG', 'ECiP', 'PHIC', 'Medical Allowance',
-    "Compensation Related Magna Compensation Carta Benefits"
+    "Compensation Related Magna Carta Benefits"
 ]
