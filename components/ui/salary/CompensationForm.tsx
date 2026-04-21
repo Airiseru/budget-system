@@ -101,6 +101,7 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                                 <option value="fixed">Fixed Amount (PHP)</option>
                                 <option value="percentage">Percentage (%)</option>
                                 <option value="salary_multiplier">Salary Multiplier</option>
+                                <option value="value_multiplier">Value Multiplier</option>
                             </select>
                             {state?.fieldErrors?.calculation_type && (
                                 <p className="text-red-500 text-xs">{state.fieldErrors.calculation_type[0]}</p>
@@ -126,7 +127,7 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
 
                         <div className="space-y-1">
                             <label className="text-sm font-medium">
-                                {calcType === 'percentage' ? 'Rate (%)' : calcType === 'salary_multiplier' ? 'Multiplier' : 'Amount (PHP)'}
+                                {calcType === 'percentage' ? 'Rate (%)' : (calcType === 'salary_multiplier' || calcType === 'value_multiplier') ? 'Multiplier' : 'Amount (PHP)'}
                             </label>
                             <input
                                 name="rule_value"

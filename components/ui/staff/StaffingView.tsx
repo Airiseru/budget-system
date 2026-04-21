@@ -8,13 +8,9 @@ import { Pencil } from "lucide-react";
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
 import BackButton from "../BackButton";
 import { STATUS_LABELS } from "@/src/lib/constants"
+import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
-
-const compensationNames = [
-    'PERA', 'RATA', 'Clothing Allowance', 'Mid-Year Bonus', 
-    'Year-End Bonus', 'Cash Gift', 'PEI', 'RLIP', 'Pag-IBIG', 'ECiP', 'PHIC'
-];
 
 interface StaffingViewProps {
     summary: any;
@@ -26,7 +22,6 @@ interface StaffingViewProps {
         existingSignature: any;
         allSignatures: any[];
     };
-    // Server Actions passed as props
     updateAuthStatus: () => Promise<void>;
     deleteFormAction: (id: string) => Promise<void>;
 }
@@ -42,6 +37,23 @@ export default function StaffingView({
     const { userCanSign, currentSignatoryRole, existingSignature, allSignatures } = workflowData;
     const formData = { id: summary.id, fiscal_year: summary.fiscal_year, form_id: summary.id };
 
+    // ==========================================
+    // NEW: OVERALL PLAN CALCULATIONS
+    // ==========================================
+    const allPositions = summary?.positions || [];
+
+    const overallBasicSalary = allPositions.reduce((sum: number, pos: any) => sum + (Number(pos.total_salary) || 0), 0);
+
+    const overallCompensationTotals = VALID_COMPENSATION_NAMES.map(compName => {
+        return allPositions.reduce((sum: number, pos: any) => {
+            const compMatch = pos.compensations?.find((c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
+            return sum + (compMatch ? Number(compMatch.amount) : 0);
+        }, 0);
+    });
+
+    const overallGrandTotal = overallBasicSalary + overallCompensationTotals.reduce((a: number, b: number) => a + b, 0);
+    // ==========================================
+
     const renderStaffTypeGroup = (tier: number, type: string) => {
         const filteredPositions = (summary?.positions || []).filter((pos: any) => {
             const pap = paps.find((p: any) => p.id === pos.pap_id);
@@ -50,65 +62,103 @@ export default function StaffingView({
 
         if (filteredPositions.length === 0) return null;
 
+        const totalBasicSalary = filteredPositions.reduce((sum: number, pos: any) => sum + (Number(pos.total_salary) || 0), 0);
+
+        const compensationTotals = VALID_COMPENSATION_NAMES.map(compName => {
+            return filteredPositions.reduce((sum: number, pos: any) => {
+                const compMatch = pos.compensations?.find((c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
+                return sum + (compMatch ? Number(compMatch.amount) : 0);
+            }, 0);
+        });
+
+        const grandTotal = totalBasicSalary + compensationTotals.reduce((a, b) => a + b, 0);
+
         return (
             <div key={type} className="space-y-2">
-                <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
+                <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
                     {type} Positions
                 </h4>
                 
-                {/* 1. Added border and rounded corners to the container */}
                 <div className="border border-slate-300 rounded-lg overflow-x-auto bg-white shadow-sm">
                     <table className="w-full text-sm border-collapse">
-                        <thead className="bg-slate-100 text-[10px] font-bold text-slate-700 uppercase">
+                        <thead className="bg-slate-100 text-sm font-bold text-slate-700 uppercase">
                             <tr>
-                                {/* 2. Added border-r (right) and border-b (bottom) to headers */}
                                 <th className="p-2 text-left sticky left-0 bg-slate-100 z-10 border-r border-b border-slate-300 min-w-[220px]">Position / Program</th>
                                 <th className="p-2 text-center border-r border-b border-slate-300">Months</th>
                                 <th className="p-2 text-center border-r border-b border-slate-300">Qty</th>
                                 <th className="p-2 text-center border-r border-b border-slate-300">SG</th>
-                                <th className="p-2 text-right border-r border-b border-slate-300 bg-slate-200/50">Basic Salary</th>
+                                <th className="p-2 text-right border-r border-b border-slate-300">Basic Salary</th>
                                 
-                                {compensationNames.map(name => (
-                                    <th key={name} className="p-2 text-right border-r border-b border-slate-300 font-bold text-blue-800">
+                                {VALID_COMPENSATION_NAMES.map(name => (
+                                    <th key={name} className="p-2 text-right border-r border-b border-slate-300 font-bold">
                                         {name}
                                     </th>
                                 ))}
+                                
+                                <th className="p-2 text-right border-b border-slate-300 font-bold text-slate-900 bg-slate-200">
+                                    Total (₱)
+                                </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-300">
                             {filteredPositions.map((pos: any) => {
                                 const relatedPap = paps.find((p: any) => p.id === pos.pap_id);
-                                
+                                const rowBasic = Number(pos.total_salary) || 0;
+                                let rowCompensationsTotal = 0;
+
                                 return (
-                                    <tr key={pos.id} className="hover:bg-blue-50/30 transition-colors">
-                                        {/* 3. Added border-r to every cell for a full grid look */}
+                                    <tr key={pos.id} className="hover:bg-accent-foreground/10 transition-colors">
                                         <td className="p-2 sticky left-0 bg-white border-r border-slate-300 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.1)]">
                                             <div className="font-bold text-slate-900 leading-tight">{pos.position_title}</div>
-                                            <div className="text-[9px] text-slate-500 mt-0.5 uppercase">{relatedPap?.title}</div>
+                                            <div className="text-sm text-slate-500 mt-0.5 uppercase">{relatedPap?.title}</div>
                                         </td>
                                         <td className="p-2 text-center border-r border-slate-200 text-slate-600">{pos.months_employed}</td>
                                         <td className="p-2 text-center border-r border-slate-200 font-mono">{pos.num_positions}</td>
-                                        <td className="p-2 text-center border-r border-slate-200 font-semibold">{pos.salary_grade}</td>
-                                        <td className="p-2 text-right border-r border-slate-300 font-mono font-bold bg-slate-50/50">
-                                            ₱{pos.total_salary?.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        <td className="p-2 text-center border-r border-slate-200 font-mono">{pos.salary_grade}</td>
+                                        <td className="p-2 text-right border-r border-slate-200 font-mono">
+                                            ₱{rowBasic.toLocaleString(undefined, { minimumFractionDigits: 2 })}
                                         </td>
 
-                                        {compensationNames.map(compName => {
+                                        {VALID_COMPENSATION_NAMES.map(compName => {
                                             const compMatch = pos.compensations?.find(
                                                 (c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase()
                                             );
-                                            const amount = compMatch ? compMatch.amount : 0;
+                                            const amount = compMatch ? Number(compMatch.amount) : 0;
+                                            rowCompensationsTotal += amount;
 
                                             return (
-                                                <td key={compName} className={`p-2 text-right border-r border-slate-200 font-mono text-[11px] ${amount === 0 ? 'text-slate-300' : 'text-slate-700'}`}>
+                                                <td key={compName} className={`p-2 text-right border-r border-slate-200 font-mono text-sm ${amount === 0 ? 'text-slate-300' : 'text-slate-700'}`}>
                                                     {amount > 0 ? "₱" + amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '—'}
                                                 </td>
                                             );
                                         })}
+
+                                        <td className="p-2 text-right border-slate-200 font-mono font-bold text-slate-900 bg-slate-50">
+                                            ₱{(rowBasic + rowCompensationsTotal).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                        </td>
                                     </tr>
                                 );
                             })}
                         </tbody>
+
+                        <tfoot className="bg-slate-100 font-bold text-slate-900 border-t-2 border-slate-400">
+                            <tr>
+                                <td colSpan={4} className="p-2 text-right border-r border-slate-300 uppercase text-sm tracking-wider">
+                                    Subtotal
+                                </td>
+                                <td className="p-2 text-right border-r border-slate-300 font-mono text-secondary-foreground">
+                                    ₱{totalBasicSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                                {compensationTotals.map((compTotal, i) => (
+                                    <td key={`total-${i}`} className={`p-2 text-right border-r border-slate-300 font-mono text-sm ${compTotal === 0 ? 'text-slate-400' : 'text-secondary-foreground'}`}>
+                                        {compTotal > 0 ? "₱" + compTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '—'}
+                                    </td>
+                                ))}
+                                <td className="p-2 text-right font-mono bg-slate-200 text-secondary-foreground border-slate-300 text-sm">
+                                    ₱{grandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                            </tr>
+                        </tfoot>
                     </table>
                 </div>
             </div>
@@ -137,6 +187,7 @@ export default function StaffingView({
                     </div>
                 )}
             </div>
+
             <div className="justify-center">
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight">FY {summary.fiscal_year} Staffing Plan</h1>
@@ -146,20 +197,64 @@ export default function StaffingView({
                 </div>
             </div>
 
+            {/* Staff Per Tier */}
             <section className="space-y-10">
                 <div className="space-y-4">
-                    <h3 className="text-sm font-black text-blue-900 border-l-4 border-blue-600 pl-3 py-1 bg-blue-50/50">TIER 1: ONGOING PROGRAMS</h3>
+                    <h3 className="text-sm font-black text-accent-foreground border-l-4 border-accent-foreground pl-3 py-1 bg-accent-foreground/10">TIER 1: ONGOING PROGRAMS</h3>
                     <div className="space-y-6">
                         {staffTypes.map(type => renderStaffTypeGroup(1, type))}
                     </div>
                 </div>
                 <div className="space-y-4">
-                    <h3 className="text-sm font-black text-emerald-900 border-l-4 border-emerald-600 pl-3 py-1 bg-emerald-50/50">TIER 2: NEW PROPOSALS</h3>
+                    <h3 className="text-sm font-black text-secondary-foreground border-l-4 border-secondary-foreground pl-3 py-1 bg-secondary-foreground/10">TIER 2: NEW PROPOSALS</h3>
                     <div className="space-y-6">
                         {staffTypes.map(type => renderStaffTypeGroup(2, type))}
                     </div>
                 </div>
             </section>
+
+            {/* Total */}
+            <div className="mt-6 border-2 border-black rounded-xl overflow-hidden bg-white shadow-md">
+                <div className="bg-accent-foreground text-white p-3 border-b border-slate-700">
+                    <h3 className="text-sm font-black tracking-widest uppercase">Total Budget Requirement (All Tiers & Types)</h3>
+                </div>
+                <div className="overflow-x-auto">
+                    <table className="w-full text-sm border-collapse">
+                        <thead className="bg-slate-50 text-sm font-bold text-slate-700 uppercase">
+                            <tr>
+                                <th className="p-3 text-left border-r border-b border-slate-300 min-w-[220px]">Requirement Summary</th>
+                                <th className="p-3 text-right border-r border-b border-slate-300">Total Basic Salary</th>
+                                {VALID_COMPENSATION_NAMES.map(name => (
+                                    <th key={`overall-th-${name}`} className="p-3 text-right border-r border-b border-slate-300 font-bold">
+                                        {name}
+                                    </th>
+                                ))}
+                                <th className="p-3 text-right border-b border-slate-300 font-black text-secondary-foreground bg-slate-200">
+                                    GRAND TOTAL (₱)
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td className="p-3 font-bold text-slate-900 border-r border-slate-300 bg-slate-50 uppercase tracking-tight text-sm">
+                                    Entire Staffing Plan
+                                </td>
+                                <td className="p-3 text-right font-mono border-r border-slate-300 font-bold text-slate-700">
+                                    ₱{overallBasicSalary.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                                {overallCompensationTotals.map((compTotal, i) => (
+                                    <td key={`overall-td-${i}`} className={`p-3 text-right border-r border-slate-300 font-mono text-sm ${compTotal === 0 ? 'text-slate-400' : 'font-bold'}`}>
+                                        {compTotal > 0 ? "₱" + compTotal.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '—'}
+                                    </td>
+                                ))}
+                                <td className="p-3 text-right font-mono font-black text-lg text-secondary-foreground bg-secondary-foreground/10 border-slate-300">
+                                    ₱{overallGrandTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
 
             <SignSection 
                 formId={summary.id ?? ""} 
@@ -179,7 +274,7 @@ export default function StaffingView({
                 <div className="pt-6 border-t mt-12 flex justify-between items-center">
                     <div>
                         <h3 className="text-sm font-bold text-gray-900">Danger Zone</h3>
-                        <p className="text-xs text-gray-500">Irreversible actions for this record.</p>
+                        <p className="text-sm text-gray-500">Irreversible actions for this record.</p>
                     </div>
                     <FormDeleteButton id={summary.id} onDelete={deleteFormAction} />
                 </div>

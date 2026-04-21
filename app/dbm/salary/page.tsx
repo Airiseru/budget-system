@@ -19,7 +19,6 @@ export default async function SalaryPage() {
 
     let schedule = null
     let compensationRules: CompensationRule[] = []
-    let text = null
 
     try {
         schedule = await SalaryRepository.getLatestSalarySchedule()

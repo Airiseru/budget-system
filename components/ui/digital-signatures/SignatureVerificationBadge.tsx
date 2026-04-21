@@ -2,8 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { verifyFormSignature } from '@/src/actions/keys'
-import { buildSignaturePayload, sha256 } from '@/src/lib/audit-hash'
-import { canonicalStringify } from '@/src/lib/canonical'
 import { ShieldCheck, ShieldX, Shield } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 

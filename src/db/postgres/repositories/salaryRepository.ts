@@ -51,6 +51,21 @@ export async function getLatestSalarySchedule(): Promise<AllSalaryRates> {
     return { ...schedule, rates }
 }
 
+export async function getHighestSalaryGrade(): Promise<number> {
+    const result = await db
+        .selectFrom('salary_schedules')
+        .selectAll()
+        .orderBy('effective_date', 'desc')
+        .limit(1)
+        .innerJoin('salary_rates', 'salary_rates.schedule_id', 'salary_schedules.id')
+        .select('salary_rates.salary_grade')
+        .orderBy('salary_grade', 'desc')
+        .limit(1)
+        .executeTakeFirstOrThrow()
+
+    return result.salary_grade
+}
+
 export async function getBaseRate(
     schedule_id: string,
     salary_grade: number,

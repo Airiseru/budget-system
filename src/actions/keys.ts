@@ -198,6 +198,9 @@ export async function verifyFormSignature(entityId: string, formId: string, tabl
     const cleanFormData = cleanDataBasedOnTable(tableName, formData)
     const form_state_hash = sha256(canonicalStringify(cleanFormData))
 
+    const formIntegrity = await auditRepository.verifyFormIntegrity(tableName, formId)
+    console.log(`formIntegrity:`, formIntegrity)
+
     if ((formPayload as { from_status: string; to_status: string; form_state_hash: string; }).form_state_hash !== form_state_hash) {
         return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Respective officer has signed the form but contains different data from current form." }
     }

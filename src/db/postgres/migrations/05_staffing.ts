@@ -42,7 +42,7 @@ export async function up(db: Kysely<any>): Promise<void> {
             col.references('positions.id').onDelete('cascade').notNull()
         )
         .addColumn('compensation_rule_id', 'uuid', (col) => 
-            col.references('compensation_rules.id').notNull()
+            col.references('compensation_rules.id')
         )
         .addColumn('name', 'text', (col) => col.notNull())
         .addColumn('amount', 'numeric(12, 2)', (col) => col.notNull().defaultTo(0))

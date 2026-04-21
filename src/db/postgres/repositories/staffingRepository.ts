@@ -50,6 +50,7 @@ interface PositionInput extends Omit<NewPosition, 'staffing_summary_id'> {
     compensations?: {
         name: string;
         amount: number;
+        compensation_rule_id: string
     }[];
 }
 
@@ -100,7 +101,8 @@ export async function createStaffingSubmission(
                         .values(compensations.map(comp => ({
                             name: comp.name,    
                             amount: comp.amount, 
-                            staff_id: insertedPosition.id 
+                            staff_id: insertedPosition.id,
+                            compensation_rule_id: comp.compensation_rule_id ?? null
                         })))
                         .execute();
                 }
@@ -168,7 +170,8 @@ export async function updateStaffingSubmission(
                         .values(compensations.map((comp: any) => ({
                             name: comp.name,
                             amount: comp.amount,
-                            staff_id: insertedPosition.id
+                            staff_id: insertedPosition.id,
+                            compensation_rule_id: comp.compensation_rule_id ?? null
                         })))
                         .execute()
                 }
@@ -210,6 +213,7 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
             'organizational_unit',
             'position_title',
             'salary_grade',
+            'salary_schedule_id',
             'step',
             'monthly_base_salary',
             'num_positions',
@@ -217,7 +221,7 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
             'total_salary',
             jsonArrayFrom(
                 eb.selectFrom('compensations')
-                    .select(['id', 'staff_id', 'name', 'amount'])
+                    .select(['id', 'staff_id', 'name', 'amount', 'compensation_rule_id'])
                     .whereRef('compensations.staff_id', '=', 'positions.id')
             ).as('compensations')
         ])
@@ -225,7 +229,7 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
 
     return {
         ...summary,
-        positions 
+        positions
     };
 }
 

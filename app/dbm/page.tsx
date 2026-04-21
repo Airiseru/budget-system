@@ -1,4 +1,3 @@
-import { LogoutButton } from "@/components/ui/LogoutButton"
 import { redirect } from "next/navigation"
 import { sessionDetails } from "@/src/actions/auth"
 import { HomeButton } from "@/components/ui/HomeButton"

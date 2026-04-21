@@ -21,7 +21,8 @@ const TYPE_LABEL = {
 export function CompensationRulesTable({ rules }: { rules: CompensationRule[] }) {
     const formatValue = (type: string, value: string | number) => {
         const num = Number(value)
-        if (type === 'percentage') return `${num}%`
+        if (type === 'percentage') return `${num}% of Salary`
+        if (type === 'salary_multiplier') return `${num} x Salary`
 
         return new Intl.NumberFormat('en-PH', {
             style: 'currency', currency: 'PHP'
