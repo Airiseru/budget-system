@@ -1,4 +1,5 @@
-import { z } from 'zod';
+import { z } from 'zod'
+import { MAX_SG, MAX_STEP } from '../constants';
 
 export const RetireeRowSchema = z.object({
     id: z.string(),
@@ -6,7 +7,8 @@ export const RetireeRowSchema = z.object({
     is_gsis_member: z.boolean(),
     retirement_law: z.string(),
     position: z.string().min(1, "Position is required"),
-    salary_grade: z.coerce.number().min(1).max(33),
+    salary_grade: z.coerce.number().min(1).max(MAX_SG),
+    step: z.coerce.number().min(1).max(MAX_STEP),
     date_of_birth: z.coerce.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Birth Date"),
     original_appointment: z.coerce.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Appointment Date"),
     retirement_effectivity: z.coerce.string().refine((val) => !isNaN(Date.parse(val)), "Invalid Effectivity Date"),

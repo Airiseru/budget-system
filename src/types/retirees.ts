@@ -16,7 +16,8 @@ export interface RetireeRecordTable {
     is_gsis_member: boolean
     retirement_law: string // e.g., RA 8291, RA 1616
     position: string
-    salary_grade: number // Important for GAA validation
+    salary_grade: number
+    step: number
     date_of_birth: Date
     original_appointment: Date
     retirement_effectivity: Date
