@@ -2,7 +2,8 @@ export const RETIREE_WORKFLOW = {
     roles: [
         'personnel_officer',
         'budget_officer',
-        'agency_head'
+        'agency_head',
+        'dbm'
     ],
     transitions: {
         draft: {
@@ -25,9 +26,15 @@ export const RETIREE_WORKFLOW = {
         },
         pending_agency_head: {
             required_roles: ['agency_head'],
-            next_status: 'approved',
+            next_status: 'pending_dbm',
             allowed_access_levels: ['approve'],
             signatory_role: 'agency_head',
+        },
+        pending_dbm: {
+            required_roles: ['dbm'],
+            next_status: 'approved',
+            allowed_access_levels: ['approve'],
+            signatory_role: 'dbm',
         },
         approved: {
             required_roles: [],
