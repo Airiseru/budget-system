@@ -208,7 +208,7 @@ export default function AllFormView({
                 {/* Pagination Footer */}
                 <div className="bg-muted border-t border-border/30 p-4 flex items-center justify-between">
                     <p className="text-sm text-muted-foreground">
-                        Showing page <span className="font-bold">{page}</span> of <span className="font-bold">{totalPages}</span>
+                        Showing page <span className="font-bold">{page}</span> of <span className="font-bold">{totalPages !== 0 ? totalPages : 1}</span>
                     </p>
                     <div className="flex gap-1 items-center">
                         {/* Previous Button (<) */}
