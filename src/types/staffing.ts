@@ -8,8 +8,6 @@ import {
 
 export interface StaffingTable {
     id: Generated<string>
-    // Link to the base 'form' table (the envelope)
-    fiscal_year: number
     submission_date: Generated<Date>
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
@@ -58,6 +56,7 @@ export interface PositionWithCompensations extends Position {
 }
 
 export interface StaffingSummaryWithPositions extends StaffingSummary {
+    fiscal_year: number;
     positions: PositionWithCompensations[];
     auth_status: string | null;
 }

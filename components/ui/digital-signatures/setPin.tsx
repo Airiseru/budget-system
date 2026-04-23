@@ -97,7 +97,7 @@ export function SetPinForm({ hasPin }: { hasPin: boolean }) {
             </div>
             <button
                 type='submit'
-                disabled={isLoading}
+                disabled={isLoading || !pin || !confirmPin || pin.length !== 6 || confirmPin.length !== 6}
                 className="w-full bg-accent-foreground text-white disabled:opacity-50 px-4 py-2 rounded"
             >
                 {isLoading ? 'Saving...' : `${hasPin ? 'Update' : 'Set'} Signing PIN`}

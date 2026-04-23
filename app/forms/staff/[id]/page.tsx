@@ -27,7 +27,7 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
         ? canSign(summary.auth_status ?? "", session.user.access_level, session.user.workflow_role ?? "", currentSignatoryRole, workflow)
         : false
 
-    const nextSignatoryRole = getNextStatus(summary.auth_status ?? "", workflow) || "approved"
+    const nextStatus = getNextStatus(summary.auth_status ?? "", workflow, 'submit') || "approved"
 
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(summary.id ?? "", session.user.id)
     const allSignatures = await KeyRepo.getSignatoriesByFormId(summary.id ?? "")
@@ -36,7 +36,7 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const updateAuthStatus = async () => {
         "use server"
         if (summary.auth_status !== 'draft') return
-        await submitForm(summary.id ?? "", summary, session.user.id, summary.entity_id, 'staffing_summaries', nextSignatoryRole)
+        await submitForm(summary.id ?? "", summary, session.user.id, summary.entity_id, 'staffing_summaries', nextStatus)
         revalidatePath(`/forms/staff/${id}`)
     }
 

@@ -44,7 +44,7 @@ export async function POST(req: Request) {
         // to your repository function, not the whole body.
         const result = await StaffingRepository.createStaffingSubmission(
             entityId, 
-            summary, // This must contain { fiscal_year, digital_signature }
+            summary.fiscal_year, // This must contain { fiscal_year, digital_signature }
             positions,
             auth_status ?? "draft"
         );

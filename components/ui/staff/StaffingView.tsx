@@ -168,7 +168,7 @@ export default function StaffingView({
     return (
         <main className="m-6 max-w-none px-4 md:px-8 md:my-12 space-y-8">
             <div className="flex justify-between items-center mb-6">
-                <BackButton url="/forms/staff" label="Back to List"></BackButton>
+                <BackButton label="Back"></BackButton>
                 {summary.auth_status === 'draft' && session.user.access_level === 'encode' && (
                     <div className="flex flex-row gap-2">
                         <Link 

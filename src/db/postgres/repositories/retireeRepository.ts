@@ -4,9 +4,12 @@ import { NewRetireeRecord, NewRetireesList } from '@/src/types/retirees';
 
 export async function createRetireeSubmission(
     entityId: string,
+    fiscal_year: number,
     listData: Omit<NewRetireesList, 'id' | 'submission_date' | 'created_at' | 'updated_at'>,
     retirees: Omit<NewRetireeRecord, 'id' | 'retirees_list_id'>[],
-    authStatus: string
+    authStatus: string,
+    parent_form_id?: string,
+    version?: number
 ) {
     return await db.transaction().execute(async (trx) => {
         // 1. Create Base Form (The Envelope)
@@ -14,17 +17,19 @@ export async function createRetireeSubmission(
             .values({ 
                 entity_id: entityId, 
                 type: 'bp_retiree',
+                fiscal_year: fiscal_year,
                 codename: 'BP Form 205', 
-                auth_status: authStatus
+                auth_status: authStatus,
+                parent_form_id: parent_form_id ?? null,
+                version: version ?? 1
             })
-            .returning('id')
+            .returning(['id', 'fiscal_year'])
             .executeTakeFirstOrThrow();
 
         // 2. Create Retirees List Metadata
         const list = await trx.insertInto('retirees_list')
             .values({
-                id: form.id, // Primary key is shared with the base form
-                fiscal_year: listData.fiscal_year,
+                id: form.id,
                 is_mandatory: listData.is_mandatory,
             })
             .returningAll()
@@ -42,7 +47,7 @@ export async function createRetireeSubmission(
                 .execute();
         }
 
-        return { formId: form.id, listId: list.id, createdAt: list.created_at };
+        return { formId: form.id, listId: list.id, createdAt: list.created_at, fiscal_year: form.fiscal_year };
     });
 }
 
@@ -53,8 +58,8 @@ export async function getRetireesFormById(id: string) {
         .where('retirees_list.id', '=', id)
         .select([
             'retirees_list.id',
-            'retirees_list.fiscal_year',
             'retirees_list.is_mandatory',
+            'forms.fiscal_year',
             'forms.auth_status',
             'forms.entity_id',
             'retirees_list.updated_at as updated_at'
@@ -85,7 +90,6 @@ export async function getAllRetireeSubmissions(
         .innerJoin('forms', 'forms.id', 'retirees_list.id')
         .select([
             'retirees_list.id as id',
-            'retirees_list.fiscal_year as fiscal_year',
             'retirees_list.is_mandatory as is_mandatory',
             'retirees_list.submission_date as submission_date',
             'forms.auth_status as auth_status',
@@ -98,7 +102,7 @@ export async function getAllRetireeSubmissions(
     }
 
     return await query
-        .orderBy('retirees_list.fiscal_year', 'desc')
+        .orderBy('forms.fiscal_year', 'desc')
         .execute();
 }
 

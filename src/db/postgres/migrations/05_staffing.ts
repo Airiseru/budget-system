@@ -7,7 +7,6 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('id', 'uuid', (col) => 
             col.primaryKey().references('forms.id').onDelete('cascade')
         )
-        .addColumn('fiscal_year', 'integer', (col) => col.notNull())
         .addColumn('submission_date', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))

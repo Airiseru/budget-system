@@ -37,6 +37,13 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
     const paps = await papRepo.getAllPaps();
 
     const schedule = await SalaryRepository.getLatestSalarySchedule()
+
+    if (!schedule) return (
+        <main className="m-4">
+            <p>There is no salary schedule for this year.</p>
+        </main>
+    )
+
     const compensationRules = await SalaryRepository.getLatestCompensationRules()
     const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
 
@@ -52,6 +59,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
                 schedule={schedule}
                 compensationRules={compensationRules}
                 highestSG={highestSG}
+                fiscalYear = {staff.fiscal_year}
                 staff={staff}
                 availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))} 
                 userId={session.user.id}

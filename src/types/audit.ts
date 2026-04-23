@@ -42,6 +42,7 @@ export type AuditEventType =
     | "UPDATE_PAP"
     | "SUBMIT_FORM"
     | "SIGN"
+    | "OVERWRITE_FORM"
     | "APPROVE_FORM"
     | "REJECT_FORM"
     | "SIGNUP"

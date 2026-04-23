@@ -6,20 +6,12 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
-import { STATUS_LABELS } from '@/src/lib/constants'
+import { STATUS_LABELS, STATUS_BADGE_COLORS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
 // Using the retiree repository instead of staffing
 const RetireeRepo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
-
-const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    draft: 'outline',
-    pending_personnel: 'secondary',
-    pending_budget: 'secondary',
-    pending_agency_head: 'secondary',
-    approved: 'default',
-}
 
 export default async function RetireesPage() {
     const session = await sessionWithEntity()
@@ -96,7 +88,7 @@ export default async function RetireesPage() {
                                             </p>
                                         </div>
                                         <Badge 
-                                            variant={statusColors[list.auth_status ?? 'draft'] ?? 'outline'}
+                                            variant={STATUS_BADGE_COLORS[list.auth_status ?? 'draft'] ?? 'outline'}
                                             className={
                                                 list.auth_status === 'approved' 
                                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent' 

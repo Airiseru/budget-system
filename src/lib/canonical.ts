@@ -3,7 +3,9 @@ export function canonicalStringify(value: unknown): string {
 }
 
 function sortKeysRecursively(value: unknown): unknown {
+    // Handle primitives
     if (value === null || typeof value !== 'object') return value
+    if (value instanceof Date) return value.toISOString()
     if (Array.isArray(value)) return value.map(sortKeysRecursively)
 
     return Object.keys(value as Record<string, unknown>)

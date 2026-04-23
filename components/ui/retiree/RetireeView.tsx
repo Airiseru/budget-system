@@ -35,7 +35,7 @@ export default function RetireeView({
     return (
         <main className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex justify-between items-center mb-6">
-                <BackButton url="/forms/retirees" label="Back to List"/>
+                <BackButton label="Back"/>
                 {data.auth_status === 'draft' && (
                 <div className="flex flex-row gap-2">
                     <Link 

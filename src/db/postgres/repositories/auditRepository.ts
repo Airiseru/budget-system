@@ -40,6 +40,7 @@ export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: 
         signature: log.signature ?? null,
         hash: ''
     }
+
     const requiresSignature = REQUIRES_SIGNATURE.includes(log.event_type as AuditEventType)
 
     if (requiresSignature) {
@@ -249,6 +250,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                 // Compare signed snapshot to current reconstructed state
                 if (reconstructedState) {
                     // Clean payload to remove id and foreign keys
+                    console.log('payload', payload)
                     const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
                     console.log('cleaned payload is ok')
                     console.log(`reconstructed state: ${JSON.stringify(reconstructedState)}`)

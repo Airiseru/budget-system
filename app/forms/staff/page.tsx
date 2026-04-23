@@ -6,19 +6,11 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
-import { STATUS_LABELS } from '@/src/lib/constants'
+import { STATUS_LABELS, STATUS_BADGE_COLORS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
-
-const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    draft: 'outline',
-    pending_personnel: 'secondary',
-    pending_budget: 'secondary',
-    pending_agency_head: 'secondary',
-    approved: 'default',
-}
 
 export default async function StaffingPage() {
     const session = await sessionWithEntity()
@@ -29,8 +21,8 @@ export default async function StaffingPage() {
 
     try {
         const data = await StaffingRepo.getAllStaffingSummaries(
-            session.user.id ?? '',
             session.user_entity.entity_type ?? '',
+            session.user.role ?? '',
             session.user.entity_id ?? ''
         ) 
     
@@ -84,7 +76,7 @@ export default async function StaffingPage() {
                                     <div className="flex items-center gap-3">
                                         <h2 className="font-bold text-lg">FY {summary.fiscal_year} Staffing Plan</h2>
                                         <Badge 
-                                            variant={statusColors[summary.auth_status ?? 'draft'] ?? 'outline'}
+                                            variant={STATUS_BADGE_COLORS[summary.auth_status ?? 'draft'] ?? 'outline'}
                                             className={
                                                 summary.auth_status === 'approved' 
                                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 

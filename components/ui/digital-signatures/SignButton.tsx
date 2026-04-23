@@ -66,6 +66,8 @@ export function SignButton({ formId, tableName, formData, userId, entityId, sign
 
             const date = new Date()
 
+            console.log(`form data:`, formData)
+
             const cleanFormData = cleanDataBasedOnTable(tableName, formData)
 
             const payload: FormSignaturePayload = {

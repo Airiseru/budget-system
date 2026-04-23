@@ -16,6 +16,7 @@ interface StaffingSummaryProps {
     schedule: AllSalaryRates
     compensationRules: CompensationRule[]
     highestSG: number
+    fiscalYear?: number
     staff?: StaffingSummaryWithPositions
     availablePaps: { id: string; title: string; tier: number }[]
     userId: string
@@ -55,6 +56,7 @@ export default function StaffForm({
     schedule,
     compensationRules,
     highestSG,
+    fiscalYear,
     staff,
     availablePaps,
     userId,
@@ -116,7 +118,7 @@ export default function StaffForm({
         fiscal_year: number
         positions: PositionFormInput[]
     }>({
-        fiscal_year: staff?.fiscal_year ?? 2026,
+        fiscal_year: fiscalYear ?? new Date().getFullYear() + 1,
         positions: staff?.positions.map(p => {
             const magnaComp = p.compensations?.find(c => c.name.toLowerCase().includes('magna carta'))
             return {
@@ -566,7 +568,7 @@ export default function StaffForm({
     }
 
     return (
-        <div className="max-w-5xl mx-auto mt-8 px-4 pb-20">
+        <div key="staffing-form" className="max-w-5xl mx-auto mt-8 px-4 pb-20">
             <div className="mb-6 p-4 bg-muted/50 border-l-4 border-border rounded-r-lg">
                 <span className="text-sm font-bold text-muted-foreground uppercase">Agency</span>
                 <h2 className="text-lg font-semibold">{entityName}</h2>

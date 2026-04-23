@@ -1,10 +1,9 @@
-import { createRetireeRepository, createFormRepository, createKeyRepository } from '@/src/db/factory';
+import { createRetireeRepository, createKeyRepository } from '@/src/db/factory';
 import { sessionWithEntity } from '@/src/actions/auth';
 import { redirect, notFound } from 'next/navigation';
-import { getCurrentSignatoryRole, getNextStatus } from '@/src/lib/workflows';
+import { getCurrentSignatoryRole, getNextStatus, canSign } from '@/src/lib/workflows';
 import { submitForm } from "@/src/actions/form"
 import { RETIREE_WORKFLOW } from '@/src/lib/workflows/retiree-flow';
-import { canSign } from '@/src/lib/workflows';
 import { revalidatePath } from 'next/cache';
 import RetireeView from '@/components/ui/retiree/RetireeView';
 
@@ -19,14 +18,16 @@ export default async function RetireeDetailsPage({ params }: { params: Promise<{
     const data = await RetireeRepo.getRetireesFormById(id);
     if (!data) return notFound();
 
-    // Logic for workflow
+    // Workflow Logic
     const workflow = RETIREE_WORKFLOW;
-    const currentSignatoryRole = getCurrentSignatoryRole(data.auth_status ?? "", workflow);
+    const currentStatus = data.auth_status ?? "draft";
+    
+    const currentSignatoryRole = getCurrentSignatoryRole(currentStatus, workflow);
     const userCanSign = currentSignatoryRole
-        ? canSign(data.auth_status ?? "", session.user.access_level, session.user.workflow_role ?? "", currentSignatoryRole, workflow)
+        ? canSign(currentStatus, session.user.access_level, session.user.workflow_role ?? "", currentSignatoryRole, workflow)
         : false;
 
-    const nextSignatoryRole = getNextStatus(data.auth_status ?? "", workflow) || "approved"
+    const nextStatus = getNextStatus(currentStatus, workflow, 'submit') || "approved"
 
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(data.id ?? "", session.user.id);
     const allSignatures = await KeyRepo.getSignatoriesByFormId(data.id ?? "");
@@ -35,7 +36,7 @@ export default async function RetireeDetailsPage({ params }: { params: Promise<{
     const updateAuthStatus = async () => {
         "use server"
         if (data.auth_status !== 'draft') return;
-        await submitForm(data.id ?? "", data, session.user.id, data.entity_id, 'retirees_list', nextSignatoryRole)
+        await submitForm(data.id ?? "", data, session.user.id, data.entity_id, 'retirees_list', nextStatus)
         revalidatePath(`/forms/retirees/${id}`);
     };
 

@@ -148,7 +148,7 @@ export async function verifyAndSubmitSignature(
         })
     
         // Update form status
-        await formRepository.updateFormAuthStatus(formId, getNextStatus(form.auth_status ?? '', workflow) ?? '')
+        await formRepository.updateFormAuthStatus(formId, getNextStatus(form.auth_status ?? '', workflow, 'approve') ?? '')
 
         console.log(`signature payload in verifyAndSubmitSignature:`, signaturePayload)
         const stringSignaturePayload = typeof signaturePayload === 'string' ? signaturePayload : canonicalStringify(signaturePayload)

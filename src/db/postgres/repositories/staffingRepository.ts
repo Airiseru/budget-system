@@ -58,17 +58,22 @@ interface PositionInput extends Omit<NewPosition, 'staffing_summary_id'> {
 
 export async function createStaffingSubmission(
     entityId: string,
-    summaryData: Omit<NewStaffingSummary, 'id' | 'submission_date' | 'created_at' | 'updated_at'>,
+    fiscal_year: number,
     positions: Omit<NewPosition, 'staffing_summary_id'>[],
-    auth_status: string
+    auth_status: string,
+    parent_form_id?: string,
+    version?: number
 ) {
     return await db.transaction().execute(async (trx) => {
         const form = await trx.insertInto('forms')
             .values({ 
                 entity_id: entityId, 
                 type: 'bp_staffing',
+                fiscal_year: fiscal_year,
                 codename: 'BP Form 204',
-                auth_status: auth_status
+                auth_status: auth_status,
+                parent_form_id: parent_form_id ?? null,
+                version: version ?? 1
             })
             .returning('id')
             .executeTakeFirstOrThrow();
@@ -76,7 +81,7 @@ export async function createStaffingSubmission(
         const summary = await trx.insertInto('staffing_summaries')
             .values({
                 id: form.id,
-                fiscal_year: summaryData.fiscal_year,
+                // fiscal_year: summaryData.fiscal_year,
             })
             .returningAll()
             .executeTakeFirstOrThrow();
@@ -136,15 +141,15 @@ export async function updateStaffingSubmission(
     return await db.transaction().execute(async (trx) => {
         if (payload.auth_status) {
             await trx.updateTable('forms')
-                .set({ auth_status: payload.auth_status, updated_at: new Date() })
+                .set({ auth_status: payload.auth_status, updated_at: new Date(), fiscal_year: payload.summary.fiscal_year })
                 .where('id', '=', summaryId)
                 .execute()
         }
 
-        await trx.updateTable('staffing_summaries')
-            .set({ fiscal_year: payload.summary.fiscal_year })
-            .where('id', '=', summaryId)
-            .execute()
+        // await trx.updateTable('staffing_summaries')
+        //     .set({ fiscal_year: payload.summary.fiscal_year })
+        //     .where('id', '=', summaryId)
+        //     .execute()
 
         await trx.deleteFrom('positions')
             .where('staffing_summary_id', '=', summaryId)
@@ -234,9 +239,11 @@ export async function getStaffingById(id: string): Promise<StaffingSummaryWithPo
 }
 
 export async function getAllStaffingSummaries(
-    entityId: string,
     entityType: string,
-    userEntityId: string
+    userRole: string,
+    userEntityId: string,
+    inDbmModule: boolean = false,
+    fiscalYear: number = new Date().getFullYear() + 1,
 ) {
     let query = db
         .selectFrom('staffing_summaries')
@@ -244,8 +251,8 @@ export async function getAllStaffingSummaries(
         .innerJoin('entities', 'entities.id', 'forms.entity_id')
         .select([
             'staffing_summaries.id',
-            'staffing_summaries.fiscal_year',
             'staffing_summaries.submission_date',
+            'forms.fiscal_year',
             'forms.auth_status',
             'forms.entity_id',
             'entities.type as entity_type'
@@ -255,6 +262,17 @@ export async function getAllStaffingSummaries(
     // 1. National Level: Can see everything
     if (entityType === 'national') {
         return await query.execute()
+    }
+
+    // DBM can see everything once form is submitted
+    if (userRole === 'dbm' && inDbmModule) {
+        return await query
+            .where(({ eb, or }) => or([
+                eb('forms.auth_status', '=', 'dbm'),
+                eb('forms.auth_status', '=', 'done'),
+            ]))
+            .where('forms.fiscal_year', '=', fiscalYear)
+            .execute()
     }
 
     // 2. Department Level: Can see their own, plus child agencies and operating units
@@ -300,11 +318,11 @@ export async function getStaffingWithFormById(id: string) {
             'staffing_summaries.id as id',
             'staffing_summaries.created_at as created_at',
             'staffing_summaries.updated_at as updated_at',
-            'staffing_summaries.fiscal_year as fiscal_year',
             'staffing_summaries.submission_date as submission_date',
             'forms.entity_id as entity_id',
             'forms.type as type',
-            'forms.auth_status as auth_status'
+            'forms.auth_status as auth_status',
+            'forms.fiscal_year as fiscal_year'
         ])
         .executeTakeFirst();
 
@@ -323,7 +341,6 @@ export async function getStaffingWithFormById(id: string) {
     if (positionIds.length > 0) {
         compensations = await db
             .selectFrom('compensations')
-            // Using "staff_id" as defined in your CompensationTable
             .where('staff_id', 'in', positionIds) 
             .selectAll()
             .execute()

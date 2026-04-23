@@ -255,6 +255,7 @@ export async function logSubmitForm(
     formData: Record<string, unknown>,
     date: Date
 ) {
+    console.log(`form data in log submit form: ${JSON.stringify(formData)}`)
     return await executeAudit({
         entity_id: entityId,
         user_id: userId,
@@ -303,6 +304,30 @@ export async function logFormSignatories(
         console.error(`Failed to log form signatories for event type ${eventType}`, error)
         return { success: false, error: "Failed to log form signatories" }
     }
+}
+
+export async function logFormOverwrite(
+    userId: string,
+    entityId: string,
+    tableName: string,
+    recordId: string,
+    oldData: Record<string, unknown>,
+    newData: Record<string, unknown>,
+    date: Date
+) {
+    const diff = computeDiff(oldData, newData)
+    if (isDiffEmpty(diff)) return { success: true }
+    console.log(`DIFF: ${JSON.stringify(diff)}`)
+
+    return await executeAudit({
+        entity_id: entityId,
+        user_id: userId,
+        event_type: 'OVERWRITE_FORM',
+        table_name: tableName,
+        record_id: recordId,
+        payload: diff,
+        changed_at: date
+    })
 }
 
 export async function getFormIntegrity(tableName: string, recordId: string) {
