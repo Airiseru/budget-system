@@ -23,13 +23,17 @@ export default async function NewRetireeFormPage() {
 
     else {
         const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
-        components.push(<BP205EntryGrid
-            schedule={schedule}
-            highestSG={highestSG}
-            userId={session.user.id}
-            entityId={session.user.entity_id}
-            entityName={session.user_entity.entity_name || "Unknown Agency"} 
-        />)
+        components.push(
+            <div key="retiree-form">
+                <BP205EntryGrid
+                    schedule={schedule}
+                    highestSG={highestSG}
+                    userId={session.user.id}
+                    entityId={session.user.entity_id}
+                    entityName={session.user_entity.entity_name || "Unknown Agency"} 
+                />
+            </div>
+        )
     }
 
     return (

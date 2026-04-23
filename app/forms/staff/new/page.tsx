@@ -32,15 +32,19 @@ export default async function NewStaffingPage() {
         const compensationRules = await SalaryRepository.getLatestCompensationRules()
         const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
 
-        components.push(<StaffForm
-            schedule={schedule}
-            compensationRules={compensationRules}
-            highestSG={highestSG}
-            availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
-            userId={session.user.id}
-            entityId={session.user.entity_id} 
-            entityName={session.user_entity.entity_name || "Unknown Agency"} 
-        />)
+        components.push(
+            <div key="staff-form">
+                <StaffForm
+                    schedule={schedule}
+                    compensationRules={compensationRules}
+                    highestSG={highestSG}
+                    availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
+                    userId={session.user.id}
+                    entityId={session.user.entity_id} 
+                    entityName={session.user_entity.entity_name || "Unknown Agency"} 
+                />
+            </div>
+        )
     }
 
     return (

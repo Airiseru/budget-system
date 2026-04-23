@@ -150,7 +150,6 @@ export async function verifyAndSubmitSignature(
         // Update form status
         await formRepository.updateFormAuthStatus(formId, getNextStatus(form.auth_status ?? '', workflow, 'approve') ?? '')
 
-        console.log(`signature payload in verifyAndSubmitSignature:`, signaturePayload)
         const stringSignaturePayload = typeof signaturePayload === 'string' ? signaturePayload : canonicalStringify(signaturePayload)
 
         // Log signature
@@ -221,7 +220,7 @@ export async function verifyFormSignature(entityId: string, formId: string, tabl
                 to_status: (formPayload as FormSignaturePayload).to_status,
                 form_state_hash: form_state_hash,
             },
-            changed_at: signatory.created_at.toISOString()
+            changed_at: signatory.created_at
         })
     }
 
