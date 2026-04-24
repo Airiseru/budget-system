@@ -7,7 +7,7 @@ import Link from "next/link";
 import { Pencil } from "lucide-react";
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
 import BackButton from "../BackButton";
-import { STATUS_LABELS } from "@/src/lib/constants"
+import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants"
 import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
@@ -31,6 +31,17 @@ interface StaffingViewProps {
         currentSignatoryRole: string | null
         existingSignature: any
         allSignatures: any[]
+        pastSignatures: {
+            id: string
+            user_name: string
+            role: string
+            created_at: Date
+        }[]
+        latestRejection: {
+            remarks: string | null
+            changed_at: Date
+            user_name: string | null
+        } | null
     };
     updateAuthStatus: () => Promise<void>
     deleteFormAction: (id: string) => Promise<void>
@@ -48,7 +59,7 @@ export default function StaffingView({
     deleteFormAction,
     isDbmEvaluator = false
 }: StaffingViewProps) {
-    const { userCanSign, currentSignatoryRole, existingSignature, allSignatures } = workflowData;
+    const { userCanSign, currentSignatoryRole, existingSignature, allSignatures, pastSignatures, latestRejection } = workflowData;
     const formData = { id: summary.id, fiscal_year: summary.fiscal_year, form_id: summary.id };
     const familyHasApprovedVersion = versionTabs.some(version => version.auth_status === 'approved')
     const canEditCurrentVersion =
@@ -63,9 +74,6 @@ export default function StaffingView({
             ? 'DBM has already approved a different version of this form. This version is locked and can no longer be signed.'
             : undefined
 
-    // ==========================================
-    // NEW: OVERALL PLAN CALCULATIONS
-    // ==========================================
     const allPositions = summary?.positions || [];
 
     const overallBasicSalary = allPositions.reduce((sum: number, pos: any) => sum + (Number(pos.total_salary) || 0), 0);
@@ -78,7 +86,6 @@ export default function StaffingView({
     });
 
     const overallGrandTotal = overallBasicSalary + overallCompensationTotals.reduce((a: number, b: number) => a + b, 0);
-    // ==========================================
 
     const renderStaffTypeGroup = (tier: number, type: string) => {
         const filteredPositions = (summary?.positions || []).filter((pos: any) => {
@@ -217,7 +224,10 @@ export default function StaffingView({
             <div className="justify-center">
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight">FY {summary.fiscal_year} Staffing Plan</h1>
-                    <Badge className="mt-2 py-1.5 px-4 rounded-full">
+                    <Badge
+                        variant={STATUS_BADGE_COLORS[summary.auth_status ?? 'draft'] ?? 'default'}
+                        className="mt-2 py-1.5 px-4 rounded-full"
+                    >
                         {STATUS_LABELS[summary.auth_status ?? ""] ?? summary.auth_status}
                     </Badge>
                 </div>
@@ -326,10 +336,12 @@ export default function StaffingView({
                 authStatus={summary.auth_status ?? ""} 
                 statusMessage={signSectionStatusMessage}
                 userCanSign={canSignCurrentVersion && !existingSignature}
-                signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")} 
-                alreadySigned={!!existingSignature} 
-                signatories={allSignatures} 
-                workflow={STAFFING_WORKFLOW} 
+                signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")}
+                alreadySigned={!!existingSignature}
+                signatories={allSignatures}
+                pastSignatories={pastSignatures}
+                latestRejection={latestRejection}
+                workflow={STAFFING_WORKFLOW}
             />
 
             {summary.auth_status === 'draft' && (

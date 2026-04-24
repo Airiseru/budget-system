@@ -1,8 +1,19 @@
 import { db } from '../database'
+import { sql } from 'kysely'
 import {
     UserKey, NewUserKey, UserKeyUpdate, UserKeyStatus, UserKeyStatuses,
     Signatory, NewSignatory
 } from '../../../types/keys'
+
+async function getLatestDraftResetByFormId(form_id: string) {
+    return await db
+        .selectFrom('audit_logs')
+        .select('changed_at')
+        .where('record_id', '=', form_id)
+        .where('event_type', '=', 'REJECT_FORM')
+        .orderBy('changed_at', 'desc')
+        .executeTakeFirst()
+}
 
 export async function createUserKey(user_key: NewUserKey): Promise<UserKey> {
     return await db.insertInto('user_keys').values(user_key).returningAll().executeTakeFirstOrThrow()
@@ -67,6 +78,36 @@ export async function getSignatoriesOfUser(user_id: string): Promise<Signatory[]
 }
 
 export async function getSignatoriesByFormId(form_id: string) {
+    const latestDraftReset = await getLatestDraftResetByFormId(form_id)
+
+    let query = db
+        .selectFrom('signatories')
+        .innerJoin('users', 'users.id', 'signatories.user_id')
+        .select([
+            'signatories.id',
+            'users.name as user_name',
+            'signatories.role',
+            'signatories.created_at'
+        ])
+        .where('signatories.form_id', '=', form_id)
+        .where('signatories.signature', 'is not', null)
+
+    if (latestDraftReset?.changed_at) {
+        query = query.where('signatories.created_at', '>', latestDraftReset.changed_at)
+    }
+
+    return await query
+        .orderBy('signatories.created_at', 'asc')
+        .execute()
+}
+
+export async function getPastSignatoriesByFormId(form_id: string) {
+    const latestDraftReset = await getLatestDraftResetByFormId(form_id)
+
+    if (!latestDraftReset?.changed_at) {
+        return []
+    }
+
     return await db
         .selectFrom('signatories')
         .innerJoin('users', 'users.id', 'signatories.user_id')
@@ -78,22 +119,37 @@ export async function getSignatoriesByFormId(form_id: string) {
         ])
         .where('signatories.form_id', '=', form_id)
         .where('signatories.signature', 'is not', null)
-        .orderBy('signatories.created_at', 'asc')
+        .where('signatories.created_at', '<=', latestDraftReset.changed_at)
+        .orderBy('signatories.created_at', 'desc')
         .execute()
 }
 
-export async function getSignatoryById(id: string): Promise<Signatory | null> {
-    return await db.selectFrom('signatories').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
-}
-
 export async function getSignatoryByFormIdAndUserId(form_id: string, user_id: string): Promise<Signatory | null> {
-    const signatory = await db.selectFrom('signatories').selectAll().where('form_id', '=', form_id).where('user_id', '=', user_id).executeTakeFirst()
+    const latestDraftReset = await getLatestDraftResetByFormId(form_id)
+
+    let query = db
+        .selectFrom('signatories')
+        .selectAll()
+        .where('form_id', '=', form_id)
+        .where('user_id', '=', user_id)
+
+    if (latestDraftReset?.changed_at) {
+        query = query.where('created_at', '>', latestDraftReset.changed_at)
+    }
+
+    const signatory = await query
+        .orderBy('created_at', 'desc')
+        .executeTakeFirst()
 
     if (!signatory) {
         return null
     }
 
     return signatory
+}
+
+export async function getSignatoryById(id: string): Promise<Signatory | null> {
+    return await db.selectFrom('signatories').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
 }
 
 export async function getSignatoryWithKey(signature_id: string) {

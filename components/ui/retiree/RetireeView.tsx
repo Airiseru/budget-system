@@ -7,7 +7,7 @@ import { Pencil } from 'lucide-react';
 import FormDeleteButton from '../FormDeleteButton';
 import { RETIREE_WORKFLOW } from '@/src/lib/workflows/retiree-flow'
 import BackButton from '../BackButton'
-import { STATUS_LABELS } from '@/src/lib/constants'
+import { STATUS_BADGE_COLORS, STATUS_LABELS } from '@/src/lib/constants'
 
 interface RetireeViewProps {
     data: any
@@ -26,6 +26,17 @@ interface RetireeViewProps {
     currentSignatoryRole: string | null
     existingSignature: any
     allSignatures: any[]
+    pastSignatures: {
+        id: string
+        user_name: string
+        role: string
+        created_at: Date
+    }[]
+    latestRejection: {
+        remarks: string | null
+        changed_at: Date
+        user_name: string | null
+    } | null
     updateAuthStatus: () => Promise<void>
     deleteFormAction: (id: string) => Promise<void>
 }
@@ -41,6 +52,8 @@ export default function RetireeView({
     currentSignatoryRole, 
     existingSignature, 
     allSignatures,
+    pastSignatures,
+    latestRejection,
     updateAuthStatus,
     deleteFormAction,
 }: RetireeViewProps) {
@@ -84,7 +97,10 @@ export default function RetireeView({
             <div className="justify-center">
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight">FY {data.fiscal_year} Retiree List Details</h1>
-                    <Badge className="mt-2 py-1.5 px-4 rounded-full">
+                    <Badge
+                        variant={STATUS_BADGE_COLORS[data.auth_status ?? 'draft'] ?? 'default'}
+                        className="mt-2 py-1.5 px-4 rounded-full"
+                    >
                         {STATUS_LABELS[data.auth_status ?? ""] ?? data.auth_status}
                     </Badge>
                 </div>
@@ -245,6 +261,8 @@ export default function RetireeView({
                 signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")} 
                 alreadySigned={!!existingSignature} 
                 signatories={allSignatures} 
+                pastSignatories={pastSignatures}
+                latestRejection={latestRejection}
                 workflow={RETIREE_WORKFLOW} 
             />
             {data.auth_status === 'draft' && !familyHasApprovedVersion && (

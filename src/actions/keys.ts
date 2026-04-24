@@ -173,6 +173,70 @@ export async function verifyAndSubmitSignature(
     }
 }
 
+export async function verifyAndRejectSignature(
+    pin: string,
+    tableName: string,
+    formId: string,
+    payload: FormSignaturePayload | Record<string, any>,
+    keyId: string,
+    publicKeySnapshot: string,
+    changedAt: Date,
+    signatoryRole: string,
+    signature: string,
+    signaturePayload: Record<string, any> | string
+) {
+    try {
+        const session = await sessionWithEntity()
+        if (!session) redirect('/login')
+
+        if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
+
+        const key = await keyRepository.getUserKeyById(keyId)
+        if (!key || key.user_id !== session.user.id) throw new Error('Invalid key')
+        if (key.status !== 'active') throw new Error('Key is no longer active')
+        if (key.expires_at && key.expires_at < new Date()) throw new Error('Key has expired')
+
+        const form = await formRepository.getFormAuthStatus(formId)
+        const workflow = getWorkflow(form.type)
+
+        if (!canSign(form.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? "", signatoryRole, workflow)) {
+            throw new Error('You are not authorized to reject at this stage')
+        }
+
+        const rejectStatus = getNextStatus(form.auth_status ?? '', workflow, 'reject')
+        if (!rejectStatus) {
+            throw new Error('This form cannot be rejected at this stage')
+        }
+
+        await formRepository.updateFormAuthStatus(formId, rejectStatus)
+
+        const stringSignaturePayload = typeof signaturePayload === 'string' ? signaturePayload : canonicalStringify(signaturePayload)
+
+        const logResult = await logFormSignatories(
+            session.user.id,
+            form.entity_id,
+            tableName,
+            formId,
+            'REJECT_FORM',
+            payload?.from_status ?? '',
+            payload.to_status ?? '',
+            payload.form_state_hash ?? '',
+            changedAt,
+            signature,
+            key.public_key,
+            stringSignaturePayload,
+            typeof payload.remarks === 'string' ? payload.remarks : undefined
+        )
+
+        if (!logResult.success) throw new Error('Failed to log rejection')
+
+        return { success: true }
+    } catch (error) {
+        console.error(`Failed to verify and reject signature:`, error)
+        throw new Error('Failed to reject form')
+    }
+}
+
 export async function verifyFormSignature(entityId: string, formId: string, tableName: string, signatoryId: string, formData: object | string) {
     const signatory = await keyRepository.getSignatoryWithKey(signatoryId)
     if (!signatory) throw new Error('Invalid signatory')

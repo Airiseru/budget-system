@@ -93,6 +93,7 @@ export type FormSignaturePayload = {
     from_status: string
     to_status: string
     form_state_hash: string
+    remarks?: string
 }
 
 export type SignedLogInput = {

@@ -1,6 +1,6 @@
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow"
 import { getCurrentSignatoryRole, canSign, getNextStatus } from "@/src/lib/workflows"
-import { createStaffingRepository, createKeyRepository, createPapRepository, createFormRepository } from "@/src/db/factory"
+import { createStaffingRepository, createKeyRepository, createPapRepository, createFormRepository, createAuditRepository } from "@/src/db/factory"
 import { submitForm } from "@/src/actions/form"
 import { sessionWithEntity } from "@/src/actions/auth"
 import { redirect, notFound } from "next/navigation"
@@ -11,6 +11,7 @@ const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'post
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 const PapRepo = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
+const AuditRepo = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function StaffingFormPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -35,6 +36,8 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
 
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(summary.id ?? "", session.user.id)
     const allSignatures = await KeyRepo.getSignatoriesByFormId(summary.id ?? "")
+    const pastSignatures = await KeyRepo.getPastSignatoriesByFormId(summary.id ?? "")
+    const latestRejection = await AuditRepo.getLatestFormRejection('staffing_summaries', summary.id ?? "")
 
     // Determine the correct back path based on the user's role
     const isOwnAgencyForm = session.user.entity_id === summary.entity_id;
@@ -82,7 +85,9 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
                 userCanSign,
                 currentSignatoryRole,
                 existingSignature,
-                allSignatures
+                allSignatures,
+                pastSignatures,
+                latestRejection
             }}
         />
     )

@@ -280,8 +280,9 @@ export async function logFormSignatories(
     signature: string,
     publicKey: string,
     signaturePayload: string,
+    remarks?: string,
 ) {
-    if (eventType !== 'SIGN' && eventType !== 'APPROVE_FORM') return { success: false, error: "Invalid event type" }
+    if (eventType !== 'SIGN' && eventType !== 'APPROVE_FORM' && eventType !== 'REJECT_FORM') return { success: false, error: "Invalid event type" }
 
     try {
         return await createSignedLog({
@@ -293,7 +294,8 @@ export async function logFormSignatories(
             payload: {
                 from_status: oldStatus,
                 to_status: newStatus,
-                form_state_hash: formStateHash
+                form_state_hash: formStateHash,
+                ...(remarks ? { remarks } : {})
             },
             changedAt: date,
             publicKeySnapshot: publicKey,

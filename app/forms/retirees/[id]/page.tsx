@@ -1,4 +1,4 @@
-import { createRetireeRepository, createKeyRepository, createFormRepository } from '@/src/db/factory';
+import { createRetireeRepository, createKeyRepository, createFormRepository, createAuditRepository } from '@/src/db/factory';
 import { sessionWithEntity } from '@/src/actions/auth';
 import { redirect, notFound } from 'next/navigation';
 import { getCurrentSignatoryRole, getNextStatus, canSign } from '@/src/lib/workflows';
@@ -10,6 +10,7 @@ import RetireeView from '@/components/ui/retiree/RetireeView';
 const RetireeRepo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
+const AuditRepo = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function RetireeDetailsPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -35,6 +36,8 @@ export default async function RetireeDetailsPage({ params }: { params: Promise<{
 
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(data.id ?? "", session.user.id)
     const allSignatures = await KeyRepo.getSignatoriesByFormId(data.id ?? "")
+    const pastSignatures = await KeyRepo.getPastSignatoriesByFormId(data.id ?? "")
+    const latestRejection = await AuditRepo.getLatestFormRejection('retirees_list', data.id ?? "")
 
     // Determine the correct back path based on the user's role
     const isOwnAgencyForm = session.user.entity_id === data.entity_id;
@@ -79,6 +82,8 @@ export default async function RetireeDetailsPage({ params }: { params: Promise<{
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}
             allSignatures={allSignatures}
+            pastSignatures={pastSignatures}
+            latestRejection={latestRejection}
             updateAuthStatus={updateAuthStatus}
             deleteFormAction={deleteFormAction}
         />
