@@ -195,7 +195,7 @@ export default function AllFormView({
                                                 href={`/dbm/forms/${form.id}`}
                                                 className="inline-flex items-center justify-center gap-1 bg-accent border border-border/50 text-secondary-foreground hover:bg-secondary hover:text-secondary-foreground px-3 py-1.5 rounded-md text-sm font-semibold transition-all shadow-sm group-hover:border-accent-foreground group-hover:text-accent-foreground"
                                             >
-                                                Evaluate <ChevronRight size={14} />
+                                                {form.auth_status === 'pending_dbm' ? 'Evaluate' : 'View'} <ChevronRight size={14} />
                                             </Link>
                                         </td>
                                     </tr>

@@ -2,7 +2,7 @@
 
 import bcrypt from 'bcrypt'
 import { createEntityRepository, createKeyRepository, createFormRepository, createAuditRepository } from '../db/factory'
-import { requireMinAccessLevel, sessionDetails, sessionWithEntity } from './auth'
+import { sessionDetails, sessionWithEntity } from './auth'
 import { redirect } from 'next/navigation'
 import { verifySignature } from '../lib/crypto'
 import { getWorkflow, canSign, getNextStatus } from '../lib/workflows'
@@ -113,10 +113,6 @@ export async function verifyAndSubmitSignature(
         const session = await sessionWithEntity()
         if (!session) redirect('/login')
     
-        const validAccess = await requireMinAccessLevel('encode', false) as boolean
-    
-        if (!validAccess) throw new Error('Unauthorized')
-    
         // Verify if PIN is correct
         if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
     
@@ -155,7 +151,7 @@ export async function verifyAndSubmitSignature(
         // Log signature
         const logResult = await logFormSignatories(
             session.user.id,
-            session.user.entity_id,
+            form.entity_id,
             tableName,
             formId,
             'SIGN',

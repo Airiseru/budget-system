@@ -9,6 +9,59 @@ export interface FormFilters {
     offset?: number;
 }
 
+export async function getFormById(id: string) {
+    return await db
+        .selectFrom('forms')
+        .where('id', '=', id)
+        .selectAll()
+        .executeTakeFirstOrThrow()
+}
+
+export async function findFormsByParentId(id: string) {
+    return await db
+        .selectFrom('forms')
+        .where('parent_form_id', '=', id)
+        .selectAll()
+        .orderBy('version', 'desc')
+        .executeTakeFirst()
+}
+
+export async function getFormVersionFamily(id: string) {
+    const form = await getFormById(id)
+    const originalFormId = form.parent_form_id ?? form.id
+
+    const forms = await db
+        .selectFrom('forms')
+        .select([
+            'id',
+            'entity_id',
+            'type',
+            'fiscal_year',
+            'parent_form_id',
+            'version',
+            'codename',
+            'auth_status',
+            'created_at',
+            'updated_at'
+        ])
+        .where(({ eb, or }) => or([
+            eb('forms.id', '=', originalFormId),
+            eb('forms.parent_form_id', '=', originalFormId)
+        ]))
+        .orderBy('version', 'asc')
+        .execute()
+
+    return {
+        originalFormId,
+        forms
+    }
+}
+
+export async function hasApprovedFormInFamily(id: string) {
+    const { forms } = await getFormVersionFamily(id)
+    return forms.some(form => form.auth_status === 'approved')
+}
+
 export async function getFormAuthStatus(formId: string) {
     return await db
         .selectFrom('forms')
@@ -39,6 +92,14 @@ export async function updateFormAuthStatus(formId: string, authStatus: string) {
     }
 }
 
+export async function updateFormParent(formId: string, parentFormId: string) {
+    return await db
+        .updateTable('forms')
+        .set({ parent_form_id: parentFormId })
+        .where('id', '=', formId)
+        .executeTakeFirstOrThrow()
+}
+
 export async function getAllForms(filters: FormFilters = {}) {
     let query = db
         .selectFrom('forms')
@@ -59,31 +120,40 @@ export async function getAllForms(filters: FormFilters = {}) {
                 'agencies.abbr',
                 'operating_units.abbr'
             ).as('entity_abbr')
-        ]);
+        ])
 
     // Apply optional filters dynamically
     if (filters.fiscal_year) query = query.where('forms.fiscal_year', '=', filters.fiscal_year);
     if (filters.auth_status) query = query.where('forms.auth_status', '=', filters.auth_status);
     if (filters.type) query = query.where('forms.type', '=', filters.type);
 
-    const countResult = await query
-        .clearSelect()
-        .select((eb) => eb.fn.count<number>('forms.id').as('total_count'))
-        .executeTakeFirst()
-        
-    const totalCount = Number(countResult?.total_count || 0);
-
-    // 2. Execute the paginated query
-    const forms = await query
-        .orderBy('forms.created_at', 'desc')
-        .limit(filters.limit ?? 50) 
-        .offset(filters.offset ?? 0)
+    const allForms = await query
+        .orderBy('forms.updated_at', 'desc')
         .execute()
+
+    const latestByFamily = new Map<string, (typeof allForms)[number]>()
+
+    for (const form of allForms) {
+        const familyId = form.parent_form_id ?? form.id
+        const current = latestByFamily.get(familyId)
+
+        if (!current || form.version > current.version) {
+            latestByFamily.set(familyId, form)
+        }
+    }
+
+    const latestForms = Array.from(latestByFamily.values())
+        .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+    const totalCount = latestForms.length
+    const limit = filters.limit ?? 50
+    const offset = filters.offset ?? 0
+    const forms = latestForms.slice(offset, offset + limit)
 
     return {
         forms,
         totalCount,
-        totalPages: Math.ceil(totalCount / (filters.limit ?? 50))
+        totalPages: Math.ceil(totalCount / limit)
     }
 }
 
@@ -106,7 +176,7 @@ export async function getFormsByEntity(
     }
 
     // Initialize our array of valid IDs with the parent entity itself
-    let validEntityIds: string[] = [entityId]
+    const validEntityIds: string[] = [entityId]
 
     // Entity hierarchy
     if (entityType === "department") {

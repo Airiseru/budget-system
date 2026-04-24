@@ -13,6 +13,7 @@ type Props = {
     userId: string
     entityId: string
     authStatus: string
+    statusMessage?: string
     userCanSign: boolean
     signatoryRole?: string
     nextSignatoryRole?: string
@@ -33,6 +34,7 @@ export function SignSection({
     userId,
     entityId,
     authStatus,
+    statusMessage,
     userCanSign,
     signatoryRole,
     alreadySigned,
@@ -45,7 +47,7 @@ export function SignSection({
 
             {/* status message */}
             <p className="text-sm text-muted-foreground">
-                {STATUS_MESSAGES[authStatus] ?? authStatus}
+                {statusMessage ?? STATUS_MESSAGES[authStatus] ?? authStatus}
             </p>
 
             {/* existing signatures */}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { useRouter } from "next/navigation"
 import { StaffingSummaryWithPositions } from "@/src/types/staffing"
 import { AllSalaryRates, CompensationRule } from '@/src/types/salaries'
@@ -22,6 +22,7 @@ interface StaffingSummaryProps {
     userId: string
     entityId: string
     entityName: string
+    isDBM?: boolean
 }
 
 type CompensationFormInput = {
@@ -62,6 +63,7 @@ export default function StaffForm({
     userId,
     entityId,
     entityName,
+    isDBM = false,
 }: StaffingSummaryProps) {
     const router = useRouter()
     const isEditing = !!staff
@@ -136,7 +138,7 @@ export default function StaffForm({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel'>('draft')
+    const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel' | 'pending_dbm'>('draft')
 
     // ---- styling ----
 
@@ -270,6 +272,7 @@ export default function StaffForm({
             summary: { fiscal_year: result.data.fiscal_year },
             positions: result.data.positions,
             auth_status: submitAction,
+            isDBM
         }
 
         const endpoint = isEditing ? `/api/staff/${staff.id}` : '/api/staff'
@@ -638,7 +641,7 @@ export default function StaffForm({
                     <div className="flex gap-3">
                         <button
                             type="submit"
-                            onClick={() => setSubmitAction('draft')}
+                            onClick={() => setSubmitAction(isDBM ? 'pending_dbm' : 'draft')}
                             className="px-6 py-2 border bg-white text-secondary-foreground rounded-md hover:text-white hover:bg-secondary-foreground transition-all font-medium text-sm"
                             disabled={isLoading}
                         >
@@ -646,7 +649,7 @@ export default function StaffForm({
                         </button>
                         <button
                             type="submit"
-                            onClick={() => setSubmitAction('pending_personnel')}
+                            onClick={() => setSubmitAction(isDBM ? 'pending_dbm' : 'pending_personnel')}
                             className="px-6 py-2 bg-accent-foreground text-white rounded-md hover:bg-accent-foreground/50 hover:text-black transition-all font-medium text-sm"
                             disabled={isLoading}
                         >

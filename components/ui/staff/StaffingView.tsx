@@ -13,29 +13,55 @@ import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
 interface StaffingViewProps {
-    summary: any;
-    paps: any[];
-    session: any;
+    summary: any
+    paps: any[]
+    session: any
+    backUrl: string
+    isDbmEvaluator?: boolean
+    originalFormId: string
+    versionTabs: {
+        id: string
+        version: number
+        parent_form_id: string | null
+        auth_status: string | null
+        updated_at: Date
+    }[]
     workflowData: {
-        userCanSign: boolean;
-        currentSignatoryRole: string | null;
-        existingSignature: any;
-        allSignatures: any[];
+        userCanSign: boolean
+        currentSignatoryRole: string | null
+        existingSignature: any
+        allSignatures: any[]
     };
-    updateAuthStatus: () => Promise<void>;
-    deleteFormAction: (id: string) => Promise<void>;
+    updateAuthStatus: () => Promise<void>
+    deleteFormAction: (id: string) => Promise<void>
 }
 
 export default function StaffingView({
     summary,
     paps,
     session,
+    backUrl,
+    originalFormId,
+    versionTabs,
     workflowData,
     updateAuthStatus,
-    deleteFormAction
+    deleteFormAction,
+    isDbmEvaluator = false
 }: StaffingViewProps) {
     const { userCanSign, currentSignatoryRole, existingSignature, allSignatures } = workflowData;
     const formData = { id: summary.id, fiscal_year: summary.fiscal_year, form_id: summary.id };
+    const familyHasApprovedVersion = versionTabs.some(version => version.auth_status === 'approved')
+    const canEditCurrentVersion =
+        !familyHasApprovedVersion &&
+        (
+            (summary.auth_status === 'draft' && session.user.access_level === 'encode') ||
+            (summary.auth_status === 'pending_dbm' && isDbmEvaluator)
+        )
+    const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign
+    const signSectionStatusMessage =
+        familyHasApprovedVersion && summary.auth_status !== 'approved'
+            ? 'DBM has already approved a different version of this form. This version is locked and can no longer be signed.'
+            : undefined
 
     // ==========================================
     // NEW: OVERALL PLAN CALCULATIONS
@@ -168,15 +194,15 @@ export default function StaffingView({
     return (
         <main className="m-6 max-w-none px-4 md:px-8 md:my-12 space-y-8">
             <div className="flex justify-between items-center mb-6">
-                <BackButton label="Back"></BackButton>
-                {summary.auth_status === 'draft' && session.user.access_level === 'encode' && (
+                <BackButton url={backUrl} label="Back"></BackButton>
+                {canEditCurrentVersion && (
                     <div className="flex flex-row gap-2">
                         <Link 
                             href={`/forms/staff/${formData.id}/edit`}
                             className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
                         >
                             <Pencil size={14} />
-                            Edit Form
+                            {session.user.role !== 'dbm' ? 'Edit Form' : 'Overwrite Form'}
                         </Link>
                         
                         <div className="flex justify-end gap-2">
@@ -196,6 +222,41 @@ export default function StaffingView({
                     </Badge>
                 </div>
             </div>
+
+            {versionTabs.length > 1 && (
+                <section className="space-y-3">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        {versionTabs.map((versionTab) => {
+                            const isActive = versionTab.id === summary.id
+                            const isOriginal = versionTab.id === originalFormId
+
+                            return (
+                                <Link
+                                    key={versionTab.id}
+                                    href={`/forms/staff/${versionTab.id}`}
+                                    className={`min-w-[168px] rounded-xl border px-4 py-3 text-left transition-colors ${
+                                        isActive
+                                            ? 'border-accent-foreground bg-accent-foreground/10 text-accent-foreground'
+                                            : 'border-border bg-card hover:border-accent-foreground/40 hover:bg-accent/40'
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-sm font-bold">
+                                            {isOriginal ? `Original (v${versionTab.version})` : `DBM (v${versionTab.version})` || `v${versionTab.version}`}
+                                        </span>
+                                        <span className="text-xs font-medium text-muted-foreground">
+                                            {STATUS_LABELS[versionTab.auth_status ?? "draft"] ?? versionTab.auth_status}
+                                        </span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Updated {new Intl.DateTimeFormat('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }).format(new Date(versionTab.updated_at))}
+                                    </p>
+                                </Link>
+                            )
+                        })}
+                    </div>
+                </section>
+            )}
 
             {/* Staff Per Tier */}
             <section className="space-y-10">
@@ -263,7 +324,8 @@ export default function StaffingView({
                 userId={session.user.id} 
                 entityId={summary.entity_id}
                 authStatus={summary.auth_status ?? ""} 
-                userCanSign={userCanSign && !existingSignature}
+                statusMessage={signSectionStatusMessage}
+                userCanSign={canSignCurrentVersion && !existingSignature}
                 signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")} 
                 alreadySigned={!!existingSignature} 
                 signatories={allSignatures} 

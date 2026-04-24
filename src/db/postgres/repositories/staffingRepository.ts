@@ -54,6 +54,76 @@ interface PositionInput extends Omit<NewPosition, 'staffing_summary_id'> {
     }[];
 }
 
+async function createStaffingSubmissionRecord(
+    trx: any,
+    entityId: string,
+    fiscal_year: number,
+    positions: Omit<NewPosition, 'staffing_summary_id'>[],
+    auth_status: string,
+    parent_form_id?: string,
+    version?: number
+) {
+    const form = await trx.insertInto('forms')
+        .values({
+            entity_id: entityId,
+            type: 'bp_staffing',
+            fiscal_year: fiscal_year,
+            codename: 'BP Form 204',
+            auth_status: auth_status,
+            parent_form_id: parent_form_id ?? null,
+            version: version ?? 1
+        })
+        .returning('id')
+        .executeTakeFirstOrThrow();
+
+    const summary = await trx.insertInto('staffing_summaries')
+        .values({
+            id: form.id,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
+
+    if (positions.length > 0) {
+        const enrichedPositions = await injectTiers(trx, positions);
+
+        for (const pos of enrichedPositions) {
+            const currentPos = pos as PositionInput;
+            const { compensations, ...positionData } = currentPos;
+
+            const insertedPosition = await trx.insertInto('positions')
+                .values({
+                    ...positionData,
+                    staffing_summary_id: summary.id
+                })
+                .returning('id')
+                .executeTakeFirstOrThrow();
+
+            if (compensations && compensations.length > 0) {
+                await trx.insertInto('compensations')
+                    .values(compensations.map(comp => ({
+                        name: comp.name,
+                        amount: comp.amount,
+                        staff_id: insertedPosition.id,
+                        compensation_rule_id: comp.compensation_rule_id ?? null
+                    })))
+                    .execute();
+            }
+        }
+    }
+
+    const uniquePaps = [...new Set(positions.map(p => p.pap_id))].filter(Boolean);
+    if (uniquePaps.length > 0) {
+        await trx.insertInto('form_paps')
+            .values(uniquePaps.map(id => ({
+                form_id: form.id,
+                pap_id: id as string
+            })))
+            .execute();
+    }
+
+    return { formId: form.id, summaryId: summary.id, createdAt: summary.created_at };
+}
+
 // --- CREATE ---
 
 export async function createStaffingSubmission(
@@ -65,66 +135,15 @@ export async function createStaffingSubmission(
     version?: number
 ) {
     return await db.transaction().execute(async (trx) => {
-        const form = await trx.insertInto('forms')
-            .values({ 
-                entity_id: entityId, 
-                type: 'bp_staffing',
-                fiscal_year: fiscal_year,
-                codename: 'BP Form 204',
-                auth_status: auth_status,
-                parent_form_id: parent_form_id ?? null,
-                version: version ?? 1
-            })
-            .returning('id')
-            .executeTakeFirstOrThrow();
-
-        const summary = await trx.insertInto('staffing_summaries')
-            .values({
-                id: form.id,
-                // fiscal_year: summaryData.fiscal_year,
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow();
-        
-        if (positions.length > 0) {
-            const enrichedPositions = await injectTiers(trx, positions);
-            
-            for (const pos of enrichedPositions) {
-                const currentPos = pos as PositionInput;
-                const { compensations, ...positionData } = currentPos;
-
-                const insertedPosition = await trx.insertInto('positions')
-                    .values({
-                        ...positionData,
-                        staffing_summary_id: summary.id
-                    })
-                    .returning('id')
-                    .executeTakeFirstOrThrow();
-
-                if (compensations && compensations.length > 0) {
-                    await trx.insertInto('compensations')
-                        .values(compensations.map(comp => ({
-                            name: comp.name,    
-                            amount: comp.amount, 
-                            staff_id: insertedPosition.id,
-                            compensation_rule_id: comp.compensation_rule_id ?? null
-                        })))
-                        .execute();
-                }
-            }
-        }
-
-        const uniquePaps = [...new Set(positions.map(p => p.pap_id))].filter(Boolean);
-        if (uniquePaps.length > 0) {
-            await trx.insertInto('form_paps')
-                .values(uniquePaps.map(id => ({
-                    form_id: form.id, 
-                    pap_id: id as string
-                })))
-                .execute();
-        }
-
-        return { formId: form.id, summaryId: summary.id, createdAt: summary.created_at };
+        return await createStaffingSubmissionRecord(
+            trx,
+            entityId,
+            fiscal_year,
+            positions,
+            auth_status,
+            parent_form_id,
+            version
+        );
     });
 }
 
@@ -139,50 +158,122 @@ export async function updateStaffingSubmission(
     }
 ) {
     return await db.transaction().execute(async (trx) => {
-        if (payload.auth_status) {
-            await trx.updateTable('forms')
-                .set({ auth_status: payload.auth_status, updated_at: new Date(), fiscal_year: payload.summary.fiscal_year })
-                .where('id', '=', summaryId)
-                .execute()
-        }
+        return await updateStaffingSubmissionRecord(trx, summaryId, payload);
+    });
+}
 
-        // await trx.updateTable('staffing_summaries')
-        //     .set({ fiscal_year: payload.summary.fiscal_year })
-        //     .where('id', '=', summaryId)
-        //     .execute()
-
-        await trx.deleteFrom('positions')
-            .where('staffing_summary_id', '=', summaryId)
+async function updateStaffingSubmissionRecord(
+    trx: any,
+    summaryId: string,
+    payload: {
+        summary: any,
+        positions: any[],
+        auth_status?: string
+    }
+) {
+    if (payload.auth_status) {
+        await trx.updateTable('forms')
+            .set({ auth_status: payload.auth_status, updated_at: new Date(), fiscal_year: payload.summary.fiscal_year })
+            .where('id', '=', summaryId)
             .execute()
+    }
 
-        if (payload.positions.length > 0) {
-            const enrichedPositions = await injectTiers(trx, payload.positions)
-            
-            for (const pos of enrichedPositions) {
-                const { compensations, tier, ...positionData } = pos as any
+    // await trx.updateTable('staffing_summaries')
+    //     .set({ fiscal_year: payload.summary.fiscal_year })
+    //     .where('id', '=', summaryId)
+    //     .execute()
 
-                const insertedPosition = await trx.insertInto('positions')
-                    .values({
-                        ...positionData,
-                        tier: tier,
-                        staffing_summary_id: summaryId
-                    })
-                    .returning('id')
-                    .executeTakeFirstOrThrow()
+    await trx.deleteFrom('positions')
+        .where('staffing_summary_id', '=', summaryId)
+        .execute()
 
-                if (compensations && compensations.length > 0) {
-                    await trx.insertInto('compensations')
-                        .values(compensations.map((comp: any) => ({
-                            name: comp.name,
-                            amount: comp.amount,
-                            staff_id: insertedPosition.id,
-                            compensation_rule_id: comp.compensation_rule_id ?? null
-                        })))
-                        .execute()
-                }
+    if (payload.positions.length > 0) {
+        const enrichedPositions = await injectTiers(trx, payload.positions)
+        
+        for (const pos of enrichedPositions) {
+            const { compensations, tier, ...positionData } = pos as any
+
+            const insertedPosition = await trx.insertInto('positions')
+                .values({
+                    ...positionData,
+                    tier: tier,
+                    staffing_summary_id: summaryId
+                })
+                .returning('id')
+                .executeTakeFirstOrThrow()
+
+            if (compensations && compensations.length > 0) {
+                await trx.insertInto('compensations')
+                    .values(compensations.map((comp: any) => ({
+                        name: comp.name,
+                        amount: comp.amount,
+                        staff_id: insertedPosition.id,
+                        compensation_rule_id: comp.compensation_rule_id ?? null
+                    })))
+                    .execute()
             }
         }
-        return { success: true }
+    }
+
+    return { success: true }
+}
+
+export async function createDbmStaffingOverwrite(
+    sourceFormId: string,
+    payload: {
+        summary: any,
+        positions: any[],
+        auth_status?: string
+    }
+) {
+    return await db.transaction().execute(async (trx) => {
+        const sourceForm = await trx
+            .selectFrom('forms')
+            .select([
+                'id',
+                'entity_id',
+                'fiscal_year',
+                'parent_form_id',
+                'version',
+                'auth_status'
+            ])
+            .where('id', '=', sourceFormId)
+            .executeTakeFirstOrThrow();
+
+        const parentFormId = sourceForm.parent_form_id ?? sourceForm.id;
+
+        const existingOverwrite = await trx
+            .selectFrom('forms')
+            .select(['id'])
+            .where('parent_form_id', '=', parentFormId)
+            .executeTakeFirst();
+
+        if (existingOverwrite) {
+            await updateStaffingSubmissionRecord(trx, existingOverwrite.id, payload);
+
+            return {
+                formId: existingOverwrite.id,
+                created: false
+            };
+        }
+
+        const nextVersion = (sourceForm.version ?? 1) + 1;
+        const nextAuthStatus = payload.auth_status ?? sourceForm.auth_status ?? 'pending_dbm';
+
+        const created = await createStaffingSubmissionRecord(
+            trx,
+            sourceForm.entity_id,
+            payload.summary.fiscal_year,
+            payload.positions,
+            nextAuthStatus,
+            parentFormId,
+            nextVersion
+        );
+
+        return {
+            formId: created.formId,
+            created: true
+        };
     });
 }
 
@@ -255,8 +346,10 @@ export async function getAllStaffingSummaries(
             'forms.fiscal_year',
             'forms.auth_status',
             'forms.entity_id',
+            'forms.parent_form_id',
             'entities.type as entity_type'
         ])
+        .where('forms.parent_form_id', 'is', null)
         .orderBy('staffing_summaries.submission_date', 'desc')
 
     // 1. National Level: Can see everything
@@ -322,7 +415,9 @@ export async function getStaffingWithFormById(id: string) {
             'forms.entity_id as entity_id',
             'forms.type as type',
             'forms.auth_status as auth_status',
-            'forms.fiscal_year as fiscal_year'
+            'forms.fiscal_year as fiscal_year',
+            'forms.parent_form_id as parent_form_id',
+            'forms.version as version'
         ])
         .executeTakeFirst();
 

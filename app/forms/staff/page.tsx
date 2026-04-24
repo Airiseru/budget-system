@@ -1,4 +1,4 @@
-import { createStaffingRepository } from '@/src/db/factory'
+import { createStaffingRepository, createFormRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ModeToggle } from "@/components/ui/system-toggle"
@@ -11,6 +11,7 @@ import { STATUS_LABELS, STATUS_BADGE_COLORS } from '@/src/lib/constants'
 export const dynamic = 'force-dynamic';
 
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
+const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function StaffingPage() {
     const session = await sessionWithEntity()
@@ -25,8 +26,22 @@ export default async function StaffingPage() {
             session.user.role ?? '',
             session.user.entity_id ?? ''
         ) 
+
+        const summariesWithDisplayStatus = await Promise.all(
+            data.map(async (summary) => {
+                const versionFamily = await FormRepo.getFormVersionFamily(summary.id)
+                const displayStatus = versionFamily.forms.some((form) => form.auth_status === 'approved')
+                    ? 'approved'
+                    : summary.auth_status
+
+                return {
+                    ...summary,
+                    displayStatus
+                }
+            })
+        )
     
-        if (data.length === 0) {
+        if (summariesWithDisplayStatus.length === 0) {
             return (
                 <div className='m-4'>
                     <ButtonGroup className='my-4'>
@@ -69,21 +84,21 @@ export default async function StaffingPage() {
 
                 <h1 className="text-2xl font-bold mb-6">Staffing Submissions</h1>
                 <div className="grid gap-4">
-                    {data.map((summary) => (
+                    {summariesWithDisplayStatus.map((summary) => (
                         <Link href={`/forms/staff/${summary.id}`} key={summary.id}>
                             <div className="border rounded-lg p-4 hover:bg-accent transition-colors">
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-3">
                                         <h2 className="font-bold text-lg">FY {summary.fiscal_year} Staffing Plan</h2>
                                         <Badge 
-                                            variant={STATUS_BADGE_COLORS[summary.auth_status ?? 'draft'] ?? 'outline'}
+                                            variant={STATUS_BADGE_COLORS[summary.displayStatus ?? 'draft'] ?? 'outline'}
                                             className={
-                                                summary.auth_status === 'approved' 
+                                                summary.displayStatus === 'approved' 
                                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
                                                 : ''
                                             }
                                         >
-                                            {STATUS_LABELS[summary.auth_status ?? 'draft'] ?? summary.auth_status}
+                                            {STATUS_LABELS[summary.displayStatus ?? 'draft'] ?? summary.displayStatus}
                                         </Badge>
                                     </div>
 

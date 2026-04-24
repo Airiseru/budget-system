@@ -262,6 +262,8 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                     if (!historyMatch) {
                         snapshotsMatchHistory = false
                     }
+                } else {
+                    snapshotsMatchHistory = false
                 }
                 
                 // Reset the reconstructed state since it was signed
@@ -284,13 +286,15 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
 
         // Clean the reconstructed state to remove ids and foreign keys
-        const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
+        const cleanedReconstructedState = reconstructedState
+            ? cleanDataBasedOnTable(tableName, reconstructedState)
+            : null
         
         console.log('current state', currentState)
         console.log('reconstructed state', cleanedReconstructedState)
         
         // Compare the reconstructed state to the current state
-        isDataMatch = isEqual(cleanedReconstructedState, currentState) && approvalHashesValid && snapshotsMatchHistory
+        isDataMatch = !!cleanedReconstructedState && isEqual(cleanedReconstructedState, currentState) && approvalHashesValid && snapshotsMatchHistory
     }
 
     return {

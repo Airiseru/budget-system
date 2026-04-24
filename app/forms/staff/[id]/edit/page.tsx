@@ -1,17 +1,19 @@
 import StaffForm from "@/components/ui/staff/StaffingForm";
 import { sessionWithEntity } from "@/src/actions/auth";
-import { createStaffingRepository, createPapRepository, createSalaryRepository } from "@/src/db/factory"
+import { createFormRepository, createStaffingRepository, createPapRepository, createSalaryRepository } from "@/src/db/factory"
 import { ButtonGroup } from "@/components/ui/button-group"
 import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
 import { notFound, redirect } from 'next/navigation'
 
+const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const SalaryRepository = createSalaryRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function EditStaffPage({ params }: { params: Promise<{ id: string }> }) {
     // 1. Resolve params
     const { id } = await params
+    let formId = id
     
     // 2. Auth Check
     const session = await sessionWithEntity();
@@ -20,16 +22,31 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
     }
 
     // 3. Fetch Staff Record
-    const staff = await StaffingRepository.getStaffingById(id);
-    if (!staff) notFound();
+    const form = await FormRepository.findFormsByParentId(id)
+
+    if (form) {
+        formId = form.id
+    }
+
+    const familyHasApprovedVersion = await FormRepository.hasApprovedFormInFamily(formId)
+
+    const staff = await StaffingRepository.getStaffingById(formId);
+    if (!staff) notFound()
+
+    if (familyHasApprovedVersion) {
+        redirect(`/forms/staff/${formId}?error=locked`)
+    }
+
+    const isDbmEvaluator = session.user.workflow_role === 'dbm'
+    const isPendingDbm = staff.auth_status === 'pending_dbm'
 
     // This will now pass type checking and logic
-    if (staff.auth_status !== 'draft') {
-        redirect(`/forms/staff/${id}?error=locked`);
+    if (staff.auth_status !== 'draft' && !(isDbmEvaluator && isPendingDbm)) {
+        redirect(`/forms/staff/${formId}?error=locked`);
     }
 
     // 5. Authorization Check (Role based)
-    if (session.user.access_level !== 'encode') {
+    if (session.user.access_level !== 'encode' && !isDbmEvaluator) {
         redirect('/forms/staff?error=unauthorized');
     }
 
@@ -52,10 +69,11 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
             <ButtonGroup className='my-4'>
                 <ModeToggle/>
                 <ButtonGroup>
-                    <BackButton url="/forms/staff" label="Back to List"></BackButton>
+                    <BackButton url={`/forms/staff/${id}`} label="Back"></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
             <StaffForm
+                isDBM={isDbmEvaluator && isPendingDbm}
                 schedule={schedule}
                 compensationRules={compensationRules}
                 highestSG={highestSG}
