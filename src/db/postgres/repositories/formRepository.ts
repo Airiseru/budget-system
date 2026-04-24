@@ -151,3 +151,11 @@ export async function getFormsByEntity(
         .offset(filters.offset ?? 0)
         .execute()
 }
+
+export async function getFormTypeById(id: string) {
+    return await db
+        .selectFrom('forms')
+        .select('type')
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
+}

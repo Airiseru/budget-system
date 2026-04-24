@@ -4,6 +4,11 @@ export const FORM_TYPES: Record<string, string> = {
     bp_retiree: 'BP Form 205',
 }
 
+export const FORM_ROUTE_MAP: Record<string, string> = {
+    'bp_staffing': '/forms/staff',
+    'bp_retiree': '/forms/retirees'
+}
+
 export const FORM_NAMES: Record<string, string> = {
     bp_staffing: 'Staffing Summary',
     bp_retiree: 'List of Retirees',
