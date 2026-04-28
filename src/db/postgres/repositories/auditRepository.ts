@@ -12,12 +12,23 @@ import {
     SignaturePayload,
     AuditLogEntryPayload,
     AuditEventType,
+    FormSignaturePayload,
     REQUIRES_SIGNATURE
 } from "../../../types/audit"
 import { canonicalStringify } from "@/src/lib/canonical"
 import { replayDiffs } from "@/src/lib/diff"
 import isEqual from "lodash/isEqual"
 import { fetchHydratedFormState } from "./formHydrator"
+import { cleanDataBasedOnTable } from "@/src/lib/validations"
+
+const cleanState = (state: any) => {
+    if (!state) return state
+    const { 
+        auth_status, entity_id, created_at, updated_at,
+        ...cleanState 
+    } = state
+    return cleanState
+}
 
 export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
     let editedLog: NewAuditLog = {
@@ -156,12 +167,12 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
     const chainResult = verifyChain(allEntityLogs)
 
     // Detect rollbacks
-    let isSealedRootValid = true; // Defaults to true if no seal exists yet
+    let isSealedRootValid = true // Defaults to true if no seal exists yet
     
     if (lastSeal) {
         if (allEntityLogs.length < lastSeal.log_count) {
             // Someone restored an old backup to delete recent history.
-            isSealedRootValid = false;
+            isSealedRootValid = false
         } else {
             // Rebuild the tree exactly as it was at the moment of the last seal
             const sealedLogs = allEntityLogs.slice(0, lastSeal.log_count)
@@ -199,13 +210,14 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
     let isDataMatch = false
     let reconstructedState = null
     let currentState = null
+    let validFormStatus = true
     let approvalHashesValid = true
     let snapshotsMatchHistory = true
 
     if (formLogs.length > 0) {
-        const rawCurrentState = await fetchHydratedFormState(tableName, recordId)
+        currentState = await fetchHydratedFormState(tableName, recordId)
 
-        if (!rawCurrentState) {
+        if (!currentState) {
             return {
                 isTimelineIntact: chainResult.isValid,
                 isSealedRootValid,
@@ -221,52 +233,62 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
 
         for (const log of formLogsWithProofs) {
-            const payload = log.payload as any;
+            const payload = log.payload as any
 
             if (log.event_type === 'CREATE_FORM') {
-                reconstructedState = JSON.parse(JSON.stringify(payload));
+                reconstructedState = JSON.parse(JSON.stringify(payload))
+                console.log(`CREATE FORM RECONSTRUCTED STATE:`, reconstructedState)
             }
             else if (log.event_type === 'EDIT_FORM') {
                 // Delta: Apply diff to current reconstructed state
                 if (reconstructedState) {
-                    reconstructedState = replayDiffs(reconstructedState, [payload]);
+                    reconstructedState = replayDiffs(reconstructedState, [payload])
                 }
             }
             else if (log.event_type === 'SUBMIT_FORM') {
                 // Compare signed snapshot to current reconstructed state
                 if (reconstructedState) {
-                    const historyMatch = isEqual(reconstructedState, payload);
+                    // Clean payload to remove id and foreign keys
+                    const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
+                    console.log('cleaned payload is ok')
+                    console.log(`reconstructed state: ${JSON.stringify(reconstructedState)}`)
+
+                    const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
+                    console.log('cleaned reconstructed state is ok')
+
+                    const historyMatch = isEqual(cleanedReconstructedState, cleanedPayload)
                     if (!historyMatch) {
-                        snapshotsMatchHistory = false;
+                        snapshotsMatchHistory = false
                     }
                 }
                 
                 // Reset the reconstructed state since it was signed
-                reconstructedState = JSON.parse(JSON.stringify(payload));
+                reconstructedState = JSON.parse(canonicalStringify(payload))
+
             }
             else if (log.event_type === 'APPROVE_FORM' || log.event_type === 'SIGN') {
                 // Approval: Verify the user signed the correct state hash
                 if (reconstructedState && payload.form_state_hash) {
-                    const actualHash = await sha256(canonicalStringify(reconstructedState));
+                    const actualHash = await sha256(canonicalStringify(cleanDataBasedOnTable(tableName, reconstructedState)))
+
+                    console.log('actualHash', actualHash)
+                    console.log('payload.form_state_hash', payload.form_state_hash)
+
                     if (actualHash !== payload.form_state_hash) {
-                        approvalHashesValid = false;
+                        approvalHashesValid = false
                     }
                 }
             }
         }
 
-        // Clean current state for comparison
-        const { 
-            auth_status, entity_id, created_at, updated_at,
-            ...cleanCurrentState 
-        } = rawCurrentState as any
-
-        currentState = JSON.parse(JSON.stringify(cleanCurrentState))
-
-        console.log('current state', currentState)
-        console.log('reconstructed state', reconstructedState)
+        // Clean the reconstructed state to remove ids and foreign keys
+        const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
         
-        isDataMatch = isEqual(reconstructedState, currentState) && approvalHashesValid && snapshotsMatchHistory
+        console.log('current state', currentState)
+        console.log('reconstructed state', cleanedReconstructedState)
+        
+        // Compare the reconstructed state to the current state
+        isDataMatch = isEqual(cleanedReconstructedState, currentState) && approvalHashesValid && snapshotsMatchHistory
     }
 
     return {
@@ -279,7 +301,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         totalEntityEvents: allEntityLogs.length,
         formEventCount: formLogs.length,
         formLogs: formLogsWithProofs,
-        debugState: { reconstructedState, currentState, approvalHashesValid, snapshotsMatchHistory }
+        debugState: { reconstructedState, currentState, approvalHashesValid, snapshotsMatchHistory, isDataMatch }
     }
 }
 
@@ -320,4 +342,32 @@ export async function sealDailyAuditLog(entityId: string) {
         .execute()
 
     return { success: true, rootHash }
+}
+
+export async function getPayloadOfFormSignEvent(
+    userId: string,
+    entityId: string,
+    tableName: string,
+    formId: string,
+): Promise<FormSignaturePayload | string> {
+    const result = await db.
+        selectFrom('audit_logs')
+        .where('entity_id', '=', entityId)
+        .where('user_id', '=', userId)
+        .where('event_type', '=', 'SIGN')
+        .where('table_name', '=', tableName)
+        .where('record_id', '=', formId)
+        .select(['payload'])
+        .execute()
+
+    console.log(`RESULT IN PAYLOAD OF SIGN EVENT: ${JSON.stringify(result)}`)
+
+    if (result.length === 0) return "Form not signed by user"
+
+    if (result.length > 1) return "Multiple signatures of user found for form"
+
+    if (!result[0].payload) return "Form has not been officially signed by respective officer"
+    
+
+    return result[0].payload
 }

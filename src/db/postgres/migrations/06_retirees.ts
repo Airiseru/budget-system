@@ -26,22 +26,28 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('retirement_law', 'text', (col) => col.notNull())
         .addColumn('position', 'text', (col) => col.notNull())
         .addColumn('salary_grade', 'integer', (col) => col.notNull())
+        .addColumn('step', 'integer', (col) => col.notNull())
         .addColumn('date_of_birth', 'timestamp', (col) => col.notNull())
         .addColumn('original_appointment', 'timestamp', (col) => col.notNull())
         .addColumn('retirement_effectivity', 'timestamp', (col) => col.notNull())
         .addColumn('highest_monthly_salary', 'numeric', (col) => col.notNull())
         .addColumn('number_vacation_leave', 'decimal')
         .addColumn('number_sick_leave', 'integer')
+        .addColumn('tlb_constant_factor', 'numeric', (col) => col.notNull())
+        .addColumn('tlb_amount', 'numeric', (col) => col.notNull())
         .addColumn('total_credible_service', 'decimal')
         .addColumn('number_gratuity_months', 'integer')
+        .addColumn('rg_amount', 'numeric')
         .execute()
 
     // Create B-tree index
     await db.schema.createIndex('idx_retirees_list_id').on('retirees').column('retirees_list_id').execute()
-
 }
 
 export async function down(db: Kysely<any>): Promise<void> {
+    // Drop indexes
+    await db.schema.dropIndex('idx_retirees_list_id').execute()
+    
     // Drop tables
     await db.schema.dropTable('retirees').execute()
     await db.schema.dropTable('retirees_list').execute()

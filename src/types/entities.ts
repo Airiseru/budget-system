@@ -17,8 +17,8 @@ export type NewEntity = Insertable<EntitiesTable>
 export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency' | 'archived';
 export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve';
 export const UserAccessLevels = ['none', 'view', 'encode', 'review', 'approve'];
-export type UserWorkflowRole = 'personnel_officer' | 'budget_officer' | 'planning_officer' | 'chief_accountant' | 'office_head' | 'agency_head';
-export const UserWorkflowRoles = ['personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head']
+export type UserWorkflowRole = 'personnel_officer' | 'budget_officer' | 'planning_officer' | 'chief_accountant' | 'office_head' | 'agency_head' | 'dbm'
+export const UserWorkflowRoles = ['personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head', 'dbm']
 
 export interface UserTable {
     id: string

@@ -115,6 +115,7 @@ export async function getSignatoryWithKey(signature_id: string) {
             'user_keys.expires_at',
             'user_keys.revoked_at',
             'user_keys.device_name',
+            'user_keys.user_id',
 
             // user fields for display
             'users.name as signer_name',

@@ -53,11 +53,20 @@ export function verifyChain(logs: AuditLog[]): {
     isValid: boolean,
     brokenAt: string | null
 } {
+    if (logs.length === 0) return { isValid: true, brokenAt: null }
+
     const sorted = [...logs].sort(
         (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
     )
 
+    let expectedPrevHash: string | null = null
+
     for (const log of sorted) {
+        if (expectedPrevHash !== null && log.prev_hash !== expectedPrevHash) {
+            console.error(`[AUDIT] Broken Chain Link: Log ${log.id} expected prev_hash ${expectedPrevHash} but got ${log.prev_hash}`)
+            return { isValid: false, brokenAt: log.id }
+        }
+
         const expected = computeAuditEntryHash({
             entity_id: log.entity_id,
             user_id: log.user_id,
@@ -72,8 +81,11 @@ export function verifyChain(logs: AuditLog[]): {
         })
 
         if (expected !== log.hash) {
+            console.error(`[AUDIT] Tampered Row: Log ${log.id} hash mismatch`)
             return { isValid: false, brokenAt: log.id }
         }
+
+        expectedPrevHash = log.hash
     }
 
     return { isValid: true, brokenAt: null }

@@ -16,7 +16,8 @@ export interface RetireeRecordTable {
     is_gsis_member: boolean
     retirement_law: string // e.g., RA 8291, RA 1616
     position: string
-    salary_grade: number // Important for GAA validation
+    salary_grade: number
+    step: number
     date_of_birth: Date
     original_appointment: Date
     retirement_effectivity: Date
@@ -24,8 +25,11 @@ export interface RetireeRecordTable {
     // Leave Credits for Terminal Leave Pay (TLP) calculation
     number_vacation_leave: number | null
     number_sick_leave: number | null
+    tlb_constant_factor: number
+    tlb_amount: number
     total_credible_service: number | null
     number_gratuity_months: number | null
+    rg_amount: number | null
 }
 
 export type RetireesList = Selectable<RetireesListTable>

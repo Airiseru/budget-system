@@ -1,4 +1,3 @@
-// app/forms/retirees/page.tsx
 import { createRetireeRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
@@ -7,6 +6,7 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
+import { STATUS_LABELS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
@@ -21,14 +21,6 @@ const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'ou
     approved: 'default',
 }
 
-const statusLabels: Record<string, string> = {
-    draft: 'Draft',
-    pending_personnel: 'Pending Personnel Officer',
-    pending_budget: 'Pending Budget Officer',
-    pending_agency_head: 'Pending Agency Head',
-    approved: 'Approved',
-}
-
 export default async function RetireesPage() {
     const session = await sessionWithEntity()
 
@@ -39,7 +31,6 @@ export default async function RetireesPage() {
     try {
         // Fetching all retiree list submissions
         const data = await RetireeRepo.getAllRetireeSubmissions(
-            session.user.id ?? '',
             session.user_entity.entity_type ?? '',
             session.user.entity_id ?? ''
         ) 
@@ -51,7 +42,7 @@ export default async function RetireesPage() {
                         <ModeToggle />
                         <ButtonGroup>
                             <Link href="/home">
-                                <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                                <Button variant="outline" aria-label="Home">Home</Button>
                             </Link>
                         </ButtonGroup>
                         {session?.user.access_level === 'encode' && (
@@ -73,7 +64,7 @@ export default async function RetireesPage() {
                     <ModeToggle />
                     <ButtonGroup>
                         <Link href="/home">
-                            <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                            <Button variant="outline" aria-label="Home">Home</Button>
                         </Link>
                     </ButtonGroup>
                     {session?.user.access_level === 'encode' && (
@@ -112,7 +103,7 @@ export default async function RetireesPage() {
                                                 : ''
                                             }
                                         >
-                                            {statusLabels[list.auth_status ?? 'draft'] ?? list.auth_status}
+                                            {STATUS_LABELS[list.auth_status ?? 'draft'] ?? list.auth_status}
                                         </Badge>
                                     </div>
 

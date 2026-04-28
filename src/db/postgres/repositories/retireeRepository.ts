@@ -1,5 +1,5 @@
 import { db } from '../database'
-
+import { TLB_FACTOR } from '@/src/lib/constants';
 import { NewRetireeRecord, NewRetireesList } from '@/src/types/retirees';
 
 export async function createRetireeSubmission(
@@ -36,12 +36,13 @@ export async function createRetireeSubmission(
                 .values(retirees.map(retiree => ({
                     ...retiree,
                     retirees_list_id: list.id,
-                    // Ensure decimals/numeric fields are handled if passed as strings
+                    tlb_constant_factor: TLB_FACTOR,
+                    tlb_amount: retiree.highest_monthly_salary * ((retiree.number_vacation_leave ?? 0) + (retiree.number_sick_leave ?? 0)) * TLB_FACTOR,
                 })))
                 .execute();
         }
 
-        return { formId: form.id, listId: list.id };
+        return { formId: form.id, listId: list.id, createdAt: list.created_at };
     });
 }
 
@@ -55,7 +56,8 @@ export async function getRetireesFormById(id: string) {
             'retirees_list.fiscal_year',
             'retirees_list.is_mandatory',
             'forms.auth_status',
-            'forms.entity_id'
+            'forms.entity_id',
+            'retirees_list.updated_at as updated_at'
         ])
         .executeTakeFirst();
 
@@ -75,7 +77,6 @@ export async function getRetireesFormById(id: string) {
 }
 
 export async function getAllRetireeSubmissions(
-    userId: string,
     entityType: string,
     entityId: string
 ) {
@@ -115,7 +116,9 @@ export async function updateRetirees(formId: string, retirees: NewRetireeRecord[
                 ...r,
                 retirees_list_id: formId,
                 // Ensure ID is generated if not provided
-                id: r.id ?? crypto.randomUUID() 
+                id: r.id ?? crypto.randomUUID(),
+                tlb_constant_factor: TLB_FACTOR,
+                tlb_amount: r.highest_monthly_salary * ((r.number_vacation_leave ?? 0) + (r.number_sick_leave ?? 0)) * TLB_FACTOR,
             }));
 
             await trx

@@ -1,42 +1,74 @@
-import { EntitiesTable, UserTable, SessionTable, AccountTable, VerificationTable, DepartmentsTable, AgenciesTable, OperatingUnitsTable } from "./entities"
+import {
+    EntitiesTable,
+    UserTable,
+    SessionTable,
+    AccountTable,
+    VerificationTable,
+    DepartmentsTable,
+    AgenciesTable,
+    OperatingUnitsTable,
+} from "./entities";
 import { AuditLogTable, MerkleRootTable } from "./audit";
+import {
+    SalarySchedulesTable,
+    SalaryRatesTable,
+    CompensationRulesTable,
+} from "./salaries";
 import { FormTable, FormPapsTable } from "./forms";
-import { UserKeyTable, SignatoryTable } from "./keys"
-import { PapTable, PapLocationTable } from "./pap";
-import { PositionTable, StaffingTable, StaffingSummaryWithPositions, CompensationTable } from "./staffing";
-import { RetireeRecordTable, RetireesListTable } from "./retirees";
-import { 
+import { UserKeyTable, SignatoryTable } from "./keys";
+import {
     CostSourceTable,
     CostByExpenseClassTable,
-    ProjectProposalTable, 
-    PAPPrerequisiteTable, 
-    CostComponentTable, 
-    LocalFinancialAttributionTable, 
-    LocalPhysicalTargetTable, 
-    LocalInfrastructureRequirementTable, 
-    LocalLocationTable, 
-    ForeignFinancialTargetTable, 
-    ForeignPhysicalTargetTable 
+    ProjectProposalTable,
+    PAPPrerequisiteTable,
+    CostComponentTable,
+    LocalFinancialAttributionTable,
+    LocalPhysicalTargetTable,
+    LocalInfrastructureRequirementTable,
+    LocalLocationTable,
+    ForeignFinancialTargetTable,
+    ForeignPhysicalTargetTable,
 } from "./project_proposals";
+import { PapTable, PapLocationTable } from "./pap";
+import {
+    PositionTable,
+    StaffingTable,
+    StaffingSummaryWithPositions,
+    CompensationTable,
+} from "./staffing";
+import { RetireeRecordTable, RetireesListTable } from "./retirees";
 
 export interface Database {
-    entities: EntitiesTable
-    audit_logs: AuditLogTable
-    merkle_roots: MerkleRootTable
-    users: UserTable
-    sessions: SessionTable
-    accounts: AccountTable
-    verifications: VerificationTable
-    user_keys: UserKeyTable
-    signatories: SignatoryTable
-    departments: DepartmentsTable
-    agencies: AgenciesTable
-    operating_units: OperatingUnitsTable
-    paps: PapTable
-    pap_locations: PapLocationTable
+    // users
+    users: UserTable;
+    sessions: SessionTable;
+    accounts: AccountTable;
+    verifications: VerificationTable;
+    user_keys: UserKeyTable;
+    signatories: SignatoryTable;
+
+    // entities
+    entities: EntitiesTable;
+    departments: DepartmentsTable;
+    agencies: AgenciesTable;
+    operating_units: OperatingUnitsTable;
+
+    // audit
+    audit_logs: AuditLogTable;
+    merkle_roots: MerkleRootTable;
+
+    // paps
+    paps: PapTable;
+    pap_locations: PapLocationTable;
+
+    // salaries
+    salary_schedules: SalarySchedulesTable;
+    salary_rates: SalaryRatesTable;
+    compensation_rules: CompensationRulesTable;
+
     // forms
-    forms: FormTable
-    form_paps: FormPapsTable
+    forms: FormTable;
+    form_paps: FormPapsTable;
     // bp form 204
     staffing_summaries: StaffingTable;
     positions: PositionTable;
@@ -59,5 +91,4 @@ export interface Database {
     // bp form 203 foreign
     foreign_financial_targets: ForeignFinancialTargetTable;
     foreign_physical_targets: ForeignPhysicalTargetTable;
-    
 }

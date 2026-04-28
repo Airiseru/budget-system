@@ -11,29 +11,7 @@ import {
 } from '@/components/ui/select'
 import { Check, Trash2 } from 'lucide-react'
 import { UserEntity, UserRole, UserAccessLevel, UserWorkflowRole } from '@/src/types/entities'
-
-const roleLabels: Record<string, string> = {
-    agency: 'Agency',
-    dbm: 'DBM',
-    admin: 'Administrator',
-}
-
-const accessLevelLabels: Record<string, string> = {
-    view: 'Viewer',
-    encode: 'Encoder',
-    review: 'Reviewer',
-    approve: 'Approver',
-}
-
-const workflowRoleLabels: Record<string, string> = {
-    none: 'None / N/A',
-    personnel_officer: 'Personnel Officer',
-    budget_officer: 'Budget Officer',
-    planning_officer: 'Planning Officer',
-    chief_accountant: 'Chief Accountant',
-    office_head: 'Office Head',
-    agency_head: 'Agency Head',
-}
+import { ROLE_LABELS, ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '@/src/lib/constants'
 
 export function PendingUsersTable({ users }: { users: UserEntity[] }) {
     if (users.length === 0) {
@@ -115,13 +93,13 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
                 <Select value={role} onValueChange={(val) => setRole(val || "")} disabled={isLoading}>
                     <SelectTrigger className="w-[140px]">
                         <SelectValue placeholder="Select Role">
-                        {role ? roleLabels[role] : 'Select Role'}
+                        {role ? ROLE_LABELS[role] : 'Select Role'}
                         </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="agency">Agency</SelectItem>
-                        <SelectItem value="dbm">DBM</SelectItem>
-                        <SelectItem value="admin">Administrator</SelectItem>
+                        {Object.entries(ROLE_LABELS).map(([role, label]) => (
+                            <SelectItem key={role} value={role}>{label}</SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </TableCell>
@@ -130,17 +108,13 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
                 <Select value={workflowRole} onValueChange={(val) => setWorkflowRole(val || "")} disabled={isLoading}>
                     <SelectTrigger className="w-[140px]">
                         <SelectValue placeholder="Select Role">
-                        {workflowRole ? workflowRoleLabels[workflowRole] : 'Select Workflow Role'}
+                        {workflowRole ? WORKFLOW_ROLE_LABELS[workflowRole] : 'Select Workflow Role'}
                         </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="none">None / N/A</SelectItem>
-                        <SelectItem value="personnel_officer">Personnel Officer</SelectItem>
-                        <SelectItem value="budget_officer">Budget Officer</SelectItem>
-                        <SelectItem value="planning_officer">Planning Officer</SelectItem>
-                        <SelectItem value="chief_accountant">Chief Accountant</SelectItem>
-                        <SelectItem value="office_head">Office Head</SelectItem>
-                        <SelectItem value="agency_head">Agency Head</SelectItem>
+                        {Object.entries(WORKFLOW_ROLE_LABELS).map(([role, label]) => (
+                            <SelectItem key={role} value={role}>{label}</SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </TableCell>
@@ -149,14 +123,13 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
                 <Select value={accessLevel} onValueChange={(val) => setAccessLevel(val || "")} disabled={isLoading}>
                     <SelectTrigger className="w-[140px]">
                         <SelectValue placeholder="Select Level">
-                            {accessLevel ? accessLevelLabels[accessLevel] : 'Select Level'}
+                            {accessLevel ? ACCESS_LEVEL_LABELS[accessLevel] : 'Select Level'}
                         </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="view">Viewer</SelectItem>
-                        <SelectItem value="encode">Encoder</SelectItem>
-                        <SelectItem value="review">Reviewer</SelectItem>
-                        <SelectItem value="approve">Approver</SelectItem>
+                        {Object.entries(ACCESS_LEVEL_LABELS).map(([level, label]) => (
+                            <SelectItem key={level} value={level}>{label}</SelectItem>
+                        ))}
                     </SelectContent>
                 </Select>
             </TableCell>

@@ -1,10 +1,9 @@
 import StaffForm from "@/components/ui/staff/StaffingForm";
 import { sessionWithEntity } from "@/src/actions/auth";
-import { createPapRepository } from "@/src/db/factory";
+import { createPapRepository, createSalaryRepository } from "@/src/db/factory";
 import { redirect } from "next/navigation";
-import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
-import Link from "next/link";
+import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
 
 export default async function NewStaffingPage() {
@@ -19,20 +18,26 @@ export default async function NewStaffingPage() {
         redirect('/forms/staff?error=unauthorized');
     }
 
-    const papRepo = createPapRepository('postgres');
-    const paps = await papRepo.getAllPaps();
+    const PapRepository = createPapRepository('postgres');
+    const paps = await PapRepository.getAllPaps();
+
+    const SalaryRepository = createSalaryRepository('postgres')
+    const schedule = await SalaryRepository.getLatestSalarySchedule()
+    const compensationRules = await SalaryRepository.getLatestCompensationRules()
+    const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
 
     return (
         <main className="m-4">
             <ButtonGroup className='my-4'>
                 <ModeToggle/>
                 <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline" aria-label="Go Back">Go Back</Button>
-                    </Link>
+                    <BackButton url="/forms/staff" label="Back to List"></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
-            <StaffForm 
+            <StaffForm
+                schedule={schedule}
+                compensationRules={compensationRules}
+                highestSG={highestSG}
                 availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
                 userId={session.user.id}
                 entityId={session.user.entity_id} 

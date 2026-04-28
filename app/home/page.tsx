@@ -14,6 +14,8 @@ export default async function HomePage() {
         return redirect("/pending-approval");
     }
 
+    const isDBM = session.user.role === "dbm";
+
     return (
         <main className="m-4">
             <h1></h1>
@@ -21,6 +23,11 @@ export default async function HomePage() {
                 <Button variant="outline">
                     <Link href="/paps/">PAPs</Link>
                 </Button>
+                {isDBM && (
+                    <Button variant="outline">
+                        <Link href="/dbm/">DBM Modules</Link>
+                    </Button>
+                )}
                 <Button variant="outline">
                     <Link href="/forms/proposals/">
                         Form 202/203 (Project Proposals)

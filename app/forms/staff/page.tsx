@@ -6,6 +6,7 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
+import { STATUS_LABELS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
@@ -17,14 +18,6 @@ const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'ou
     pending_budget: 'secondary',
     pending_agency_head: 'secondary',
     approved: 'default',
-}
-
-const statusLabels: Record<string, string> = {
-    draft: 'Draft',
-    pending_personnel: 'Pending Personnel Officer',
-    pending_budget: 'Pending Budget Officer',
-    pending_agency_head: 'Pending Agency Head',
-    approved: 'Approved',
 }
 
 export default async function StaffingPage() {
@@ -48,7 +41,7 @@ export default async function StaffingPage() {
                         <ModeToggle />
                         <ButtonGroup>
                             <Link href="/home">
-                                <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                                <Button variant="outline" aria-label="Home">Home</Button>
                             </Link>
                         </ButtonGroup>
                         {session?.user.access_level === 'encode' && (
@@ -70,7 +63,7 @@ export default async function StaffingPage() {
                     <ModeToggle />
                     <ButtonGroup>
                         <Link href="/home">
-                            <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                            <Button variant="outline" aria-label="Home">Home</Button>
                         </Link>
                     </ButtonGroup>
                     {session?.user.access_level === 'encode' && (
@@ -98,7 +91,7 @@ export default async function StaffingPage() {
                                                 : ''
                                             }
                                         >
-                                            {statusLabels[summary.auth_status ?? 'draft'] ?? summary.auth_status}
+                                            {STATUS_LABELS[summary.auth_status ?? 'draft'] ?? summary.auth_status}
                                         </Badge>
                                     </div>
 

@@ -5,7 +5,8 @@ import {
 } from "@/src/db/factory";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { redirect, notFound } from "next/navigation";
-import { getCurrentSignatoryRole } from "@/src/lib/workflows";
+import { getCurrentSignatoryRole, getNextStatus } from "@/src/lib/workflows";
+import { submitForm } from "@/src/actions/form";
 import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import { canSign } from "@/src/lib/workflows";
 import { revalidatePath } from "next/cache";
@@ -14,16 +15,7 @@ import RetireeView from "@/components/ui/retiree/RetireeView";
 const RetireeRepo = createRetireeRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
-const FormRepo = createFormRepository(process.env.DATABASE_TYPE || "postgres");
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || "postgres");
-
-const statusLabels: Record<string, string> = {
-    draft: "Draft",
-    pending_personnel: "Pending Personnel Officer",
-    pending_budget: "Pending Budget Officer",
-    pending_agency_head: "Pending Agency Head",
-    approved: "Approved",
-};
 
 export default async function RetireeDetailsPage({
     params,
@@ -53,6 +45,9 @@ export default async function RetireeDetailsPage({
           )
         : false;
 
+    const nextSignatoryRole =
+        getNextStatus(data.auth_status ?? "", workflow) || "approved";
+
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(
         data.id ?? "",
         session.user.id,
@@ -63,7 +58,14 @@ export default async function RetireeDetailsPage({
     const updateAuthStatus = async () => {
         "use server";
         if (data.auth_status !== "draft") return;
-        await FormRepo.updateFormAuthStatus(data.id ?? "", "pending_personnel");
+        await submitForm(
+            data.id ?? "",
+            data,
+            session.user.id,
+            data.entity_id,
+            "retirees_list",
+            nextSignatoryRole,
+        );
         revalidatePath(`/forms/retirees/${id}`);
     };
 

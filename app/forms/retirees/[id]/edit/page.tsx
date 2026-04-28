@@ -2,14 +2,18 @@ import BP205EntryGrid from "@/components/ui/retiree/RetireeForm";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
-import Link from "next/link";
+import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
-import { createRetireeRepository } from "@/src/db/factory";
+import {
+    createRetireeRepository,
+    createSalaryRepository,
+} from "@/src/db/factory";
 import { notFound, redirect } from "next/navigation";
 
 const RetireeRepo = createRetireeRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
+const SalaryRepository = createSalaryRepository("postgres");
 
 export default async function EditRetireePage({
     params,
@@ -33,20 +37,26 @@ export default async function EditRetireePage({
         redirect("/forms/retirees?error=unauthorized");
     }
 
+    const schedule = await SalaryRepository.getLatestSalarySchedule();
+    const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade;
+
     return (
         <main className="m-4">
             <ButtonGroup className="my-4">
                 <ModeToggle />
                 <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline" aria-label="Go Back">
-                            Go Back
-                        </Button>
-                    </Link>
+                    <BackButton
+                        url="/forms/retirees"
+                        label="Back to List"
+                    ></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
+            {/* Pass the entityId here */}
             <BP205EntryGrid
+                schedule={schedule}
+                highestSG={highestSG}
                 retireeData={retireeData}
+                userId={session.user.id}
                 entityId={session.user.entity_id}
                 entityName={session.user_entity.entity_name || "Unknown Agency"}
             />

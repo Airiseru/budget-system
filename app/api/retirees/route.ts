@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { createRetireeRepository } from '@/src/db/factory';
 import { auth } from "@/src/lib/auth"; 
 import { headers } from "next/headers";
+import { logNewForm, logSubmitForm } from '@/src/actions/audit';
 
 const repo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres');
 
@@ -28,6 +29,45 @@ export async function POST(req: Request) {
             retirees,
             auth_status
         );
+
+        const newRetirees = await repo.getRetireesFormById(result.formId);
+
+        if (!newRetirees) {
+            return NextResponse.json({ error: "Create failed" }, { status: 500 });
+        }
+
+        // Log form creation
+        const logResult = await logNewForm(
+            session.user.id,
+            entityId,
+            'retirees_list',
+            result.formId,
+            {
+                fiscal_year: newRetirees.fiscal_year,
+                is_mandatory: newRetirees.is_mandatory,
+                retirees: newRetirees.retirees
+            },
+            result.createdAt
+        )
+
+        if (!logResult.success) throw new Error('Failed to log form creation')
+
+        if (auth_status !== 'draft') {
+            const submitResult = await logSubmitForm(
+                session.user.id,
+                entityId,
+                'retirees_list',
+                result.formId,
+                {
+                    fiscal_year: newRetirees.fiscal_year,
+                    is_mandatory: newRetirees.is_mandatory,
+                    retirees: newRetirees.retirees
+                },
+                result.createdAt
+            )
+
+            if (!submitResult.success) throw new Error('Failed to log form submission')
+        }
 
         return NextResponse.json(result, { status: 201 });
     } catch (error: any) {

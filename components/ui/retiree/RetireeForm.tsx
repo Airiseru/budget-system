@@ -3,9 +3,10 @@
 import React, { useState } from 'react';
 import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { RetireeRecordTable } from '@/src/types/retirees';
 import { z } from "zod";
-import { RetireeRowSchema, BP205Schema } from '@/src/schemas/retiree.schema';
+import { RetireeRowSchema, BP205Schema } from '@/src/lib/validations/retiree.schema';
+import { TLB_FACTOR, MAX_STEP } from '@/src/lib/constants';
+import { AllSalaryRates } from '@/src/types/salaries';
 
 type RetireeRow = z.infer<typeof RetireeRowSchema>;
 
@@ -22,7 +23,8 @@ interface RetireeFormInitialData {
     retirement_law: string;
     position: string;
     salary_grade: number;
-    date_of_birth: Date; // Note: Date object from DB
+    step: number;
+    date_of_birth: Date;
     original_appointment: Date;
     retirement_effectivity: Date;
     highest_monthly_salary: number | string;
@@ -30,17 +32,21 @@ interface RetireeFormInitialData {
     number_sick_leave: number | null;
     total_credible_service: number | null;
     number_gratuity_months: number | null;
+    rg_amount: number | null;
     retirees_list_id: string;
   }[];
 }
 
 interface Props {
-  retireeData?: RetireeFormInitialData; // Use the interface here
+  schedule: AllSalaryRates
+  highestSG: number
+  retireeData?: RetireeFormInitialData;
+  userId: string
   entityId: string;
   entityName: string;
 }
 
-const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
+const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, entityName }: Props) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel'>('draft');
@@ -49,26 +55,23 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
   const isEditing = !!retireeData
 
   const [retirees, setRetirees] = useState<RetireeRow[]>(() => {
-    // Check if we are in "Edit Mode" via the retiree prop
     if (retireeData && retireeData.retirees && retireeData.retirees.length > 0) {
         return retireeData.retirees.map((r) => ({
             ...r,
-            // 1. Convert DB Timestamps/Dates to YYYY-MM-DD for HTML inputs
             date_of_birth: r.date_of_birth ? new Date(r.date_of_birth).toISOString().split('T')[0] : "",
             original_appointment: r.original_appointment ? new Date(r.original_appointment).toISOString().split('T')[0] : "",
             retirement_effectivity: r.retirement_effectivity ? new Date(r.retirement_effectivity).toISOString().split('T')[0] : "",
-            
-            // 2. Ensure numbers are actual numbers (Kysely numeric types can return as strings)
             salary_grade: Number(r.salary_grade),
-            highest_monthly_salary: Number(r.highest_monthly_salary),
+            step: Number(r.step),
+            highest_monthly_salary: Number(schedule?.rates?.find(rate => rate.salary_grade === Number(r.salary_grade) && rate.step === Number(r.step))?.amount ?? 0),
             number_vacation_leave: Number(r.number_vacation_leave ?? 0),
             number_sick_leave: Number(r.number_sick_leave ?? 0),
             total_credible_service: Number(r.total_credible_service ?? 0),
             number_gratuity_months: Number(r.number_gratuity_months ?? 0),
+            rg_amount: Number(r.rg_amount ?? 0),
         }));
     }
 
-    // Default Row for "Create Mode"
     return [{
         id: crypto.randomUUID(),
         name: "",
@@ -76,35 +79,48 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
         retirement_law: "RA 8291",
         position: "",
         salary_grade: 1,
+        step: 1,
         date_of_birth: "",
         original_appointment: "",
         retirement_effectivity: "",
-        highest_monthly_salary: 0,
+        highest_monthly_salary: schedule?.rates?.find(rate => rate.salary_grade === 1 && rate.step === 1)?.amount ?? 0,
         number_vacation_leave: 0,
         number_sick_leave: 0,
         total_credible_service: 0,
         number_gratuity_months: 0,
+        rg_amount: 0,
     }];
-});
-
-
+  });
 
   const [fiscalYear, setFiscalYear] = useState(2026);
 
   const handleInputChange = (id: string, field: string, value: any) => {
-    setRetirees((prev: any) => prev.map((r: any) => r.id === id ? { ...r, [field]: value } : r));
+    setRetirees((prev: any) => prev.map((r: any) => {
+      if (r.id !== id) return r;
+
+      const updatedRow = { ...r, [field]: value };
+
+      // Auto-compute Highest Monthly Salary if SG or Step changes
+      if (field === 'salary_grade' || field === 'step') {
+          const currentSG = field === 'salary_grade' ? Number(value) : Number(updatedRow.salary_grade);
+          const currentStep = field === 'step' ? Number(value) : Number(updatedRow.step);
+          
+          const newSalary = Number(schedule?.rates?.find(rate => rate.salary_grade === currentSG && rate.step === currentStep)?.amount ?? 0);
+          updatedRow.highest_monthly_salary = newSalary;
+      }
+
+      return updatedRow;
+    }));
   };
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
-    // 1. Validate the retirees array using Zod
     const validation = BP205Schema.safeParse({ retirees });
 
     if (!validation.success) {
-      // 2. Format the error message (gets the first error found)
       const firstError = validation.error.issues[0];
       const rowNum = parseInt(firstError.path[1] as string) + 1;
       setError(`Row ${rowNum}: ${firstError.message}`);
@@ -112,8 +128,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
       return;
     }
 
-    // 3. If validation passes, use validation.data (it's now cleaned/coerced)
     const payload = {
+      userId,
       entityId,
       listData: {
         fiscal_year: fiscalYear,
@@ -136,7 +152,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
       if (response.ok) {
         const data = await response.json();
         router.refresh();
-        router.push(`/forms/retirees/${data.formId}`);
+        const endpoint = data.formId ? `/forms/retirees/${data.formId}` : '/forms/retirees'
+        router.push(endpoint)
       } else {
         const err = await response.json();
         setError(err.error || "Failed to save");
@@ -155,7 +172,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
       is_gsis_member: true, 
       retirement_law: "RA 8291", 
       position: "", 
-      salary_grade: 1, 
+      salary_grade: 1,
+      step: 1,
       date_of_birth: "",
       original_appointment: "",
       retirement_effectivity: "", 
@@ -163,7 +181,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
       number_vacation_leave: 0,
       number_sick_leave: 0,
       total_credible_service: 0,
-      number_gratuity_months: 0
+      number_gratuity_months: 0,
+      rg_amount: 0
     }]);
   };
 
@@ -176,7 +195,7 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
   };
 
   return (
-    <div>
+    <div className="p-6 mx-auto space-y-6">
       <div className="mb-6 p-4 bg-muted/50 border-l-4 border-muted-400 rounded-r-lg shadow-sm">
           <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">Logged-in Agency</span>
           <h2 className="text-lg font-semibold text-muted-800">{entityName}</h2>
@@ -240,7 +259,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                 <th className="p-2 border-r text-left w-24">Ret. Law</th>
                 <th className="p-2 border-r text-left w-40">Position</th>
                 <th className="p-2 border-r text-center w-12">SG</th>
-                <th className="p-2 border-r text-center w-32">DOB</th>
+                <th className="p-2 border-r text-center w-12">Step</th>
+                <th className="p-2 border-r text-center w-32">Date of Birth</th>
                 <th className="p-2 border-r text-center w-32">Orig. Appt</th>
                 <th className="p-2 border-r text-center w-32">Effectivity</th>
                 <th className="p-2 border-r text-right w-32">Monthly Sal.</th>
@@ -248,6 +268,7 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                 <th className="p-2 border-r text-center w-20">SL Credits</th>
                 <th className="p-2 border-r text-center w-24">Total Credible Service</th>
                 <th className="p-2 border-r text-center w-24">No. of Gratuity Months</th>
+                <th className="p-2 border-r text-center w-24">Retirement Gratuity Amount</th>
                 <th className="p-2 text-center w-12">Action</th>
               </tr>
             </thead>
@@ -284,12 +305,14 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                     <input type="text" value={row.position} className="w-full p-1.5 focus:bg-card focus:outline-none" placeholder="Administrative Officer V" onChange={(e) => handleInputChange(row.id, 'position', e.target.value)}  />
                   </td>
                   <td className="p-1 border-r">
-                    <input type="number" value={row.salary_grade} className="w-full p-1.5 text-center focus:bg-card focus:outline-none" placeholder="18" onChange={(e) => handleInputChange(row.id, 'salary_grade', e.target.value)} />
+                    <input type="number" value={row.salary_grade} min="1" max={highestSG} className="w-full p-1.5 text-center focus:bg-card focus:outline-none" placeholder="18" onChange={(e) => handleInputChange(row.id, 'salary_grade', e.target.value)} />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input type="number" value={row.step} min="1" max={MAX_STEP} className="w-full p-1.5 text-center focus:bg-card focus:outline-none" placeholder="1" onChange={(e) => handleInputChange(row.id, 'step', e.target.value)} />
                   </td>
                   <td className="p-1 border-r">
                     <input 
                       type="date" 
-                      // Ensure value is YYYY-MM-DD or empty string
                       value={row.date_of_birth ? new Date(row.date_of_birth).toISOString().split('T')[0] : ''} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none bg-transparent" 
                       onChange={(e) => handleInputChange(row.id, 'date_of_birth', e.target.value)} 
@@ -309,14 +332,21 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                     <input type="date" value={row.retirement_effectivity} className="w-full p-1.5 text-center focus:bg-card focus:outline-none" onChange={(e) => handleInputChange(row.id, 'retirement_effectivity', e.target.value)} />
                   </td>
                   <td className="p-1 border-r">
-                    <div className="flex items-center">
+                    <div className="flex items-center bg-muted/30">
                       <span className="text-muted-400 pl-1 text-xs">₱</span>
-                      <input type="number" value={row.highest_monthly_salary} onChange={(e) => handleInputChange(row.id, 'highest_monthly_salary', e.target.value)} className="w-full p-1.5 text-right focus:bg-card focus:outline-none font-mono" placeholder="0.00" />
+                      <input 
+                        type="number" 
+                        disabled 
+                        value={row.highest_monthly_salary} 
+                        className="w-full p-1.5 text-right bg-transparent focus:outline-none font-mono font-semibold" 
+                        placeholder="0.00" 
+                      />
                     </div>
                   </td>
                   <td className="p-1 border-r">
                     <input 
-                      type="number" 
+                      type="number"
+                      min="0"
                       step="0.001"
                       value={row.number_vacation_leave} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
@@ -326,6 +356,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                   <td className="p-1 border-r">
                     <input 
                       type="number" 
+                      min="0"
+                      step="0.001"
                       value={row.number_sick_leave} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
                       onChange={(e) => handleInputChange(row.id, 'number_sick_leave', e.target.value)} 
@@ -333,7 +365,8 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                   </td>
                   <td className="p-1 border-r">
                     <input 
-                      type="number" 
+                      type="number"
+                      min="0"
                       step="0.1"
                       value={row.total_credible_service} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
@@ -341,11 +374,22 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
                     />
                   </td>
                   <td className="p-1 border-r">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
+                      min="0"
                       value={row.number_gratuity_months} 
                       className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
                       onChange={(e) => handleInputChange(row.id, 'number_gratuity_months', e.target.value)} 
+                    />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input 
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      value={row.rg_amount} 
+                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                      onChange={(e) => handleInputChange(row.id, 'rg_amount', e.target.value)} 
                     />
                   </td>
                   <td className="p-1 text-center">
@@ -367,7 +411,7 @@ const BP205EntryGrid = ({ retireeData, entityId, entityName }: Props) => {
         <div className="flex justify-between items-start text-xs text-muted-500 px-2">
           <p>* Ensure "Effectivity Date" falls within FY 2026 for TLP eligibility.</p>
           <div className="text-right">
-              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary)*( Number(r.number_vacation_leave) + Number(r.number_sick_leave))*TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
       </form>

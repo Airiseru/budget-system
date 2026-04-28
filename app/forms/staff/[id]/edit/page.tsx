@@ -1,13 +1,13 @@
 import StaffForm from "@/components/ui/staff/StaffingForm";
 import { sessionWithEntity } from "@/src/actions/auth";
-import { createStaffingRepository, createPapRepository } from "@/src/db/factory";
-import { Button } from '@/components/ui/button'
+import { createStaffingRepository, createPapRepository, createSalaryRepository } from "@/src/db/factory"
 import { ButtonGroup } from "@/components/ui/button-group"
-import Link from "next/link";
+import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
 import { notFound, redirect } from 'next/navigation'
 
-const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
+const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
+const SalaryRepository = createSalaryRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function EditStaffPage({ params }: { params: Promise<{ id: string }> }) {
     // 1. Resolve params
@@ -20,7 +20,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
     }
 
     // 3. Fetch Staff Record
-    const staff = await StaffingRepo.getStaffingById(id);
+    const staff = await StaffingRepository.getStaffingById(id);
     if (!staff) notFound();
 
     // This will now pass type checking and logic
@@ -36,17 +36,22 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
     const papRepo = createPapRepository('postgres');
     const paps = await papRepo.getAllPaps();
 
+    const schedule = await SalaryRepository.getLatestSalarySchedule()
+    const compensationRules = await SalaryRepository.getLatestCompensationRules()
+    const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
+
     return (
         <main className="m-4">
             <ButtonGroup className='my-4'>
                 <ModeToggle/>
                 <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline" aria-label="Go Back">Go Back</Button>
-                    </Link>
+                    <BackButton url="/forms/staff" label="Back to List"></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
-            <StaffForm 
+            <StaffForm
+                schedule={schedule}
+                compensationRules={compensationRules}
+                highestSG={highestSG}
                 staff={staff}
                 availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))} 
                 userId={session.user.id}

@@ -28,7 +28,10 @@ export interface PositionTable {
     staff_type: string
     organizational_unit: string
     position_title: string
-    salary_grade: string
+    salary_schedule_id: string
+    salary_grade: number
+    step: number
+    monthly_base_salary: number
     num_positions: number
     months_employed: number
     total_salary: number
@@ -40,7 +43,8 @@ export type PositionUpdate = Updateable<PositionTable>
 
 export interface CompensationTable {
     id: Generated<string>
-    staff_id: string 
+    staff_id: string
+    compensation_rule_id: string
     name: string
     amount: number
 }
