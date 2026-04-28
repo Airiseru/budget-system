@@ -1,17 +1,17 @@
 import {
-    createRetireeRepository,
+    createProposalRepository,
     createFormRepository,
     createKeyRepository,
 } from "@/src/db/factory";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { redirect, notFound } from "next/navigation";
 import { getCurrentSignatoryRole } from "@/src/lib/workflows";
-import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
+import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
 import { canSign } from "@/src/lib/workflows";
 import { revalidatePath } from "next/cache";
-import RetireeView from "@/components/ui/retiree/RetireeView";
+import ProposalView from "@/components/ui/proposals/ProposalView";
 
-const RetireeRepo = createRetireeRepository(
+const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const FormRepo = createFormRepository(process.env.DATABASE_TYPE || "postgres");
@@ -19,8 +19,9 @@ const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || "postgres");
 
 const statusLabels: Record<string, string> = {
     draft: "Draft",
-    pending_personnel: "Pending Personnel Officer",
     pending_budget: "Pending Budget Officer",
+    pending_planning: "Pending Planning Officer",
+    pending_chief_accountant: "Pending Chief Accountant",
     pending_agency_head: "Pending Agency Head",
     approved: "Approved",
 };
@@ -34,11 +35,11 @@ export default async function RetireeDetailsPage({
     const session = await sessionWithEntity();
     if (!session) redirect("/login");
 
-    const data = await RetireeRepo.getRetireesFormById(id);
+    const data = await ProposalRepo.getProjectProposalById(id);
     if (!data) return notFound();
 
     // Logic for workflow
-    const workflow = RETIREE_WORKFLOW;
+    const workflow = PROPOSAL_WORKFLOW;
     const currentSignatoryRole = getCurrentSignatoryRole(
         data.auth_status ?? "",
         workflow,
@@ -63,19 +64,19 @@ export default async function RetireeDetailsPage({
     const updateAuthStatus = async () => {
         "use server";
         if (data.auth_status !== "draft") return;
-        await FormRepo.updateFormAuthStatus(data.id ?? "", "pending_personnel");
-        revalidatePath(`/forms/retirees/${id}`);
+        await FormRepo.updateFormAuthStatus(data.id ?? "", "pending_budget");
+        revalidatePath(`/forms/proposals/${id}`);
     };
 
     const deleteFormAction = async (formId: string) => {
         "use server";
         if (data.auth_status !== "draft") return;
-        await RetireeRepo.deleteRetireeForm(formId);
-        redirect("/forms/retirees");
+        await ProposalRepo.deleteProjectProposal(formId);
+        redirect("/forms/proposals");
     };
 
     return (
-        <RetireeView
+        <ProposalView
             data={data}
             session={session}
             userCanSign={userCanSign}

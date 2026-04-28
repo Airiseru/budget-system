@@ -5,6 +5,19 @@ import { UserKeyTable, SignatoryTable } from "./keys"
 import { PapTable, PapLocationTable } from "./pap";
 import { PositionTable, StaffingTable, StaffingSummaryWithPositions, CompensationTable } from "./staffing";
 import { RetireeRecordTable, RetireesListTable } from "./retirees";
+import { 
+    CostSourceTable,
+    CostByExpenseClassTable,
+    ProjectProposalTable, 
+    PAPPrerequisiteTable, 
+    CostComponentTable, 
+    LocalFinancialAttributionTable, 
+    LocalPhysicalTargetTable, 
+    LocalInfrastructureRequirementTable, 
+    LocalLocationTable, 
+    ForeignFinancialTargetTable, 
+    ForeignPhysicalTargetTable 
+} from "./project_proposals";
 
 export interface Database {
     entities: EntitiesTable
@@ -32,5 +45,19 @@ export interface Database {
     // bp form 205
     retirees_list: RetireesListTable;
     retirees: RetireeRecordTable;
-
+    // bp form 202 / 203 (Project Proposals)
+    cost_sources: CostSourceTable;
+    cost_by_expense_class: CostByExpenseClassTable;
+    project_proposals: ProjectProposalTable;
+    pap_prerequisites: PAPPrerequisiteTable;
+    cost_by_components: CostComponentTable;
+    // bp form 202 local
+    local_financial_attributions: LocalFinancialAttributionTable;
+    local_physical_targets: LocalPhysicalTargetTable;
+    local_infrastructure_requirements: LocalInfrastructureRequirementTable;
+    local_locations: LocalLocationTable;
+    // bp form 203 foreign
+    foreign_financial_targets: ForeignFinancialTargetTable;
+    foreign_physical_targets: ForeignPhysicalTargetTable;
+    
 }

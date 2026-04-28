@@ -5,6 +5,7 @@ import * as PostgreKeyRepository from '@/src/db/postgres/repositories/keyReposit
 import * as PostgreFormRepository from '@/src/db/postgres/repositories/formRepository'
 import * as PostgreStaffingRepository from '@/src/db/postgres/repositories/staffingRepository'
 import * as PostgreRetireeRepository from '@/src/db/postgres/repositories/retireeRepository'
+import * as PostgreProposalRepository from '@/src/db/postgres/repositories/proposalRepository'
 
 export function createAuditRepository(dbType: string) {
     switch (dbType) {
@@ -64,6 +65,15 @@ export function createRetireeRepository(dbType: string) {
     switch (dbType) {
         case 'postgres':
             return PostgreRetireeRepository
+        default:
+            throw new Error(`Unsupported database type: ${dbType}`)
+    }
+}
+
+export function createProposalRepository(dbType: string) {
+    switch (dbType) {
+        case 'postgres':
+            return PostgreProposalRepository
         default:
             throw new Error(`Unsupported database type: ${dbType}`)
     }

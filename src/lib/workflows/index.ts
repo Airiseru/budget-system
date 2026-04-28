@@ -1,5 +1,6 @@
 import { RETIREE_WORKFLOW } from "./retiree-flow"
 import { STAFFING_WORKFLOW } from "./staffing-flow"
+import { PROPOSAL_WORKFLOW } from "./proposal-flow"
 
 export type WorkflowTransition = {
     required_roles: string[]
@@ -53,7 +54,8 @@ export function isTerminalStatus(authStatus: string, workflow: Workflow): boolea
 
 export const WORKFLOWS: Record<string, Workflow> = {
     bp_staffing: STAFFING_WORKFLOW,
-    bp_retiree: RETIREE_WORKFLOW
+    bp_retiree: RETIREE_WORKFLOW,
+    bp_proposal: PROPOSAL_WORKFLOW
 }
 
 export function getWorkflow(formType: string): Workflow {
