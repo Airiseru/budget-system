@@ -30,13 +30,15 @@ export async function creaetNewSalarySchedule(
     })
 }
 
-export async function getLatestSalarySchedule(): Promise<AllSalaryRates> {
+export async function getLatestSalarySchedule(): Promise<AllSalaryRates | null> {
     const schedule = await db
         .selectFrom('salary_schedules')
         .selectAll()
         .orderBy('effective_date', 'desc')
         .limit(1)
-        .executeTakeFirstOrThrow()
+        .executeTakeFirst()
+    
+    if (!schedule) return null
 
     const rates = await db
         .selectFrom('salary_rates')

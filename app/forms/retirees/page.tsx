@@ -1,4 +1,4 @@
-import { createRetireeRepository } from '@/src/db/factory'
+import { createRetireeRepository, createFormRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ModeToggle } from "@/components/ui/system-toggle"
@@ -6,20 +6,13 @@ import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
-import { STATUS_LABELS } from '@/src/lib/constants'
+import { STATUS_LABELS, STATUS_BADGE_COLORS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 
 // Using the retiree repository instead of staffing
 const RetireeRepo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
-
-const statusColors: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-    draft: 'outline',
-    pending_personnel: 'secondary',
-    pending_budget: 'secondary',
-    pending_agency_head: 'secondary',
-    approved: 'default',
-}
+const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function RetireesPage() {
     const session = await sessionWithEntity()
@@ -35,7 +28,21 @@ export default async function RetireesPage() {
             session.user.entity_id ?? ''
         ) 
 
-        if (data.length === 0) {
+        const listsWithDisplayStatus = await Promise.all(
+            data.map(async (list: any) => {
+                const versionFamily = await FormRepo.getFormVersionFamily(list.id)
+                const displayStatus = versionFamily.forms.some((form) => form.auth_status === 'approved')
+                    ? 'approved'
+                    : list.auth_status
+
+                return {
+                    ...list,
+                    displayStatus
+                }
+            })
+        )
+
+        if (listsWithDisplayStatus.length === 0) {
             return (
                 <div className='m-4'>
                     <ButtonGroup className='my-4'>
@@ -82,7 +89,7 @@ export default async function RetireesPage() {
                 </div>
 
                 <div className="grid gap-4">
-                    {data.map((list: any) => (
+                    {listsWithDisplayStatus.map((list: any) => (
                         <Link href={`/forms/retirees/${list.id}`} key={list.id}>
                             <div className="border rounded-lg p-5 hover:bg-accent transition-all shadow-sm group">
                                 <div className="flex justify-between items-center">
@@ -96,14 +103,14 @@ export default async function RetireesPage() {
                                             </p>
                                         </div>
                                         <Badge 
-                                            variant={statusColors[list.auth_status ?? 'draft'] ?? 'outline'}
+                                            variant={STATUS_BADGE_COLORS[list.displayStatus ?? 'draft'] ?? 'outline'}
                                             className={
-                                                list.auth_status === 'approved' 
+                                                list.displayStatus === 'approved' 
                                                 ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-transparent' 
                                                 : ''
                                             }
                                         >
-                                            {STATUS_LABELS[list.auth_status ?? 'draft'] ?? list.auth_status}
+                                            {STATUS_LABELS[list.displayStatus ?? 'draft'] ?? list.displayStatus}
                                         </Badge>
                                     </div>
 

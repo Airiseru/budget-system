@@ -4,7 +4,9 @@ import { PROPOSAL_WORKFLOW } from "./proposal-flow"
 
 export type WorkflowTransition = {
     required_roles: string[]
-    next_status: string | null   // null for terminal states like 'approved'
+    on_submit: string | null   // null for terminal states like 'approved'
+    on_approve: string | null
+    on_reject: string | null
     allowed_access_levels: string[]
     signatory_role: string | null  // null for draft which needs no signature
 }
@@ -30,8 +32,10 @@ export function canSign(
     return true
 }
 
-export function getNextStatus(currentStatus: string, workflow: Workflow): string | null {
-    return workflow.transitions[currentStatus]?.next_status ?? null
+export function getNextStatus(currentStatus: string, workflow: Workflow, action: 'submit' | 'approve' | 'reject'): string | null {
+    if (action === 'submit') return workflow.transitions[currentStatus]?.on_submit ?? null
+    else if (action === 'reject') return workflow.transitions[currentStatus]?.on_reject ?? null
+    else return workflow.transitions[currentStatus]?.on_approve ?? null
 }
 
 export function getCurrentSignatoryRole(
@@ -42,14 +46,24 @@ export function getCurrentSignatoryRole(
 }
 
 export function getNextSignatoryRole(
-    authStatus: string,
-    workflow: Workflow
+    currentStatus: string,
+    workflow: Workflow,
+    action: 'submit' | 'approve' | 'reject'
 ): string | null {
-    return workflow.transitions[authStatus]?.signatory_role ?? null
+    // Find next state
+    const nextStatus = getNextStatus(currentStatus, workflow, action);
+    
+    // No next signatory if no next state
+    if (!nextStatus) return null;
+    
+    // Return the signatory required for that future state
+    return workflow.transitions[nextStatus]?.signatory_role ?? null;
 }
 
-export function isTerminalStatus(authStatus: string, workflow: Workflow): boolean {
-    return workflow.transitions[authStatus]?.next_status === null
+export function isTerminalStatus(authStatus: string, workflow: Workflow, action: 'submit' | 'approve' | 'reject'): boolean {
+    if (action === 'submit') return workflow.transitions[authStatus]?.on_submit === null
+    else if (action === 'reject') return workflow.transitions[authStatus]?.on_reject === null
+    else return workflow.transitions[authStatus]?.on_approve === null
 }
 
 export const WORKFLOWS: Record<string, Workflow> = {

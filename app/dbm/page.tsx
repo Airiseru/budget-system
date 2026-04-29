@@ -24,6 +24,10 @@ export default async function HomePage() {
                     url='/dbm/salary'
                     label='Salary Schedules and Compensations'
                 />
+                <GeneralButton
+                    url='/dbm/forms'
+                    label='View All Forms'
+                />
                 <HomeButton url="/home"></HomeButton>
             </div>
         </main>

@@ -99,7 +99,7 @@ export function SignButton({
                 table_name: tableName,
                 record_id: formId,
                 payload: payload,
-                changed_at: date.toISOString(),
+                changed_at: date,
             });
 
             const output = await signData(signaturePayload, privateKey, true);

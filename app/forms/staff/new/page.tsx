@@ -18,13 +18,34 @@ export default async function NewStaffingPage() {
         redirect('/forms/staff?error=unauthorized');
     }
 
+    let components = []
+
     const PapRepository = createPapRepository('postgres');
     const paps = await PapRepository.getAllPaps();
 
     const SalaryRepository = createSalaryRepository('postgres')
     const schedule = await SalaryRepository.getLatestSalarySchedule()
-    const compensationRules = await SalaryRepository.getLatestCompensationRules()
-    const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
+
+    if (!schedule) components.push(<p key="no-schedule">There is no salary schedule for this year.</p>)
+    
+    else {
+        const compensationRules = await SalaryRepository.getLatestCompensationRules()
+        const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
+
+        components.push(
+            <div key="staff-form">
+                <StaffForm
+                    schedule={schedule}
+                    compensationRules={compensationRules}
+                    highestSG={highestSG}
+                    availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
+                    userId={session.user.id}
+                    entityId={session.user.entity_id} 
+                    entityName={session.user_entity.entity_name || "Unknown Agency"} 
+                />
+            </div>
+        )
+    }
 
     return (
         <main className="m-4">
@@ -34,15 +55,7 @@ export default async function NewStaffingPage() {
                     <BackButton url="/forms/staff" label="Back to List"></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
-            <StaffForm
-                schedule={schedule}
-                compensationRules={compensationRules}
-                highestSG={highestSG}
-                availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
-                userId={session.user.id}
-                entityId={session.user.entity_id} 
-                entityName={session.user_entity.entity_name || "Unknown Agency"} 
-            />
+            {components}
         </main>
     );
 }

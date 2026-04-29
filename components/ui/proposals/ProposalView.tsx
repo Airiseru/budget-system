@@ -704,8 +704,8 @@ export default function ProposalView({
                 </div>
             )}
 
-            {/* SIGNATURE SECTION */}
-            <div className="pt-12 border-t">
+            {/* SIGNATURE SECTION TO BE FIXED */}
+            {/* <div className="pt-12 border-t">
                 <SignSection
                     formId={data.id ?? ""}
                     tableName="project_proposals"
@@ -727,7 +727,7 @@ export default function ProposalView({
                     signatories={allSignatures}
                     workflow={PROPOSAL_WORKFLOW}
                 />
-            </div>
+            </div> */}
         </div>
     );
 }

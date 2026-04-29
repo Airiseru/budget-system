@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { StaffingSummaryWithPositions } from "@/src/types/staffing";
 import { AllSalaryRates, CompensationRule } from "@/src/types/salaries";
@@ -16,11 +16,13 @@ interface StaffingSummaryProps {
     schedule: AllSalaryRates;
     compensationRules: CompensationRule[];
     highestSG: number;
+    fiscalYear?: number;
     staff?: StaffingSummaryWithPositions;
     availablePaps: { id: string; title: string; tier: number }[];
     userId: string;
     entityId: string;
     entityName: string;
+    isDBM?: boolean;
 }
 
 type CompensationFormInput = {
@@ -55,11 +57,13 @@ export default function StaffForm({
     schedule,
     compensationRules,
     highestSG,
+    fiscalYear,
     staff,
     availablePaps,
     userId,
     entityId,
     entityName,
+    isDBM = false,
 }: StaffingSummaryProps) {
     const router = useRouter();
     const isEditing = !!staff;
@@ -134,7 +138,7 @@ export default function StaffForm({
         fiscal_year: number;
         positions: PositionFormInput[];
     }>({
-        fiscal_year: staff?.fiscal_year ?? 2026,
+        fiscal_year: fiscalYear ?? new Date().getFullYear() + 1,
         positions: staff?.positions.map((p) => {
             const magnaComp = p.compensations?.find((c) =>
                 c.name.toLowerCase().includes("magna carta"),
@@ -161,7 +165,7 @@ export default function StaffForm({
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [submitAction, setSubmitAction] = useState<
-        "draft" | "pending_personnel"
+        "draft" | "pending_personnel" | "pending_dbm"
     >("draft");
 
     // ---- styling ----
@@ -320,6 +324,7 @@ export default function StaffForm({
             summary: { fiscal_year: result.data.fiscal_year },
             positions: result.data.positions,
             auth_status: submitAction,
+            isDBM,
         };
 
         const endpoint = isEditing ? `/api/staff/${staff.id}` : "/api/staff";
@@ -735,7 +740,7 @@ export default function StaffForm({
     };
 
     return (
-        <div className="max-w-5xl mx-auto mt-8 px-4 pb-20">
+        <div key="staffing-form" className="max-w-5xl mx-auto mt-8 px-4 pb-20">
             <div className="mb-6 p-4 bg-muted/50 border-l-4 border-border rounded-r-lg">
                 <span className="text-sm font-bold text-muted-foreground uppercase">
                     Agency
@@ -816,7 +821,9 @@ export default function StaffForm({
                     <div className="flex gap-3">
                         <button
                             type="submit"
-                            onClick={() => setSubmitAction("draft")}
+                            onClick={() =>
+                                setSubmitAction(isDBM ? "pending_dbm" : "draft")
+                            }
                             className="px-6 py-2 border bg-white text-secondary-foreground rounded-md hover:text-white hover:bg-secondary-foreground transition-all font-medium text-sm"
                             disabled={isLoading}
                         >
@@ -824,7 +831,11 @@ export default function StaffForm({
                         </button>
                         <button
                             type="submit"
-                            onClick={() => setSubmitAction("pending_personnel")}
+                            onClick={() =>
+                                setSubmitAction(
+                                    isDBM ? "pending_dbm" : "pending_personnel",
+                                )
+                            }
                             className="px-6 py-2 bg-accent-foreground text-white rounded-md hover:bg-accent-foreground/50 hover:text-black transition-all font-medium text-sm"
                             disabled={isLoading}
                         >

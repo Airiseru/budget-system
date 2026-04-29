@@ -2,7 +2,6 @@ import { Generated, ColumnType, Selectable, Insertable, Updateable } from 'kysel
 
 export interface RetireesListTable {
     id: Generated<string>
-    fiscal_year: number
     is_mandatory: boolean
     submission_date: Generated<Date>
     created_at: Generated<Date>

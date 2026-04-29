@@ -38,7 +38,7 @@ export default async function SalaryPage() {
                 <div className="flex items-center justify-between">
                     <BackButton/>
                     <div className="text-center">
-                        <h1 className="text-3xl font-bold tracking-tight">Salary & Compensation</h1>
+                        <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">Salary & Compensation</h1>
                         <p className="text-muted-foreground text-sm mt-1">
                             Manage salary schedules and compensation rules
                         </p>

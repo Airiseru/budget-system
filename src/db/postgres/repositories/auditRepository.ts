@@ -40,6 +40,7 @@ export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: 
         signature: log.signature ?? null,
         hash: ''
     }
+
     const requiresSignature = REQUIRES_SIGNATURE.includes(log.event_type as AuditEventType)
 
     if (requiresSignature) {
@@ -249,6 +250,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                 // Compare signed snapshot to current reconstructed state
                 if (reconstructedState) {
                     // Clean payload to remove id and foreign keys
+                    console.log('payload', payload)
                     const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
                     console.log('cleaned payload is ok')
                     console.log(`reconstructed state: ${JSON.stringify(reconstructedState)}`)
@@ -260,6 +262,8 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                     if (!historyMatch) {
                         snapshotsMatchHistory = false
                     }
+                } else {
+                    snapshotsMatchHistory = false
                 }
                 
                 // Reset the reconstructed state since it was signed
@@ -282,13 +286,15 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
 
         // Clean the reconstructed state to remove ids and foreign keys
-        const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
+        const cleanedReconstructedState = reconstructedState
+            ? cleanDataBasedOnTable(tableName, reconstructedState)
+            : null
         
         console.log('current state', currentState)
         console.log('reconstructed state', cleanedReconstructedState)
         
         // Compare the reconstructed state to the current state
-        isDataMatch = isEqual(cleanedReconstructedState, currentState) && approvalHashesValid && snapshotsMatchHistory
+        isDataMatch = !!cleanedReconstructedState && isEqual(cleanedReconstructedState, currentState) && approvalHashesValid && snapshotsMatchHistory
     }
 
     return {
@@ -353,21 +359,67 @@ export async function getPayloadOfFormSignEvent(
     const result = await db.
         selectFrom('audit_logs')
         .where('entity_id', '=', entityId)
-        .where('user_id', '=', userId)
-        .where('event_type', '=', 'SIGN')
         .where('table_name', '=', tableName)
         .where('record_id', '=', formId)
-        .select(['payload'])
+        .where(({ eb, or }) => or([
+            eb('event_type', '=', 'SIGN'),
+            eb('event_type', '=', 'REJECT_FORM')
+        ]))
+        .select(['payload', 'event_type', 'user_id'])
+        .orderBy('changed_at', 'asc')
         .execute()
 
     console.log(`RESULT IN PAYLOAD OF SIGN EVENT: ${JSON.stringify(result)}`)
 
-    if (result.length === 0) return "Form not signed by user"
+    let currentSignPayload: FormSignaturePayload | null = null
+    let currentCycleSignCount = 0
 
-    if (result.length > 1) return "Multiple signatures of user found for form"
+    for (const log of result) {
+        const payload = log.payload as FormSignaturePayload | null
 
-    if (!result[0].payload) return "Form has not been officially signed by respective officer"
-    
+        if (log.event_type === 'REJECT_FORM') {
+            currentSignPayload = null
+            currentCycleSignCount = 0
+            continue
+        }
 
-    return result[0].payload
+        if (log.event_type === 'SIGN' && log.user_id === userId) {
+            currentSignPayload = payload
+            currentCycleSignCount += 1
+        }
+    }
+
+    if (!currentSignPayload) return "Form not signed by user"
+
+    if (currentCycleSignCount > 1) return "Multiple signatures of user found for form"
+
+    return currentSignPayload
+}
+
+export async function getLatestFormRejection(tableName: string, recordId: string) {
+    const result = await db
+        .selectFrom('audit_logs')
+        .leftJoin('users', 'users.id', 'audit_logs.user_id')
+        .select([
+            'audit_logs.payload',
+            'audit_logs.changed_at',
+            'users.name as user_name',
+        ])
+        .where('audit_logs.table_name', '=', tableName)
+        .where('audit_logs.record_id', '=', recordId)
+        .where('audit_logs.event_type', '=', 'REJECT_FORM')
+        .orderBy('audit_logs.changed_at', 'desc')
+        .limit(1)
+        .executeTakeFirst()
+
+    if (!result) return null
+
+    const payload = result.payload as FormSignaturePayload | null
+
+    return {
+        remarks: payload?.remarks?.trim() || null,
+        changed_at: result.changed_at,
+        user_name: result.user_name ?? null,
+        to_status: payload?.to_status ?? null,
+    }
 }

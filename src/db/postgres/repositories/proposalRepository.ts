@@ -120,6 +120,9 @@ export async function createProjectProposal(
     proposalData: any,
     payload: any,
     authStatus: string,
+    fiscal_year: number,
+    parent_form_id?: string,
+    version?: number,
 ) {
     return await db.transaction().execute(async (trx) => {
         // 1. Insert into Master Forms table
@@ -137,6 +140,9 @@ export async function createProjectProposal(
                           : "BP Form 203 (Expanded)",
                 codename: `BP Form ${proposalData.type}`,
                 auth_status: authStatus,
+                fiscal_year: fiscal_year,
+                parent_form_id: parent_form_id ?? null,
+                version: version ?? 1,
             })
             .returning("id")
             .executeTakeFirstOrThrow();

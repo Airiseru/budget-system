@@ -44,12 +44,13 @@ interface Props {
   userId: string
   entityId: string;
   entityName: string;
+  isDBM?: boolean;
 }
 
-const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, entityName }: Props) => {
+const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, entityName, isDBM = false }: Props) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
-  const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel'>('draft');
+  const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel' | 'pending_dbm'>('draft');
   const [error, setError] = useState<string | null>(null);
 
   const isEditing = !!retireeData
@@ -92,7 +93,7 @@ const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, en
     }];
   });
 
-  const [fiscalYear, setFiscalYear] = useState(2026);
+  const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear() + 1);
 
   const handleInputChange = (id: string, field: string, value: any) => {
     setRetirees((prev: any) => prev.map((r: any) => {
@@ -136,7 +137,8 @@ const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, en
         is_mandatory: true,
       },
       retirees: validation.data.retirees,
-      auth_status: submitAction
+      auth_status: submitAction,
+      isDBM
     };
 
     const endpoint = isEditing ? `/api/retirees/${retireeData.id}` : '/api/retirees';
@@ -220,22 +222,22 @@ const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, en
           <div className="flex gap-3">
             <button
               type="submit"
-              onClick={() => setSubmitAction('draft')}
+              onClick={() => setSubmitAction(isDBM ? 'pending_dbm' : 'draft')}
               disabled={isLoading}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-accent-foreground text-primary px-4 py-2 disabled:opacity-50 hover:bg-accent-foreground/80 transition-all border rounded-md "
             >
               <Save size={16} />
-              {isLoading && submitAction === 'draft' ? 'Saving...' : 'Save Draft'}
+              {isLoading && (submitAction === 'draft' || submitAction === 'pending_dbm') ? 'Saving...' : (isDBM ? 'Overwrite Form' : 'Save Draft')}
             </button>
             
             <button
               type="submit"
-              onClick={() => setSubmitAction('pending_personnel')}
+              onClick={() => setSubmitAction(isDBM ? 'pending_dbm' : 'pending_personnel')}
               disabled={isLoading}
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-secondary-foreground text-primary disabled:opacity-50 hover:bg-secondary-foreground/80 transition-all"
             >
               <Send size={16} />
-              {isLoading && submitAction === 'pending_personnel' ? 'Submitting...' : 'Finalize & Submit'}
+              {isLoading && (submitAction === 'pending_personnel' || submitAction === 'pending_dbm') ? 'Submitting...' : (isDBM ? 'Finalize Overwrite' : 'Finalize & Submit')}
             </button>
 
             <button
@@ -409,7 +411,7 @@ const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, en
 
         {/* Footer Info */}
         <div className="flex justify-between items-start text-xs text-muted-500 px-2">
-          <p>* Ensure "Effectivity Date" falls within FY 2026 for TLP eligibility.</p>
+          <p>* Ensure "Effectivity Date" falls within FY {fiscalYear} for TLP eligibility.</p>
           <div className="text-right">
               <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary)*( Number(r.number_vacation_leave) + Number(r.number_sick_leave))*TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>

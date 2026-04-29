@@ -42,6 +42,7 @@ export type AuditEventType =
     | "UPDATE_PAP"
     | "SUBMIT_FORM"
     | "SIGN"
+    | "OVERWRITE_FORM"
     | "APPROVE_FORM"
     | "REJECT_FORM"
     | "SIGNUP"
@@ -92,6 +93,7 @@ export type FormSignaturePayload = {
     from_status: string
     to_status: string
     form_state_hash: string
+    remarks?: string
 }
 
 export type SignedLogInput = {

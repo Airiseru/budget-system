@@ -25,6 +25,7 @@ export async function POST(req: Request) {
 
         const result = await repo.createRetireeSubmission(
             entityId,
+            listData.fiscal_year,
             listData,
             retirees,
             auth_status
@@ -35,6 +36,8 @@ export async function POST(req: Request) {
         if (!newRetirees) {
             return NextResponse.json({ error: "Create failed" }, { status: 500 });
         }
+
+        console.log(`New retirees form created: ${JSON.stringify(newRetirees)}`)
 
         // Log form creation
         const logResult = await logNewForm(

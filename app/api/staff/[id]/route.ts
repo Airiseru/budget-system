@@ -1,6 +1,6 @@
 import { createStaffingRepository, createFormRepository } from '@/src/db/factory'
 import { NextResponse } from 'next/server'
-import { logSaveFormEdits, logSubmitForm } from '@/src/actions/audit'
+import { logNewForm, logSaveFormEdits, logSubmitForm, logFormOverwrite } from '@/src/actions/audit'
 export const dynamic = 'force-dynamic';
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -27,8 +27,16 @@ export async function PUT(
 ) {
     const { id } = await params
     const body = await request.json()
+    const isDbm = body.isDbm ?? body.isDBM ?? false
+
+    const staffingBody = {
+        summary: body.summary,
+        positions: body.positions,
+        auth_status: body.auth_status
+    }
 
     console.log(`PUT BODY: ${JSON.stringify(body)}`)
+    console.log(`isDbm: ${isDbm}`)
 
     // Check current status in DB before updating
     const existing = await StaffingRepository.getStaffingWithFormById(id)
@@ -37,45 +45,88 @@ export async function PUT(
         return NextResponse.json({ error: "Not found" }, { status: 404 })
     }
 
-    if (existing.auth_status !== 'draft') {
+    const familyHasApprovedVersion = await FormRepository.hasApprovedFormInFamily(id)
+
+    if (familyHasApprovedVersion) {
+        return NextResponse.json(
+            { error: "This form version family is locked because a DBM-approved version already exists." },
+            { status: 403 }
+        )
+    }
+
+    const canEditDraft = existing.auth_status === 'draft'
+    const canEditPendingDbm = isDbm && existing.auth_status === 'pending_dbm'
+
+    if (!canEditDraft && !canEditPendingDbm) {
         return NextResponse.json(
             { error: "Only drafts can be modified." }, 
             { status: 403 } // 403 Forbidden
         )
     }
 
-    await StaffingRepository.updateStaffingSubmission(id, body)
+    const shouldCreateDbmCopy =
+        isDbm &&
+        existing.auth_status === 'pending_dbm' &&
+        !existing.parent_form_id
 
-    const updated = await StaffingRepository.getStaffingWithFormById(id)
+    const overwriteResult = shouldCreateDbmCopy
+        ? await StaffingRepository.createDbmStaffingOverwrite(id, staffingBody)
+        : null
+
+    const targetFormId = overwriteResult?.formId ?? id
+
+    if (!shouldCreateDbmCopy) {
+        await StaffingRepository.updateStaffingSubmission(id, staffingBody)
+    }
+
+    const updated = await StaffingRepository.getStaffingWithFormById(targetFormId)
 
     if (!updated) {
         return NextResponse.json({ error: "Update failed" }, { status: 500 })
     }
 
+    if (overwriteResult?.created) {
+        const logCreateResult = await logNewForm(
+            body.userId,
+            existing.entity_id,
+            'staffing_summaries',
+            targetFormId,
+            {
+                ...staffingBody.summary,
+                positions: staffingBody.positions
+            },
+            updated.created_at
+        )
+
+        if (!logCreateResult.success) {
+            return NextResponse.json({ error: "Failed to log overwritten form creation" }, { status: 500 })
+        }
+    }
+
     // Log form edit
     const logResult = await logSaveFormEdits(
-        body.userId,
-        body.entityId,
-        'staffing_summaries',
-        id,
-        existing,
-        updated,
-        updated.updated_at
-    )
+            body.userId,
+            existing.entity_id,
+            'staffing_summaries',
+            targetFormId,
+            existing,
+            updated,
+            updated.updated_at
+        )
 
     if (!logResult.success) {
         return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
     }
 
-    if (body.auth_status !== 'draft') {
-        const result = await FormRepository.updateFormAuthStatus(id, body.auth_status)
+    if (body.auth_status === 'pending_personnel') {
+        const result = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
 
         // Log form update
         const submitResult = await logSubmitForm(
             body.userId,
-            body.entityId,
+            existing.entity_id,
             'staffing_summaries',
-            id,
+            targetFormId,
             updated,
             result.updated_at
         )
@@ -84,8 +135,26 @@ export async function PUT(
             return NextResponse.json({ error: "Failed to log form submission" }, { status: 500 })
         }
     }
+    else if (body.auth_status === 'pending_dbm') {
+        const result = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
 
-    return NextResponse.json({ success: true })
+        // Log form overwrite
+        const overwriteLogResult = await logFormOverwrite(
+            body.userId,
+            existing.entity_id,
+            'staffing_summaries',
+            targetFormId,
+            existing,
+            updated,
+            result.updated_at
+        )
+
+        if (!overwriteLogResult.success) {
+            return NextResponse.json({ error: "Failed to log form overwrite" }, { status: 500 })
+        }
+    }
+
+    return NextResponse.json({ success: true, summaryId: targetFormId })
 }
 
 export async function DELETE(

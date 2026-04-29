@@ -14,9 +14,27 @@ export default async function NewRetireeFormPage() {
         redirect('/forms/retirees?error=unauthorized');
     }
 
+    let components = []
+
     const SalaryRepository = createSalaryRepository('postgres')
     const schedule = await SalaryRepository.getLatestSalarySchedule()
-    const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
+
+    if (!schedule) components.push(<p key="no-schedule">There is no salary schedule for this year.</p>)
+
+    else {
+        const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
+        components.push(
+            <div key="retiree-form">
+                <BP205EntryGrid
+                    schedule={schedule}
+                    highestSG={highestSG}
+                    userId={session.user.id}
+                    entityId={session.user.entity_id}
+                    entityName={session.user_entity.entity_name || "Unknown Agency"} 
+                />
+            </div>
+        )
+    }
 
     return (
         <main className="m-4">
@@ -26,14 +44,7 @@ export default async function NewRetireeFormPage() {
                     <BackButton url="/forms/retirees" label="Back to List"></BackButton>
                 </ButtonGroup>
             </ButtonGroup>
-            {/* Pass the entityId here */}
-            <BP205EntryGrid
-                schedule={schedule}
-                highestSG={highestSG}
-                userId={session.user.id}
-                entityId={session.user.entity_id}
-                entityName={session.user_entity.entity_name || "Unknown Agency"} 
-            />
+            {components}
         </main>
     );
 }

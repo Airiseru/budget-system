@@ -30,7 +30,7 @@ export function buildSignaturePayload(log: {
     table_name: string | null
     record_id: string | null
     payload: Record<string, unknown> | string | null
-    changed_at: string
+    changed_at: Date
 }): string {
     return canonicalStringify({
         entity_id: log.entity_id,

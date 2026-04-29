@@ -7,15 +7,36 @@ import { Pencil } from "lucide-react";
 import FormDeleteButton from "../FormDeleteButton";
 import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import BackButton from "../BackButton";
-import { STATUS_LABELS } from "@/src/lib/constants";
+import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
 
 interface RetireeViewProps {
     data: any;
     session: any;
+    backUrl: string;
+    isDbmEvaluator?: boolean;
+    originalFormId: string;
+    versionTabs: {
+        id: string;
+        version: number;
+        parent_form_id: string | null;
+        auth_status: string | null;
+        updated_at: Date;
+    }[];
     userCanSign: boolean;
     currentSignatoryRole: string | null;
     existingSignature: any;
     allSignatures: any[];
+    pastSignatures: {
+        id: string;
+        user_name: string;
+        role: string;
+        created_at: Date;
+    }[];
+    latestRejection: {
+        remarks: string | null;
+        changed_at: Date;
+        user_name: string | null;
+    } | null;
     updateAuthStatus: () => Promise<void>;
     deleteFormAction: (id: string) => Promise<void>;
 }
@@ -23,10 +44,16 @@ interface RetireeViewProps {
 export default function RetireeView({
     data,
     session,
+    backUrl,
+    isDbmEvaluator = false,
+    originalFormId,
+    versionTabs,
     userCanSign,
     currentSignatoryRole,
     existingSignature,
     allSignatures,
+    pastSignatures,
+    latestRejection,
     updateAuthStatus,
     deleteFormAction,
 }: RetireeViewProps) {
@@ -35,19 +62,34 @@ export default function RetireeView({
         fiscal_year: data.fiscal_year,
         form_id: data.id,
     };
+    const familyHasApprovedVersion = versionTabs.some(
+        (version) => version.auth_status === "approved",
+    );
+    const canEditCurrentVersion =
+        !familyHasApprovedVersion &&
+        ((data.auth_status === "draft" &&
+            session.user.access_level === "encode") ||
+            (data.auth_status === "pending_dbm" && isDbmEvaluator));
+    const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign;
+    const signSectionStatusMessage =
+        familyHasApprovedVersion && data.auth_status !== "approved"
+            ? "DBM has already approved a different version of this form. This version is locked and can no longer be signed."
+            : undefined;
 
     return (
         <main className="p-6 max-w-7xl mx-auto space-y-6">
             <div className="flex justify-between items-center mb-6">
-                <BackButton url="/forms/retirees" label="Back to List" />
-                {data.auth_status === "draft" && (
+                <BackButton url={backUrl} label="Back" />
+                {canEditCurrentVersion && (
                     <div className="flex flex-row gap-2">
                         <Link
                             href={`/forms/retirees/${formData.id}/edit`}
                             className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
                         >
                             <Pencil size={14} />
-                            Edit Form
+                            {session.user.role !== "dbm"
+                                ? "Edit Form"
+                                : "Overwrite Form"}
                         </Link>
                         <div className="flex justify-end gap-2">
                             <form action={updateAuthStatus}>
@@ -55,7 +97,9 @@ export default function RetireeView({
                                     type="submit"
                                     className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
                                 >
-                                    Submit Form
+                                    {session.user.role !== "dbm"
+                                        ? "Submit Form"
+                                        : "Finalize Overwrite"}
                                 </button>
                             </form>
                         </div>
@@ -67,12 +111,65 @@ export default function RetireeView({
                     <h1 className="text-3xl font-bold tracking-tight">
                         FY {data.fiscal_year} Retiree List Details
                     </h1>
-                    <Badge className="mt-2 py-1.5 px-4 rounded-full">
+                    <Badge
+                        variant={
+                            STATUS_BADGE_COLORS[data.auth_status ?? "draft"] ??
+                            "default"
+                        }
+                        className="mt-2 py-1.5 px-4 rounded-full"
+                    >
                         {STATUS_LABELS[data.auth_status ?? ""] ??
                             data.auth_status}
                     </Badge>
                 </div>
             </div>
+
+            {versionTabs.length > 1 && (
+                <section className="space-y-3">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        {versionTabs.map((versionTab) => {
+                            const isActive = versionTab.id === data.id;
+                            const isOriginal = versionTab.id === originalFormId;
+
+                            return (
+                                <Link
+                                    key={versionTab.id}
+                                    href={`/forms/retirees/${versionTab.id}`}
+                                    className={`min-w-[168px] rounded-xl border px-4 py-3 text-left transition-colors ${
+                                        isActive
+                                            ? "border-accent-foreground bg-accent-foreground/10 text-accent-foreground"
+                                            : "border-border bg-card hover:border-accent-foreground/40 hover:bg-accent/40"
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-sm font-bold">
+                                            {isOriginal
+                                                ? `Original (v${versionTab.version})`
+                                                : `DBM (v${versionTab.version})`}
+                                        </span>
+                                        <span className="text-xs font-medium text-muted-foreground">
+                                            {STATUS_LABELS[
+                                                versionTab.auth_status ??
+                                                    "draft"
+                                            ] ?? versionTab.auth_status}
+                                        </span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Updated{" "}
+                                        {new Intl.DateTimeFormat("en-PH", {
+                                            month: "short",
+                                            day: "numeric",
+                                            year: "numeric",
+                                        }).format(
+                                            new Date(versionTab.updated_at),
+                                        )}
+                                    </p>
+                                </Link>
+                            );
+                        })}
+                    </div>
+                </section>
+            )}
 
             {/* Metadata Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -294,7 +391,8 @@ export default function RetireeView({
                 userId={session.user.id}
                 entityId={data.entity_id}
                 authStatus={data.auth_status ?? ""}
-                userCanSign={userCanSign && !existingSignature}
+                statusMessage={signSectionStatusMessage}
+                userCanSign={canSignCurrentVersion && !existingSignature}
                 signatoryRole={
                     existingSignature
                         ? existingSignature.role
@@ -302,9 +400,11 @@ export default function RetireeView({
                 }
                 alreadySigned={!!existingSignature}
                 signatories={allSignatures}
+                pastSignatories={pastSignatures}
+                latestRejection={latestRejection}
                 workflow={RETIREE_WORKFLOW}
             />
-            {data.auth_status === "draft" && (
+            {data.auth_status === "draft" && !familyHasApprovedVersion && (
                 <div className="pt-6 border-t mt-12 flex justify-between items-center">
                     <div>
                         <h3 className="text-sm font-bold text-gray-900">
