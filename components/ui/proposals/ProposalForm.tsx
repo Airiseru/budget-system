@@ -4,6 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalSchema } from "@/src/schemas/proposal.schema";
 
+interface AttributionYearTier {
+    year: number;
+    tier: number;
+    costs: ExpenseRow[]; // Contains PS, MOOE, CO, FINEX for this specific Year+Tier
+}
+
+interface LocalFinancialAttribution {
+    description: string;
+    attribution_costs: AttributionYearTier[];
+}
+
 const DEFAULT_PREREQUISITES = [
     // Approving Authorities
     {
@@ -96,7 +107,7 @@ type FinancialTableKey =
     | "foreign_financial_targets";
 
 interface ExpenseRow {
-    expense_class: "PS" | "MOOE" | "CO" | "FE";
+    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
     amount: number | string;
     currency: string;
     year?: number;
@@ -124,13 +135,7 @@ interface ProjectProposalPayload {
     cost_by_components: { component_name: string; costs: ExpenseRow[] }[];
     local_locations: { location: string; costs: ExpenseRow[] }[];
 
-    local_financial_attributions: {
-        description: string;
-        year: number;
-        tier?: number;
-        total_amt: number | string;
-        costs: ExpenseRow[];
-    }[];
+    local_financial_attributions: LocalFinancialAttribution[];
     local_physical_targets: { year: number; target_description: string }[];
     local_infrastructure_requirements: {
         description: string;
@@ -235,7 +240,7 @@ const ExpenseSubForm = ({
 }) => {
     // Helper to find or update a specific expense class within the array
     const handleValueChange = (
-        targetClass: "PS" | "MOOE" | "CO" | "FE",
+        targetClass: "PS" | "MOOE" | "CO" | "FINEX",
         value: string,
     ) => {
         const existingIdx = costs.findIndex(
@@ -278,7 +283,7 @@ const ExpenseSubForm = ({
 
             {/* Values Row */}
             <div className="grid grid-cols-4 gap-4">
-                {(["PS", "MOOE", "CO", "FE"] as const).map((itemClass) => (
+                {(["PS", "MOOE", "CO", "FINEX"] as const).map((itemClass) => (
                     <div key={itemClass} className="relative">
                         <input
                             type="number"
@@ -492,7 +497,7 @@ export default function ProposalForm({
     const handleMatrixChange = (
         field: FinancialTableKey,
         parentIdx: number,
-        targetClass: "PS" | "MOOE" | "CO" | "FE",
+        targetClass: "PS" | "MOOE" | "CO" | "FINEX",
         value: string,
     ) => {
         const parentArray = payload[field] as any[];
@@ -536,80 +541,80 @@ export default function ProposalForm({
         return componentTotal;
     };
 
-    const getAmount = (
-        costs: ExpenseRow[],
-        year: number,
-        tier: number,
-        expenseClass: string,
-    ) => {
-        return (
-            costs.find(
-                (c: any) =>
-                    c.expense_class === expenseClass &&
-                    c.year === year &&
-                    (tier === null || c.tier === tier),
-            )?.amount ?? ""
-        );
-    };
+    // const getAmount = (
+    //     costs: ExpenseRow[],
+    //     year: number,
+    //     tier: number,
+    //     expenseClass: string,
+    // ) => {
+    //     return (
+    //         costs.find(
+    //             (c: any) =>
+    //                 c.expense_class === expenseClass &&
+    //                 c.year === year &&
+    //                 (tier === null || c.tier === tier),
+    //         )?.amount ?? ""
+    //     );
+    // };
 
-    const calculateRowTotal = (
-        costs: ExpenseRow[],
-        year: number,
-        expenseClass: string,
-    ) => {
-        return costs
-            .filter(
-                (c: any) => c.year === year && c.expense_class === expenseClass,
-            )
-            .reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    };
+    // const calculateRowTotal = (
+    //     costs: ExpenseRow[],
+    //     year: number,
+    //     expenseClass: string,
+    // ) => {
+    //     return costs
+    //         .filter(
+    //             (c: any) => c.year === year && c.expense_class === expenseClass,
+    //         )
+    //         .reduce((sum, c) => sum + Number(c.amount || 0), 0);
+    // };
 
-    const handleMatrixUpdate = (
-        parentIdx: number,
-        year: number,
-        tier: number | null,
-        expenseClass: string,
-        value: string,
-    ) => {
-        setPayload((prev) => {
-            const updatedAttributions = [...prev.local_financial_attributions];
-            const currentCosts = [
-                ...(updatedAttributions[parentIdx].costs || []),
-            ];
+    // const handleMatrixUpdate = (
+    //     parentIdx: number,
+    //     year: number,
+    //     tier: number | null,
+    //     expenseClass: string,
+    //     value: string,
+    // ) => {
+    //     setPayload((prev) => {
+    //         const updatedAttributions = [...prev.local_financial_attributions];
+    //         const currentCosts = [
+    //             ...(updatedAttributions[parentIdx].costs || []),
+    //         ];
 
-            const existingIdx = currentCosts.findIndex(
-                (c: any) =>
-                    c.year === year &&
-                    c.tier === tier &&
-                    c.expense_class === expenseClass,
-            );
+    //         const existingIdx = currentCosts.findIndex(
+    //             (c: any) =>
+    //                 c.year === year &&
+    //                 c.tier === tier &&
+    //                 c.expense_class === expenseClass,
+    //         );
 
-            if (existingIdx > -1) {
-                currentCosts[existingIdx] = {
-                    ...currentCosts[existingIdx],
-                    amount: value,
-                };
-            } else {
-                currentCosts.push({
-                    expense_class: expenseClass as any,
-                    amount: value,
-                    currency: "PHP",
-                    year,
-                    tier,
-                } as any);
-            }
+    //         if (existingIdx > -1) {
+    //             currentCosts[existingIdx] = {
+    //                 ...currentCosts[existingIdx],
+    //                 amount: value,
+    //             };
+    //         } else {
+    //             currentCosts.push({
+    //                 expense_class: expenseClass as any,
+    //                 amount: value,
+    //                 currency: "PHP",
+    //                 year,
+    //                 tier,
+    //             } as any);
+    //         }
 
-            updatedAttributions[parentIdx] = {
-                ...updatedAttributions[parentIdx],
-                costs: currentCosts,
-            };
+    //         updatedAttributions[parentIdx] = {
+    //             ...updatedAttributions[parentIdx],
+    //             costs: currentCosts,
+    //         };
 
-            return {
-                ...prev,
-                local_financial_attributions: updatedAttributions,
-            };
-        });
-    };
+    //         return {
+    //             ...prev,
+    //             local_financial_attributions: updatedAttributions,
+    //         };
+    //     });
+    // };
 
     return (
         <form
@@ -746,9 +751,11 @@ export default function ProposalForm({
                             </p>
                         )}
                     </div>
+                </div>
+                <div className="flex flex-col gap-4">
                     <div>
                         <label className="text-[10px] font-black uppercase text-muted-400">
-                            Priority
+                            Priority Rank
                         </label>
                         <input
                             type="number"
@@ -770,8 +777,6 @@ export default function ProposalForm({
                             {entityName}
                         </h2>
                     </div>
-                </div>
-                <div>
                     <div className="space-y-4">
                         <h3 className="text-xs font-black text-muted-400 uppercase tracking-widest mb-4">
                             Project Classification
@@ -1053,7 +1058,7 @@ export default function ProposalForm({
                                                     "PS",
                                                     "MOOE",
                                                     "CO",
-                                                    "FE",
+                                                    "FINEX",
                                                 ] as const
                                             ).map((itemClass) => (
                                                 <td
@@ -1170,7 +1175,7 @@ export default function ProposalForm({
                                                     "PS",
                                                     "MOOE",
                                                     "CO",
-                                                    "FE",
+                                                    "FINEX",
                                                 ] as const
                                             ).map((itemClass) => (
                                                 <td
@@ -1213,97 +1218,118 @@ export default function ProposalForm({
                         </div>
                     </div>
                     <div>
-                        <div
-                            className={`rounded-xl border shadow-sm overflow-hidden ${
-                                errors.local_financial_attributions
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
+                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden mb-6">
                             <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
                                 <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
-                                    LOCAL FINANCIAL ATTRIBUTION(S)
+                                    PAP Attribution by Expense Class
                                 </h3>
                                 <button
                                     type="button"
                                     onClick={() =>
                                         addRow("local_financial_attributions", {
                                             description: "",
-                                            year: payload.proposal_year,
-                                            tier: 1,
-                                            total_amt: 0,
-                                            costs: [],
+                                            attribution_costs: [
+                                                {
+                                                    year: 2027,
+                                                    tier: 1,
+                                                    costs: [],
+                                                },
+                                                {
+                                                    year: 2027,
+                                                    tier: 2,
+                                                    costs: [],
+                                                },
+                                                {
+                                                    year: 2028,
+                                                    tier: 1,
+                                                    costs: [],
+                                                },
+                                                {
+                                                    year: 2029,
+                                                    tier: 1,
+                                                    costs: [],
+                                                },
+                                            ],
                                         })
                                     }
                                     className="text-secondary-foreground-600 text-xs font-bold hover:underline"
                                 >
-                                    + ADD ATTRIBUTION
+                                    + ADD PAP DESCRIPTION
                                 </button>
                             </div>
 
-                            <div className="p-0">
+                            <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-muted-50 border-b">
+                                        <tr className="bg-white border-b">
                                             <th
                                                 rowSpan={2}
-                                                className="py-4 px-4 text-[10px] font-bold text-muted-700 uppercase border-r text-center w-1/3"
+                                                className="py-4 px-4 text-[10px] font-bold text-slate-700 uppercase border-r w-1/4 text-center"
                                             >
                                                 PAP (A)
                                             </th>
                                             <th
                                                 colSpan={3}
-                                                className="py-2 text-[10px] font-bold text-muted-700 uppercase border-b border-r text-center"
+                                                className="py-2 text-[10px] font-bold text-slate-700 uppercase border-b border-r text-center"
                                             >
                                                 FY {payload.proposal_year} (B)
                                             </th>
                                             <th
                                                 rowSpan={2}
-                                                className="py-4 px-4 text-[10px] font-bold text-muted-700 uppercase border-r text-center"
+                                                className="py-4 px-2 text-[10px] font-bold text-slate-700 uppercase border-r text-center"
                                             >
                                                 FY {payload.proposal_year + 1}{" "}
                                                 Tier 1 (C)
                                             </th>
                                             <th
                                                 rowSpan={2}
-                                                className="py-4 px-4 text-[10px] font-bold text-muted-700 uppercase text-center"
+                                                className="py-4 px-2 text-[10px] font-bold text-slate-700 uppercase text-center"
                                             >
                                                 FY {payload.proposal_year + 2}{" "}
                                                 Tier 1 (D)
                                             </th>
                                         </tr>
-                                        <tr className="bg-muted-50 border-b">
-                                            <th className="py-2 text-[9px] font-bold text-muted-500 uppercase text-center border-r w-24">
+                                        <tr className="bg-white border-b">
+                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
                                                 Tier 1
                                             </th>
-                                            <th className="py-2 text-[9px] font-bold text-muted-500 uppercase text-center border-r w-24">
+                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
                                                 Tier 2
                                             </th>
-                                            <th className="py-2 text-[9px] font-bold text-muted-500 uppercase text-center border-r w-24">
+                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24 bg-slate-50/50">
                                                 Total
                                             </th>
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-chart-5/10">
-                                        {payload.local_financial_attributions.map(
-                                            (attrib, i) => (
-                                                <>
-                                                    {/* PAP Description Header Row */}
-                                                    <tr
-                                                        key={`pap-${i}`}
-                                                        className="bg-muted-50/30 border-t-indigo-500 z-5"
-                                                    >
-                                                        <td className="py-2 px-4 font-bold text-sm text-muted-800 text-left">
+
+                                    {payload.local_financial_attributions.map(
+                                        (attr, attrIdx) => {
+                                            // Column configuration for total calculations
+                                            const cols = [
+                                                { year: 2027, tier: 1 },
+                                                { year: 2027, tier: 2 },
+                                                { isTotal: true, year: 2027 }, // Visual Total Column
+                                                { year: 2028, tier: 1 },
+                                                { year: 2029, tier: 1 },
+                                            ];
+
+                                            return (
+                                                <tbody
+                                                    key={attrIdx}
+                                                    className="border-b-2 border-chart-5/50"
+                                                >
+                                                    <tr className="border-chart-5/20 font-bold border-b divide-x">
+                                                        <td className="py-3 px-4">
                                                             <input
-                                                                className="flex-1 border-b text-sm"
-                                                                placeholder="PAP"
+                                                                className="w-full font-bold text-xs text-slate-800 outline-none bg-transparent placeholder:font-normal"
+                                                                placeholder="Enter PAP Description..."
                                                                 value={
-                                                                    attrib.description
+                                                                    attr.description
                                                                 }
                                                                 onChange={(e) =>
                                                                     updateRow(
                                                                         "local_financial_attributions",
-                                                                        i,
+                                                                        attrIdx,
                                                                         {
                                                                             description:
                                                                                 e
@@ -1314,153 +1340,325 @@ export default function ProposalForm({
                                                                 }
                                                             />
                                                         </td>
+                                                        {cols.map(
+                                                            (col, colIdx) => {
+                                                                // Calculate total for this specific column (Year/Tier) across all expense classes
+                                                                const colTotal =
+                                                                    (
+                                                                        [
+                                                                            "PS",
+                                                                            "MOOE",
+                                                                            "CO",
+                                                                            "FINEX",
+                                                                        ] as const
+                                                                    ).reduce(
+                                                                        (
+                                                                            sum,
+                                                                            ec,
+                                                                        ) => {
+                                                                            if (
+                                                                                col.isTotal
+                                                                            ) {
+                                                                                const t1 =
+                                                                                    Number(
+                                                                                        attr.attribution_costs
+                                                                                            .find(
+                                                                                                (
+                                                                                                    c,
+                                                                                                ) =>
+                                                                                                    c.year ===
+                                                                                                        col.year &&
+                                                                                                    c.tier ===
+                                                                                                        1,
+                                                                                            )
+                                                                                            ?.costs.find(
+                                                                                                (
+                                                                                                    e,
+                                                                                                ) =>
+                                                                                                    e.expense_class ===
+                                                                                                    ec,
+                                                                                            )
+                                                                                            ?.amount ||
+                                                                                            0,
+                                                                                    );
+                                                                                const t2 =
+                                                                                    Number(
+                                                                                        attr.attribution_costs
+                                                                                            .find(
+                                                                                                (
+                                                                                                    c,
+                                                                                                ) =>
+                                                                                                    c.year ===
+                                                                                                        col.year &&
+                                                                                                    c.tier ===
+                                                                                                        2,
+                                                                                            )
+                                                                                            ?.costs.find(
+                                                                                                (
+                                                                                                    e,
+                                                                                                ) =>
+                                                                                                    e.expense_class ===
+                                                                                                    ec,
+                                                                                            )
+                                                                                            ?.amount ||
+                                                                                            0,
+                                                                                    );
+                                                                                return (
+                                                                                    sum +
+                                                                                    (t1 +
+                                                                                        t2)
+                                                                                );
+                                                                            }
+                                                                            return (
+                                                                                sum +
+                                                                                Number(
+                                                                                    attr.attribution_costs
+                                                                                        .find(
+                                                                                            (
+                                                                                                c,
+                                                                                            ) =>
+                                                                                                c.year ===
+                                                                                                    col.year &&
+                                                                                                c.tier ===
+                                                                                                    col.tier,
+                                                                                        )
+                                                                                        ?.costs.find(
+                                                                                            (
+                                                                                                e,
+                                                                                            ) =>
+                                                                                                e.expense_class ===
+                                                                                                ec,
+                                                                                        )
+                                                                                        ?.amount ||
+                                                                                        0,
+                                                                                )
+                                                                            );
+                                                                        },
+                                                                        0,
+                                                                    );
+
+                                                                return (
+                                                                    <td
+                                                                        key={
+                                                                            colIdx
+                                                                        }
+                                                                        className={`px-2 text-right text-xs ${col.isTotal ? "bg-slate-100/50" : ""}`}
+                                                                    >
+                                                                        {colTotal >
+                                                                        0
+                                                                            ? colTotal.toLocaleString()
+                                                                            : "-"}
+                                                                    </td>
+                                                                );
+                                                            },
+                                                        )}
                                                     </tr>
 
-                                                    {/* Expense Class Sub-Rows */}
+                                                    {/* 2. THE EXPENSE CLASS ROWS (Detailed Entry) */}
                                                     {(
                                                         [
                                                             "PS",
                                                             "MOOE",
                                                             "CO",
-                                                            "FE",
+                                                            "FINEX",
                                                         ] as const
-                                                    ).map((itemClass) => (
+                                                    ).map((expClass) => (
                                                         <tr
-                                                            key={`${i}-${itemClass}`}
-                                                            className="hover:bg-muted-50/50"
+                                                            key={expClass}
+                                                            className="hover:bg-slate-50/30 divide-x"
                                                         >
-                                                            <td className="py-2 px-8 text-xs text-muted-600 italic">
-                                                                {itemClass}
+                                                            <td className="py-2 px-8 text-[10px] text-slate-500 font-medium">
+                                                                {expClass}
                                                             </td>
-                                                            {/* FY Current Tier 1 */}
-                                                            <td className="border-l border-chart-1 p-0">
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full text-right p-2 text-xs outline-none bg-transparent"
-                                                                    value={getAmount(
-                                                                        attrib.costs,
-                                                                        payload.proposal_year,
-                                                                        1,
-                                                                        itemClass,
-                                                                    )}
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixUpdate(
-                                                                            i,
-                                                                            payload.proposal_year,
-                                                                            1,
-                                                                            itemClass,
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
+                                                            {cols.map(
+                                                                (
+                                                                    col,
+                                                                    colIdx,
+                                                                ) => {
+                                                                    if (
+                                                                        col.isTotal
+                                                                    ) {
+                                                                        const t1 =
+                                                                            Number(
+                                                                                attr.attribution_costs
+                                                                                    .find(
+                                                                                        (
+                                                                                            c,
+                                                                                        ) =>
+                                                                                            c.year ===
+                                                                                                col.year &&
+                                                                                            c.tier ===
+                                                                                                1,
+                                                                                    )
+                                                                                    ?.costs.find(
+                                                                                        (
+                                                                                            e,
+                                                                                        ) =>
+                                                                                            e.expense_class ===
+                                                                                            expClass,
+                                                                                    )
+                                                                                    ?.amount ||
+                                                                                    0,
+                                                                            );
+                                                                        const t2 =
+                                                                            Number(
+                                                                                attr.attribution_costs
+                                                                                    .find(
+                                                                                        (
+                                                                                            c,
+                                                                                        ) =>
+                                                                                            c.year ===
+                                                                                                col.year &&
+                                                                                            c.tier ===
+                                                                                                2,
+                                                                                    )
+                                                                                    ?.costs.find(
+                                                                                        (
+                                                                                            e,
+                                                                                        ) =>
+                                                                                            e.expense_class ===
+                                                                                            expClass,
+                                                                                    )
+                                                                                    ?.amount ||
+                                                                                    0,
+                                                                            );
+                                                                        return (
+                                                                            <td
+                                                                                key={
+                                                                                    colIdx
+                                                                                }
+                                                                                className="bg-slate-50/50 text-right px-2 text-[10px] font-bold text-slate-400"
+                                                                            >
+                                                                                {(
+                                                                                    t1 +
+                                                                                    t2
+                                                                                ).toLocaleString()}
+                                                                            </td>
+                                                                        );
                                                                     }
-                                                                />
-                                                            </td>
-                                                            {/* FY Current Tier 2 */}
-                                                            <td className="border-l border-chart-1 p-0">
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full text-right p-2 text-xs outline-none bg-transparent"
-                                                                    value={getAmount(
-                                                                        attrib.costs,
-                                                                        payload.proposal_year,
-                                                                        2,
-                                                                        itemClass,
-                                                                    )}
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixUpdate(
-                                                                            i,
-                                                                            payload.proposal_year,
-                                                                            2,
-                                                                            itemClass,
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </td>
-                                                            {/* Total for Current Year */}
-                                                            <td className="border-l border-chart-1 bg-muted-50/50 text-right px-2 text-xs font-bold">
-                                                                {calculateRowTotal(
-                                                                    attrib.costs,
-                                                                    payload.proposal_year,
-                                                                    itemClass,
-                                                                )}
-                                                            </td>
-                                                            {/* FY+1 Tier 1 */}
-                                                            <td className="border-l border-chart-1 p-0">
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full text-right p-2 text-xs outline-none bg-transparent"
-                                                                    value={getAmount(
-                                                                        attrib.costs,
-                                                                        payload.proposal_year +
-                                                                            1,
-                                                                        1,
-                                                                        itemClass,
-                                                                    )}
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixUpdate(
-                                                                            i,
-                                                                            payload.proposal_year +
-                                                                                1,
-                                                                            1,
-                                                                            itemClass,
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </td>
-                                                            {/* FY+2 Tier 1 */}
-                                                            <td className="border-l border-chart-1 p-0">
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full text-right p-2 text-xs outline-none bg-transparent"
-                                                                    value={getAmount(
-                                                                        attrib.costs,
-                                                                        payload.proposal_year +
-                                                                            2,
-                                                                        1,
-                                                                        itemClass,
-                                                                    )}
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixUpdate(
-                                                                            i,
-                                                                            payload.proposal_year +
-                                                                                2,
-                                                                            1,
-                                                                            itemClass,
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </td>
+
+                                                                    return (
+                                                                        <td
+                                                                            key={
+                                                                                colIdx
+                                                                            }
+                                                                            className="px-2 "
+                                                                        >
+                                                                            <input
+                                                                                type="number"
+                                                                                className="w-full text-right bg-transparent outline-none text-[11px] py-1"
+                                                                                placeholder="0"
+                                                                                value={
+                                                                                    attr.attribution_costs
+                                                                                        .find(
+                                                                                            (
+                                                                                                c,
+                                                                                            ) =>
+                                                                                                c.year ===
+                                                                                                    col.year &&
+                                                                                                c.tier ===
+                                                                                                    col.tier,
+                                                                                        )
+                                                                                        ?.costs.find(
+                                                                                            (
+                                                                                                e,
+                                                                                            ) =>
+                                                                                                e.expense_class ===
+                                                                                                expClass,
+                                                                                        )
+                                                                                        ?.amount ??
+                                                                                    ""
+                                                                                }
+                                                                                onChange={(
+                                                                                    e,
+                                                                                ) => {
+                                                                                    const newAttrCosts =
+                                                                                        [
+                                                                                            ...attr.attribution_costs,
+                                                                                        ];
+                                                                                    let yearTierEntry =
+                                                                                        newAttrCosts.find(
+                                                                                            (
+                                                                                                c,
+                                                                                            ) =>
+                                                                                                c.year ===
+                                                                                                    col.year &&
+                                                                                                c.tier ===
+                                                                                                    col.tier,
+                                                                                        );
+                                                                                    if (
+                                                                                        !yearTierEntry
+                                                                                    ) {
+                                                                                        yearTierEntry =
+                                                                                            {
+                                                                                                year: col.year!,
+                                                                                                tier: col.tier!,
+                                                                                                costs: [],
+                                                                                            };
+                                                                                        newAttrCosts.push(
+                                                                                            yearTierEntry,
+                                                                                        );
+                                                                                    }
+                                                                                    const currentCosts =
+                                                                                        [
+                                                                                            ...yearTierEntry.costs,
+                                                                                        ];
+                                                                                    const costIdx =
+                                                                                        currentCosts.findIndex(
+                                                                                            (
+                                                                                                c,
+                                                                                            ) =>
+                                                                                                c.expense_class ===
+                                                                                                expClass,
+                                                                                        );
+                                                                                    if (
+                                                                                        costIdx >
+                                                                                        -1
+                                                                                    )
+                                                                                        currentCosts[
+                                                                                            costIdx
+                                                                                        ].amount =
+                                                                                            e.target.value;
+                                                                                    else
+                                                                                        currentCosts.push(
+                                                                                            {
+                                                                                                expense_class:
+                                                                                                    expClass,
+                                                                                                amount: e
+                                                                                                    .target
+                                                                                                    .value,
+                                                                                                currency:
+                                                                                                    "PHP",
+                                                                                            },
+                                                                                        );
+                                                                                    yearTierEntry.costs =
+                                                                                        currentCosts;
+                                                                                    updateRow(
+                                                                                        "local_financial_attributions",
+                                                                                        attrIdx,
+                                                                                        {
+                                                                                            attribution_costs:
+                                                                                                newAttrCosts,
+                                                                                        } as any,
+                                                                                    );
+                                                                                }}
+                                                                            />
+                                                                        </td>
+                                                                    );
+                                                                },
+                                                            )}
                                                         </tr>
                                                     ))}
-                                                </>
-                                            ),
-                                        )}
-                                    </tbody>
+                                                </tbody>
+                                            );
+                                        },
+                                    )}
                                 </table>
-
                                 {payload.local_financial_attributions.length ===
                                     0 && (
                                     <div className="p-8 text-center text-muted-400 text-xs italic">
-                                        No attributions added. Click "+ ADD
-                                        ATTRIBUTION" to begin.
+                                        No Local Financial Attributions added.
+                                        Click "+ ADD ATTRIBUTION" to begin.
                                     </div>
                                 )}
                             </div>
@@ -1484,7 +1682,7 @@ export default function ProposalForm({
                                         "local_infrastructure_requirements",
                                         {
                                             description: "",
-                                            year: 2026,
+                                            year: payload.proposal_year,
                                             total_amt: 0,
                                             costs: [],
                                         },
@@ -1543,7 +1741,7 @@ export default function ProposalForm({
                                                         "PS",
                                                         "MOOE",
                                                         "CO",
-                                                        "FE",
+                                                        "FINEX",
                                                     ] as const
                                                 ).map((itemClass) => (
                                                     <td
@@ -1598,7 +1796,7 @@ export default function ProposalForm({
                                 type="button"
                                 onClick={() =>
                                     addRow("local_physical_targets", {
-                                        year: 2026,
+                                        year: payload.proposal_year,
                                         target_description: "",
                                     })
                                 }
@@ -1681,7 +1879,7 @@ export default function ProposalForm({
                             type="button"
                             onClick={() =>
                                 addRow("foreign_financial_targets", {
-                                    year: 2026,
+                                    year: payload.proposal_year,
                                     total_amt: 0,
                                     costs: [],
                                 } as any)

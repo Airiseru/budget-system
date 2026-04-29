@@ -74,6 +74,8 @@ export default async function RetireeDetailsPage({
         await ProposalRepo.deleteProjectProposal(formId);
         redirect("/forms/proposals");
     };
+    console.log("PROPOSAL VIEW");
+    console.log(data);
 
     return (
         <ProposalView

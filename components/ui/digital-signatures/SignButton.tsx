@@ -1,91 +1,109 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { getPrivateKey } from '@/src/lib/device-key-store'
-import { signData } from '@/src/lib/crypto'
-import { sha256, buildSignaturePayload } from '@/src/lib/audit-hash'
-import { verifyAndSubmitSignature, getUserKeys, verifySigningPin } from '@/src/actions/keys'
-import { FormSignaturePayload } from '@/src/types/audit'
-import { canonicalStringify } from '@/src/lib/canonical'
-import { cleanDataBasedOnTable } from '@/src/lib/validations'
-import { Button } from '@/components/ui/button'
-import { PenLine, ShieldCheck, Eye, EyeOff } from 'lucide-react'
+import { useState } from "react";
+import { getPrivateKey } from "@/src/lib/device-key-store";
+import { signData } from "@/src/lib/crypto";
+import { sha256, buildSignaturePayload } from "@/src/lib/audit-hash";
+import {
+    verifyAndSubmitSignature,
+    getUserKeys,
+    verifySigningPin,
+} from "@/src/actions/keys";
+import { FormSignaturePayload } from "@/src/types/audit";
+import { canonicalStringify } from "@/src/lib/canonical";
+import { cleanDataBasedOnTable } from "@/src/lib/validations";
+import { Button } from "@/components/ui/button";
+import { PenLine, ShieldCheck, Eye, EyeOff } from "lucide-react";
 
 type Props = {
-    formId: string
-    tableName: string
-    formData: object
-    userId: string
-    entityId: string
-    signatoryRole: string
-    fromAuthStatus?: string
-    toAuthStatus?: string
-    onApproved?: () => void
-}
+    formId: string;
+    tableName: string;
+    formData: object;
+    userId: string;
+    entityId: string;
+    signatoryRole: string;
+    fromAuthStatus?: string;
+    toAuthStatus?: string;
+    onApproved?: () => void;
+};
 
-type Step = 'idle' | 'pin' | 'signing' | 'signed'
+type Step = "idle" | "pin" | "signing" | "signed";
 
-export function SignButton({ formId, tableName, formData, userId, entityId, signatoryRole, fromAuthStatus, toAuthStatus, onApproved }: Props) {
-    const [step, setStep] = useState<Step>('idle')
-    const [pin, setPin] = useState('')
-    const [showPin, setShowPin] = useState(false)
-    const [error, setError] = useState<string | null>(null)
+export function SignButton({
+    formId,
+    tableName,
+    formData,
+    userId,
+    entityId,
+    signatoryRole,
+    fromAuthStatus,
+    toAuthStatus,
+    onApproved,
+}: Props) {
+    const [step, setStep] = useState<Step>("idle");
+    const [pin, setPin] = useState("");
+    const [showPin, setShowPin] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
     async function handleApprove() {
-        setError(null)
+        setError(null);
 
         if (pin.length !== 6) {
-            setError('Please enter your 6-digit PIN.')
-            return
+            setError("Please enter your 6-digit PIN.");
+            return;
         }
 
-        setStep('signing')
+        setStep("signing");
 
         try {
-            const privateKey = await getPrivateKey(userId)
+            const privateKey = await getPrivateKey(userId);
             if (!privateKey) {
-                setError('No digital signature key found. Please register this device first.')
-                setStep('pin')
-                return
+                setError(
+                    "No digital signature key found. Please register this device first.",
+                );
+                setStep("pin");
+                return;
             }
 
             // Verify if PIN is correct
-            if (!await verifySigningPin(pin)) {
-                setError('Incorrect PIN')
-                setStep('pin')
-                return
+            if (!(await verifySigningPin(pin))) {
+                setError("Incorrect PIN");
+                setStep("pin");
+                return;
             }
 
-            const keys = await getUserKeys()
-            const activeKey = keys.find(k => k.status === 'active')
+            const keys = await getUserKeys();
+            const activeKey = keys.find((k) => k.status === "active");
             if (!activeKey) {
-                setError('No active digital signature key. Please register or renew your device key.')
-                setStep('pin')
-                return
+                setError(
+                    "No active digital signature key. Please register or renew your device key.",
+                );
+                setStep("pin");
+                return;
             }
 
-            const date = new Date()
+            const date = new Date();
 
-            const cleanFormData = cleanDataBasedOnTable(tableName, formData)
+            const cleanFormData = cleanDataBasedOnTable(tableName, formData);
 
             const payload: FormSignaturePayload = {
                 from_status: fromAuthStatus ?? signatoryRole,
-                to_status: toAuthStatus ?? 'approved',
+                to_status: toAuthStatus ?? "approved",
                 form_state_hash: sha256(canonicalStringify(cleanFormData)),
-            }
+            };
 
             const signaturePayload = buildSignaturePayload({
                 entity_id: entityId,
                 user_id: userId,
-                event_type: 'SIGN',
+                event_type: "SIGN",
                 table_name: tableName,
                 record_id: formId,
                 payload: payload,
                 changed_at: date.toISOString(),
-            })
+            });
 
-            const output = await signData(signaturePayload, privateKey, true)
-            const signature = output.signature
+            const output = await signData(signaturePayload, privateKey, true);
+            const signature = output.signature;
 
             await verifyAndSubmitSignature(
                 pin,
@@ -97,35 +115,38 @@ export function SignButton({ formId, tableName, formData, userId, entityId, sign
                 date,
                 signatoryRole,
                 signature,
-                signaturePayload as string
-            )
+                signaturePayload as string,
+            );
 
-            setStep('signed')
-            setPin('')
-            onApproved?.()
+            setStep("signed");
+            setPin("");
+            onApproved?.();
         } catch (err: any) {
-            setError(err.message ?? 'Failed to approved. Please try again.')
-            setStep('pin')
-            setPin('')
+            setError(err.message ?? "Failed to approved. Please try again.");
+            setStep("pin");
+            setPin("");
         }
     }
 
-    if (step === 'signed') {
+    if (step === "signed") {
         return (
             <div className="flex items-center gap-2 text-emerald-600">
                 <ShieldCheck className="h-4 w-4" />
                 <span className="text-sm font-medium">Signed</span>
             </div>
-        )
+        );
     }
 
-    if (step === 'idle') {
+    if (step === "idle") {
         return (
-            <Button onClick={() => setStep('pin')} className="gap-2 bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80">
+            <Button
+                onClick={() => setStep("pin")}
+                className="gap-2 bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80"
+            >
                 <PenLine className="h-4 w-4" />
                 Sign Document
             </Button>
-        )
+        );
     }
 
     return (
@@ -141,40 +162,50 @@ export function SignButton({ formId, tableName, formData, userId, entityId, sign
 
             <div className="relative">
                 <input
-                    type={showPin ? 'text' : 'password'}
+                    type={showPin ? "text" : "password"}
                     value={pin}
-                    onChange={e => setPin(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    onChange={(e) =>
+                        setPin(e.target.value.replace(/\D/g, "").slice(0, 6))
+                    }
                     placeholder="6-digit PIN"
                     className="border px-3 py-2 w-full rounded bg-background font-mono pr-10 tracking-widest"
                     maxLength={6}
                     autoFocus
-                    onKeyDown={e => e.key === 'Enter' && handleApprove()}
+                    onKeyDown={(e) => e.key === "Enter" && handleApprove()}
                 />
                 <button
                     type="button"
-                    onClick={() => setShowPin(p => !p)}
+                    onClick={() => setShowPin((p) => !p)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                    {showPin ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPin ? (
+                        <EyeOff className="h-4 w-4" />
+                    ) : (
+                        <Eye className="h-4 w-4" />
+                    )}
                 </button>
             </div>
 
             <div className="flex gap-2">
                 <Button
                     onClick={handleApprove}
-                    disabled={pin.length !== 6 || step === 'signing'}
+                    disabled={pin.length !== 6 || step === "signing"}
                     className="flex-1 bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80"
                 >
-                    {step === 'signing' ? 'Signing...' : 'Confirm Signature'}
+                    {step === "signing" ? "Signing..." : "Confirm Signature"}
                 </Button>
                 <Button
                     variant="outline"
-                    onClick={() => { setStep('idle'); setPin(''); setError(null) }}
-                    disabled={step === 'signing'}
+                    onClick={() => {
+                        setStep("idle");
+                        setPin("");
+                        setError(null);
+                    }}
+                    disabled={step === "signing"}
                 >
                     Cancel
                 </Button>
             </div>
         </div>
-    )
+    );
 }

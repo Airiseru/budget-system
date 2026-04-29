@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { SignSection } from "@/components/ui/digital-signatures/SignSection";
 import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
@@ -85,6 +86,74 @@ export default function ProposalView({
     updateAuthStatus,
     deleteFormAction,
 }: ProposalViewProps) {
+    const getAttributionRows = (attributions: any[]) => {
+        const rows: any[] = [];
+
+        attributions?.forEach((attr) => {
+            // We need a row for every unique expense class found in this attribution
+            const uniqueClasses = new Set<string>();
+            attr.costs?.forEach((c: any) =>
+                c.expense_classes?.forEach((ec: any) =>
+                    uniqueClasses.add(ec.expense_class),
+                ),
+            );
+
+            Array.from(uniqueClasses)
+                .sort()
+                .forEach((cls) => {
+                    rows.push({
+                        description: attr.description,
+                        expenseClass: cls,
+                        // Helper to find specific cell value
+                        getValue: (year: number, tier: number | null) => {
+                            const yearData = attr.costs?.find(
+                                (c: any) =>
+                                    c.year === year &&
+                                    (tier === null || c.tier === tier),
+                            );
+                            const classData = yearData?.expense_classes?.find(
+                                (ec: any) => ec.expense_class === cls,
+                            );
+                            return Number(classData?.amount || 0);
+                        },
+                    });
+                });
+        });
+
+        return rows;
+    };
+
+    const getGroupedData = (attributions: any[]) => {
+        return attributions?.map((attr) => {
+            // Get unique expense classes for this specific PAP
+            const classes = new Set<string>();
+            attr.costs?.forEach((c: any) =>
+                c.expense_classes?.forEach((ec: any) =>
+                    classes.add(ec.expense_class),
+                ),
+            );
+
+            return {
+                description: attr.description,
+                expenseClasses: Array.from(classes).sort(),
+                // Helper to pull specific values from the nested JSON
+                getValue: (cls: string, year: number, tier: number | null) => {
+                    const yearData = attr.costs?.find(
+                        (c: any) =>
+                            c.year === year &&
+                            (tier === null || c.tier === tier),
+                    );
+                    const classData = yearData?.expense_classes?.find(
+                        (ec: any) => ec.expense_class === cls,
+                    );
+                    return Number(classData?.amount || 0);
+                },
+            };
+        });
+    };
+
+    const groupedPaps = getGroupedData(data.local_financial_attributions);
+
     return (
         <div className="m-6 max-w-5xl mx-auto space-y-10 pb-20">
             {/* NAVIGATION & ACTIONS */}
@@ -303,6 +372,222 @@ export default function ProposalView({
                             Local Details
                         </h2>
                         <div className="h-px bg-muted-200 flex-grow" />
+                    </div>
+
+                    {/* PAP Attribution Section */}
+                    <div className="space-y-4 mt-8">
+                        <h3 className="text-xs font-black uppercase text-muted-400 tracking-widest">
+                            PAP Attribution by Expense Class
+                        </h3>
+                        <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b border-muted-100">
+                                        <th
+                                            rowSpan={2}
+                                            className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase text-left border-r border-muted-100"
+                                        >
+                                            PAP Description / Expense Class
+                                        </th>
+                                        <th
+                                            colSpan={3}
+                                            className="py-2 px-2 text-[10px] font-black text-muted-400 uppercase text-center border-muted-100 border-r border-muted-100"
+                                        >
+                                            FY 2027
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center border-r border-muted-100"
+                                        >
+                                            FY 2028 T1
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center"
+                                        >
+                                            FY 2029 T1
+                                        </th>
+                                    </tr>
+                                    <tr className="bg-muted-50/50 border-b border-muted-100">
+                                        <th className="py-2 px-2 text-[9px] font-bold text-muted-400 uppercase text-center border-r border-muted-50">
+                                            Tier 1
+                                        </th>
+                                        <th className="py-2 px-2 text-[9px] font-bold text-muted-400 uppercase text-center border-r border-muted-50">
+                                            Tier 2
+                                        </th>
+                                        <th className="py-2 px-2 text-[9px] font-black text-muted-500 uppercase text-center border-r border-muted-100 bg-muted-100/30">
+                                            Total
+                                        </th>
+                                    </tr>
+                                </thead>
+
+                                {data.local_financial_attributions?.map(
+                                    (attr: any, pIdx: number) => {
+                                        const order = [
+                                            "PS",
+                                            "MOOE",
+                                            "CO",
+                                            "FINEX",
+                                        ];
+
+                                        // 1. Extract and sort unique expense classes based on the preferred order
+                                        const uniqueClasses = Array.from(
+                                            new Set(
+                                                attr.costs?.flatMap((c: any) =>
+                                                    c.expense_classes?.map(
+                                                        (ec: any) =>
+                                                            ec.expense_class,
+                                                    ),
+                                                ),
+                                            ),
+                                        ).sort(
+                                            (a: any, b: any) =>
+                                                order.indexOf(a) -
+                                                order.indexOf(b),
+                                        ) as string[];
+
+                                        // 2. Helper to get values for a specific class OR the entire PAP (if cls is null)
+                                        const getVal = (
+                                            year: number,
+                                            tier: number | null,
+                                            cls: string | null = null,
+                                        ) => {
+                                            const yData = attr.costs?.find(
+                                                (c: any) =>
+                                                    c.year === year &&
+                                                    (tier === null ||
+                                                        c.tier === tier),
+                                            );
+                                            if (!yData) return 0;
+
+                                            if (cls) {
+                                                return Number(
+                                                    yData.expense_classes?.find(
+                                                        (ec: any) =>
+                                                            ec.expense_class ===
+                                                            cls,
+                                                    )?.amount || 0,
+                                                );
+                                            }
+                                            // If no class specified, sum all classes for that year/tier (The PAP Total)
+                                            return (
+                                                yData.expense_classes?.reduce(
+                                                    (sum: number, ec: any) =>
+                                                        sum +
+                                                        Number(ec.amount || 0),
+                                                    0,
+                                                ) || 0
+                                            );
+                                        };
+
+                                        return (
+                                            <tbody
+                                                key={pIdx}
+                                                className="border-b-2 border-chart-5/50"
+                                            >
+                                                {/* Header Row: PAP Description + Aggregated Totals */}
+                                                <tr className="bg-muted-50/20 font-bold divide-x border-b border-chart-5/20">
+                                                    <td className="p-4 text-muted-900 border-muted-100">
+                                                        {attr.description}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono border-muted-50">
+                                                        {getVal(
+                                                            2027,
+                                                            1,
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono border-r border-muted-100">
+                                                        {getVal(
+                                                            2027,
+                                                            2,
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono bg-muted-100/20 border-r border-muted-100">
+                                                        {(
+                                                            getVal(2027, 1) +
+                                                            getVal(2027, 2)
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono border-r border-muted-100">
+                                                        {getVal(
+                                                            2028,
+                                                            1,
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono">
+                                                        {getVal(
+                                                            2029,
+                                                            1,
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                </tr>
+
+                                                {/* Child Rows: Individual Expense Classes */}
+                                                {uniqueClasses.map((cls) => {
+                                                    const v27t1 = getVal(
+                                                        2027,
+                                                        1,
+                                                        cls,
+                                                    );
+                                                    const v27t2 = getVal(
+                                                        2027,
+                                                        2,
+                                                        cls,
+                                                    );
+                                                    const v28t1 = getVal(
+                                                        2028,
+                                                        1,
+                                                        cls,
+                                                    );
+                                                    const v29t1 = getVal(
+                                                        2029,
+                                                        1,
+                                                        cls,
+                                                    );
+
+                                                    return (
+                                                        <tr
+                                                            key={cls}
+                                                            className="hover:bg-muted-50/30 transition-colors"
+                                                        >
+                                                            <td className="p-3 pl-8 text-xs font-medium text-muted-500 border-r border-muted-100 italic">
+                                                                {cls}
+                                                            </td>
+                                                            <td className="p-3 text-right font-mono text-xs text-muted-500 border-r border-muted-50">
+                                                                {v27t1 > 0
+                                                                    ? v27t1.toLocaleString()
+                                                                    : "—"}
+                                                            </td>
+                                                            <td className="p-3 text-right font-mono text-xs text-muted-500 border-r border-muted-100">
+                                                                {v27t2 > 0
+                                                                    ? v27t2.toLocaleString()
+                                                                    : "—"}
+                                                            </td>
+                                                            <td className="p-3 text-right font-mono text-xs text-muted-600 bg-muted-50/10 border-r border-muted-100">
+                                                                {(
+                                                                    v27t1 +
+                                                                    v27t2
+                                                                ).toLocaleString()}
+                                                            </td>
+                                                            <td className="p-3 text-right font-mono text-xs text-muted-500 border-r border-muted-100">
+                                                                {v28t1 > 0
+                                                                    ? v28t1.toLocaleString()
+                                                                    : "—"}
+                                                            </td>
+                                                            <td className="p-3 text-right font-mono text-xs text-muted-500">
+                                                                {v29t1 > 0
+                                                                    ? v29t1.toLocaleString()
+                                                                    : "—"}
+                                                            </td>
+                                                        </tr>
+                                                    );
+                                                })}
+                                            </tbody>
+                                        );
+                                    },
+                                )}
+                            </table>
+                        </div>
                     </div>
 
                     {/* Locations */}

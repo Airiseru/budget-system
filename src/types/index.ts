@@ -23,6 +23,7 @@ import {
     PAPPrerequisiteTable,
     CostComponentTable,
     LocalFinancialAttributionTable,
+    AttributionCostTable,
     LocalPhysicalTargetTable,
     LocalInfrastructureRequirementTable,
     LocalLocationTable,
@@ -85,6 +86,7 @@ export interface Database {
     cost_by_components: CostComponentTable;
     // bp form 202 local
     local_financial_attributions: LocalFinancialAttributionTable;
+    attribution_costs: AttributionCostTable;
     local_physical_targets: LocalPhysicalTargetTable;
     local_infrastructure_requirements: LocalInfrastructureRequirementTable;
     local_locations: LocalLocationTable;
