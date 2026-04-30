@@ -30,6 +30,7 @@ export const config = {
         '/paps/:path*',
         '/forms/:path*',
         '/home/:path*',
+        '/dbm/:path*',
         '/admin/:path*',
     ],
 };

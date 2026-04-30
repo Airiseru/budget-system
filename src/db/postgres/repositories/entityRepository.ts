@@ -179,6 +179,7 @@ export async function getAllEntitySegments() {
             'departments.name as name',
             'departments.abbr as abbr',
             'departments.uacs_code as uacs_code',
+            'departments.status as status',
         ])
         .execute()
 
@@ -193,6 +194,7 @@ export async function getAllEntitySegments() {
             'agencies.uacs_code as uacs_code',
             'agencies.type as type',
             'agencies.department_id as department_id',
+            'agencies.status as status',
         ])
         .execute()
 
@@ -206,6 +208,7 @@ export async function getAllEntitySegments() {
             'operating_units.abbr as abbr',
             'operating_units.uacs_code as uacs_code',
             'operating_units.agency_id as agency_id',
+            'operating_units.status as status',
         ])
         .execute()
 
@@ -258,18 +261,21 @@ export async function getFullEntityById(
             return await db.selectFrom('departments')
                 .selectAll()
                 .where('id', '=', id)
+                .where('status', '=', 'active')
                 .executeTakeFirst()
         } 
         else if (type === 'agency') {
             return await db.selectFrom('agencies')
                 .selectAll()
                 .where('id', '=', id)
+                .where('status', '=', 'active')
                 .executeTakeFirst()
         } 
         else if (type === 'operating_unit') {
             return await db.selectFrom('operating_units')
                 .leftJoin('agencies', 'agencies.id', 'operating_units.agency_id')
                 .where('operating_units.id', '=', id)
+                .where('operating_units.status', '=', 'active')
                 .select([
                     'operating_units.id as id',
                     'operating_units.name as name',

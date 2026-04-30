@@ -15,6 +15,15 @@ export async function requireAdmin(
     }
 }
 
+export async function requireDbm(
+    errorMessage: string = 'Unauthorized: You must be a dbm to perform this action.'
+) {
+    const session = await sessionDetails()
+    if (!session || session?.user?.role !== 'dbm') {
+        redirect('/home')
+    }
+}
+
 export async function getPendingUsers() {
     await requireAdmin()
     const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')

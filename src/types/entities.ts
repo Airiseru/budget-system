@@ -14,9 +14,9 @@ export interface EntitiesTable {
 export type Entity = Selectable<EntitiesTable>
 export type NewEntity = Insertable<EntitiesTable>
 
-export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency' | 'archived';
-export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve';
-export const UserAccessLevels = ['none', 'view', 'encode', 'review', 'approve'];
+export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency' | 'archived'
+export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve'
+export const UserAccessLevels = ['none', 'view', 'encode', 'review', 'approve']
 export type UserWorkflowRole = 'personnel_officer' | 'budget_officer' | 'planning_officer' | 'chief_accountant' | 'office_head' | 'agency_head' | 'dbm'
 export const UserWorkflowRoles = ['personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head', 'dbm']
 
@@ -76,11 +76,14 @@ export interface VerificationTable {
     updated_at: ColumnType<Date, never, Date>
 }
 
+export type EntityStatus = 'active' | 'inactive'
+
 export interface DepartmentsTable {
     id: string
     name: string
     abbr: string
     uacs_code: string
+    status: EntityStatus
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
@@ -96,6 +99,7 @@ export interface AgenciesTable {
     abbr: string | null
     type: 'bureau' | 'attached_agency'
     uacs_code: string
+    status: EntityStatus
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
@@ -111,6 +115,8 @@ export interface OperatingUnitsTable {
     name: string
     abbr: string | null
     uacs_code: string
+    parent_ou_id: string | null
+    status: EntityStatus
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
