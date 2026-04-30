@@ -1,17 +1,19 @@
-import { sessionDetails } from '@/src/actions/auth'
-import { redirect } from 'next/navigation'
-import BackButton from '@/components/ui/BackButton'
+import { sessionDetails } from "@/src/actions/auth";
+import { redirect } from "next/navigation";
+import BackButton from "@/components/ui/BackButton";
 
 export default async function UserSettingsPage() {
-    const session = await sessionDetails()
-    if (!session) redirect('/login')
+    const session = await sessionDetails();
+    if (!session) redirect("/login");
 
     return (
         <main className="m-6 max-w-2xl md:mx-auto md:my-12 space-y-6">
             <div className="flex items-center justify-between">
                 <BackButton url="/home/settings" />
                 <div className="text-center">
-                    <h1 className="text-3xl font-bold tracking-tight">User Settings</h1>
+                    <h1 className="text-3xl font-bold tracking-tight">
+                        User Settings
+                    </h1>
                     <p className="text-muted-foreground text-sm mt-1">
                         Update your account details
                     </p>
@@ -30,15 +32,25 @@ export default async function UserSettingsPage() {
                 </div>
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Role</p>
-                    <p className="font-medium capitalize">{session.user.role}</p>
+                    <p className="font-medium capitalize">
+                        {session.user.role}
+                    </p>
                 </div>
                 <div className="space-y-1">
-                    <p className="text-sm text-muted-foreground">Access Level</p>
-                    <p className="font-medium capitalize">{session.user.access_level}</p>
+                    <p className="text-sm text-muted-foreground">Role</p>
+                    <p className="font-medium">{session.user.workflow_role}</p>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">
+                        Access Level
+                    </p>
+                    <p className="font-medium capitalize">
+                        {session.user.access_level}
+                    </p>
                 </div>
             </div>
 
             {/* placeholder for edit form — add UserSettingsForm component here later */}
         </main>
-    )
+    );
 }

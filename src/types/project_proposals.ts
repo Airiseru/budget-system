@@ -116,6 +116,8 @@ export interface FullProjectProposal extends ProjectProposal {
     locations?: LocalLocation[];
     foreign_financials?: ForeignFinancialTarget[];
     foreign_physical_targets?: ForeignPhysicalTarget[];
+    entity_id: string; // Add this
+    fiscal_year: number; // Add this
     auth_status: string | null;
 }
 

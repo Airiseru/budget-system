@@ -7,10 +7,8 @@ import { sql } from "kysely";
 import { Transaction } from "kysely";
 import { Database } from "@/src/types";
 
-/**
- * Helper to handle the "Cost Source" architecture.
- * This separates the Entity (Component/Location) from its specific Expense Classes (PS, MOOE, etc.)
- */
+// --- HELPERS (STAY RELATIVELY THE SAME) ---
+
 async function insertWithCostSource(
     trx: Transaction<Database>,
     tableName: keyof Database,
@@ -19,19 +17,13 @@ async function insertWithCostSource(
     type: string,
 ) {
     if (!items || items.length === 0) return;
-
     for (const item of items) {
-        // 1. Create a tracking ID for the cost group
         const source = await trx
             .insertInto("cost_sources")
             .values({ type })
             .returning("id")
             .executeTakeFirstOrThrow();
-
-        // 2. Separate costs array from the entity metadata (like component_name or location)
         const { costs, ...entityData } = item;
-
-        // 3. Insert the entity (e.g., the Component Row)
         await trx
             .insertInto(tableName as any)
             .values({
@@ -40,8 +32,6 @@ async function insertWithCostSource(
                 cost_source_id: source.id,
             })
             .execute();
-
-        // 4. Insert the nested expense classes (PS, MOOE, CO, FE)
         if (costs && costs.length > 0) {
             await trx
                 .insertInto("cost_by_expense_class")
@@ -64,9 +54,7 @@ async function insertAttributions(
     attributions: any[],
 ) {
     if (!attributions?.length) return;
-
     for (const attr of attributions) {
-        // 1. Insert the parent Attribution Description
         const attribution = await trx
             .insertInto("local_financial_attributions")
             .values({
@@ -76,18 +64,13 @@ async function insertAttributions(
             .returning("id")
             .executeTakeFirstOrThrow();
 
-        // 2. Loop through each Year/Tier (e.g., 2027 Tier 1, 2027 Tier 2)
         for (const entry of attr.attribution_costs) {
             if (!entry.costs || entry.costs.length === 0) continue;
-
-            // 3. Create a unique cost_source for this specific Year + Tier
             const source = await trx
                 .insertInto("cost_sources")
                 .values({ type: "local_attribution" })
                 .returning("id")
                 .executeTakeFirstOrThrow();
-
-            // 4. Link the Year/Tier to the Attribution and the Cost Source
             await trx
                 .insertInto("attribution_costs")
                 .values({
@@ -97,8 +80,6 @@ async function insertAttributions(
                     cost_source_id: source.id,
                 })
                 .execute();
-
-            // 5. Insert the actual money values (PS, MOOE, etc.)
             await trx
                 .insertInto("cost_by_expense_class")
                 .values(
@@ -107,7 +88,6 @@ async function insertAttributions(
                         expense_class: c.expense_class,
                         amount: c.amount || 0,
                         currency: c.currency || "PHP",
-                        // fund_category, fund_component, etc. if provided
                     })),
                 )
                 .execute();
@@ -115,163 +95,386 @@ async function insertAttributions(
     }
 }
 
-export async function createProjectProposal(
+// --- REFACTORED CORE LOGIC ---
+
+async function createProjectProposalRecord(
+    trx: Transaction<Database>,
     entityId: string,
+    fiscal_year: number,
     proposalData: any,
     payload: any,
     authStatus: string,
-    fiscal_year: number,
     parent_form_id?: string,
     version?: number,
 ) {
-    return await db.transaction().execute(async (trx) => {
-        // 1. Insert into Master Forms table
-        const form = await trx
-            .insertInto("forms")
-            .values({
-                entity_id: entityId,
-                type:
-                    proposalData.type === "202"
-                        ? proposalData.is_new
-                            ? "BP Form 202 (New)"
-                            : "BP Form 202 (Expanded)"
-                        : proposalData.is_new
-                          ? "BP Form 203 (New)"
-                          : "BP Form 203 (Expanded)",
-                codename: `BP Form ${proposalData.type}`,
-                auth_status: authStatus,
-                fiscal_year: fiscal_year,
-                parent_form_id: parent_form_id ?? null,
-                version: version ?? 1,
-            })
-            .returning("id")
-            .executeTakeFirstOrThrow();
+    console.log(fiscal_year);
+    // 1. Insert into Forms
+    const form = await trx
+        .insertInto("forms")
+        .values({
+            entity_id: entityId, // Potential Source of Error
+            type:
+                proposalData.type === "202"
+                    ? proposalData.is_new
+                        ? "BP Form 202 (New)"
+                        : "BP Form 202 (Expanded)"
+                    : proposalData.is_new
+                      ? "BP Form 203 (New)"
+                      : "BP Form 203 (Expanded)",
+            codename: `BP Form ${proposalData.type}`,
+            auth_status: authStatus,
+            fiscal_year: fiscal_year, // Potential Source of Error
+            parent_form_id: parent_form_id ?? null,
+            version: version ?? 1,
+        })
+        .returning(["id", "fiscal_year"])
+        .executeTakeFirstOrThrow();
 
-        // 2. Insert into Project Proposals
-        const project = await trx
-            .insertInto("project_proposals")
-            .values({
-                id: form.id,
-                title: proposalData.title,
-                proposal_year: proposalData.proposal_year,
-                priority_rank: proposalData.priority_rank,
-                is_new: proposalData.is_new ?? true,
-                is_infrastructure: proposalData.is_infrastructure ?? false,
-                for_ict: proposalData.for_ict ?? false,
-                myca_issuance: proposalData.myca_issuance,
-                total_proposal_currency:
-                    proposalData.total_proposal_currency || "PHP",
-                total_proposal_cost: proposalData.total_proposal_cost || 0,
-                type: proposalData.type,
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow();
+    const calculatedTotal = payload.cost_by_components?.reduce(
+        (acc: number, comp: any) => {
+            return (
+                acc +
+                (comp.costs?.reduce(
+                    (sum: number, c: any) => sum + Number(c.amount || 0),
+                    0,
+                ) || 0)
+            );
+        },
+        0,
+    );
 
-        // 3. Create the PAP record (Mapped to your specific schema)
-        const newPap = await trx
-            .insertInto("paps")
-            .values({
-                entity_id: entityId,
-                title: proposalData.title,
-                // These columns are NOT NULL in your schema,
-                // so ensure they exist in proposalData or use defaults:
-                org_outcome_id: proposalData.org_outcome_id || "O-1",
-                description:
-                    proposalData.description || "No description provided.",
-                purpose: proposalData.purpose || "No purpose provided.",
-                beneficiaries: proposalData.beneficiaries || "General Public",
+    // 2. Insert into Project Proposals
+    const project = await trx
+        .insertInto("project_proposals")
+        .values({
+            id: form.id,
+            title: proposalData.title,
+            proposal_year: proposalData.proposal_year,
+            priority_rank: proposalData.priority_rank,
+            is_new: proposalData.is_new ?? true,
+            is_infrastructure: proposalData.is_infrastructure ?? false,
+            for_ict: proposalData.for_ict ?? false,
+            myca_issuance: proposalData.myca_issuance,
+            total_proposal_currency:
+                proposalData.total_proposal_currency || "PHP",
+            total_proposal_cost:
+                calculatedTotal || proposalData.total_proposal_cost || 0,
+            type: proposalData.type,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-                project_type: proposalData.is_infrastructure
-                    ? "infrastructure"
-                    : "non-infrastructure",
-                project_status: "proposed",
-                auth_status: authStatus,
-                category: proposalData.type === "202" ? "local" : "foreign",
-                tier: 1, // Defaulting to Tier 1 for new proposals
-            })
-            .returning("id")
-            .executeTakeFirstOrThrow();
+    // 3. Create PAP and Junction
+    const newPap = await trx
+        .insertInto("paps")
+        .values({
+            entity_id: entityId,
+            title: proposalData.title,
+            org_outcome_id: proposalData.org_outcome_id || "O-1",
+            description: proposalData.description || "No description provided.",
+            purpose: proposalData.purpose || "No purpose provided.",
+            beneficiaries: proposalData.beneficiaries || "General Public",
+            project_type: proposalData.is_infrastructure
+                ? "infrastructure"
+                : "non-infrastructure",
+            project_status: "proposed",
+            auth_status: authStatus,
+            category: proposalData.type === "202" ? "local" : "foreign",
+            tier: 1,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
 
-        // 4. Link Form and PAP in the junction table
+    await trx
+        .insertInto("form_paps")
+        .values({ form_id: form.id, pap_id: newPap.id })
+        .execute();
+
+    // 4. Insert Prerequisites and Dynamic Cost Data
+    if (payload.pap_prerequisites?.length) {
         await trx
-            .insertInto("form_paps")
-            .values({
-                form_id: form.id,
-                pap_id: newPap.id,
-            })
+            .insertInto("pap_prerequisites")
+            .values(
+                payload.pap_prerequisites.map((p: any) => ({
+                    ...p,
+                    proposal_id: form.id,
+                })),
+            )
             .execute();
+    }
 
-        // 5. Insert PAP Prerequisites
-        if (payload.pap_prerequisites?.length) {
+    await insertWithCostSource(
+        trx,
+        "cost_by_components",
+        form.id,
+        payload.cost_by_components,
+        "component",
+    );
+
+    if (proposalData.type === "202") {
+        await insertAttributions(
+            trx,
+            form.id,
+            payload.local_financial_attributions,
+        );
+        await insertWithCostSource(
+            trx,
+            "local_infrastructure_requirements",
+            form.id,
+            payload.local_infrastructure_requirements,
+            "infra",
+        );
+        await insertWithCostSource(
+            trx,
+            "local_locations",
+            form.id,
+            payload.local_locations,
+            "location",
+        );
+        if (payload.local_physical_targets?.length) {
             await trx
-                .insertInto("pap_prerequisites")
+                .insertInto("local_physical_targets")
                 .values(
-                    payload.pap_prerequisites.map((p: any) => ({
+                    payload.local_physical_targets.map((p: any) => ({
                         ...p,
                         proposal_id: form.id,
                     })),
                 )
                 .execute();
         }
-
-        // 6. Insert Costs & Other arrays (Simplified for brevity)
+    } else {
         await insertWithCostSource(
             trx,
-            "cost_by_components",
+            "foreign_financial_targets",
             form.id,
-            payload.cost_by_components,
-            "component",
+            payload.foreign_financial_targets,
+            "for_fin",
         );
+    }
 
-        if (proposalData.type === "202") {
-            await insertAttributions(
-                trx,
-                form.id,
-                payload.local_financial_attributions,
-            );
-            await insertWithCostSource(
-                trx,
-                "local_infrastructure_requirements",
-                form.id,
-                payload.local_infrastructure_requirements,
-                "infra",
-            );
-            await insertWithCostSource(
-                trx,
-                "local_locations",
-                form.id,
-                payload.local_locations,
-                "location",
-            );
+    return {
+        formId: form.id,
+        papId: newPap.id,
+        createdAt: project.created_at,
+        fiscal_year: form.fiscal_year,
+    };
+}
 
-            if (payload.local_physical_targets?.length) {
-                await trx
-                    .insertInto("local_physical_targets")
-                    .values(
-                        payload.local_physical_targets.map((p: any) => ({
-                            ...p,
-                            proposal_id: form.id,
-                        })),
-                    )
-                    .execute();
-            }
-        } else {
-            await insertWithCostSource(
+export async function createProjectProposal(
+    entityId: string,
+    fiscal_year: number,
+    proposalData: any,
+    payload: any,
+    authStatus: string,
+    parent_form_id?: string,
+    version?: number,
+) {
+    return await db.transaction().execute(async (trx) => {
+        return await createProjectProposalRecord(
+            trx,
+            entityId,
+            fiscal_year,
+            proposalData,
+            payload,
+            authStatus,
+            parent_form_id,
+            version,
+        );
+    });
+}
+
+async function updateProjectProposalRecord(
+    trx: Transaction<Database>,
+    proposalId: string,
+    payload: any,
+    authStatus?: string,
+) {
+    const { payload: p } = payload;
+
+    // 1. Update Form
+    await trx
+        .updateTable("forms")
+        .set({
+            auth_status: authStatus ?? payload.auth_status,
+            fiscal_year: p.fiscal_year,
+            updated_at: new Date(),
+        })
+        .where("id", "=", proposalId)
+        .execute();
+
+    // 2. Wipe existing related data (Cascading Cleanup)
+    await sql`
+        DELETE FROM cost_sources 
+        WHERE id IN (
+            SELECT cost_source_id FROM cost_by_components WHERE proposal_id = ${proposalId}
+            UNION SELECT cost_source_id FROM attribution_costs 
+                WHERE attribution_id IN (SELECT id FROM local_financial_attributions WHERE proposal_id = ${proposalId})
+            UNION SELECT cost_source_id FROM local_infrastructure_requirements WHERE proposal_id = ${proposalId}
+            UNION SELECT cost_source_id FROM local_locations WHERE proposal_id = ${proposalId}
+            UNION SELECT cost_source_id FROM foreign_financial_targets WHERE proposal_id = ${proposalId}
+        )
+    `.execute(trx);
+
+    await trx
+        .deleteFrom("local_financial_attributions")
+        .where("proposal_id", "=", proposalId)
+        .execute();
+
+    const nonCostTables = [
+        "pap_prerequisites",
+        "local_physical_targets",
+        "foreign_physical_targets",
+    ] as const;
+    for (const table of nonCostTables) {
+        await trx
+            .deleteFrom(table)
+            .where("proposal_id", "=", proposalId)
+            .execute();
+    }
+
+    // 3. Update main proposal row
+    await trx
+        .updateTable("project_proposals")
+        .set({
+            proposal_year: p.proposal_year,
+            priority_rank: p.priority_rank,
+            is_new: p.is_new,
+            is_infrastructure: p.is_infrastructure,
+            for_ict: p.for_ict,
+            total_proposal_cost: p.total_proposal_cost,
+            updated_at: new Date(),
+        })
+        .where("id", "=", proposalId)
+        .execute();
+
+    // 4. Re-insert arrays (reuse the logic from create)
+    if (p.pap_prerequisites?.length) {
+        await trx
+            .insertInto("pap_prerequisites")
+            .values(
+                p.pap_prerequisites.map((i: any) => ({
+                    ...i,
+                    proposal_id: proposalId,
+                })),
+            )
+            .execute();
+    }
+
+    await insertWithCostSource(
+        trx,
+        "cost_by_components",
+        proposalId,
+        p.cost_by_components,
+        "component",
+    );
+
+    if (p.type === "202") {
+        await insertAttributions(
+            trx,
+            proposalId,
+            p.local_financial_attributions,
+        );
+        await insertWithCostSource(
+            trx,
+            "local_infrastructure_requirements",
+            proposalId,
+            p.local_infrastructure_requirements,
+            "infra",
+        );
+        await insertWithCostSource(
+            trx,
+            "local_locations",
+            proposalId,
+            p.local_locations,
+            "loc",
+        );
+        if (p.local_physical_targets?.length) {
+            await trx
+                .insertInto("local_physical_targets")
+                .values(
+                    p.local_physical_targets.map((i: any) => ({
+                        ...i,
+                        proposal_id: proposalId,
+                    })),
+                )
+                .execute();
+        }
+    } else {
+        await insertWithCostSource(
+            trx,
+            "foreign_financial_targets",
+            proposalId,
+            p.foreign_financial_targets,
+            "for_fin",
+        );
+    }
+}
+
+export async function updateProjectProposal(proposalId: string, payload: any) {
+    return await db.transaction().execute(async (trx) => {
+        await updateProjectProposalRecord(trx, proposalId, payload);
+        return { success: true };
+    });
+}
+
+export async function createDbmProposalOverwrite(
+    sourceFormId: string,
+    payload: any,
+    authStatus?: string,
+) {
+    return await db.transaction().execute(async (trx) => {
+        const sourceForm = await trx
+            .selectFrom("forms")
+            .select([
+                "id",
+                "entity_id",
+                "parent_form_id",
+                "version",
+                "auth_status",
+                "fiscal_year",
+            ])
+            .where("id", "=", sourceFormId)
+            .executeTakeFirstOrThrow();
+
+        const parentFormId = sourceForm.parent_form_id ?? sourceForm.id;
+
+        const existingOverwrite = await trx
+            .selectFrom("forms")
+            .select(["id"])
+            .where("parent_form_id", "=", parentFormId)
+            .executeTakeFirst();
+
+        if (existingOverwrite) {
+            await updateProjectProposalRecord(
                 trx,
-                "foreign_financial_targets",
-                form.id,
-                payload.foreign_financial_targets,
-                "for_fin",
+                existingOverwrite.id,
+                payload,
+                authStatus,
             );
-            // ... and other foreign tables
+            return { formId: existingOverwrite.id, created: false };
         }
 
-        return {
-            formId: form.id,
-            papId: newPap.id,
-            createdAt: project.created_at,
-        };
+        const created = await createProjectProposalRecord(
+            trx,
+            sourceForm.entity_id,
+            payload.payload.fiscal_year ?? sourceForm.fiscal_year,
+            payload.payload, // assuming proposalData is nested in payload or payload itself
+            payload.payload,
+            authStatus ?? "pending_dbm",
+            parentFormId,
+            (sourceForm.version ?? 1) + 1,
+        );
+
+        return { formId: created.formId, created: true };
     });
+}
+
+export async function deleteProjectProposal(id: string) {
+    return await db
+        .deleteFrom("forms")
+        .where("id", "=", id)
+        .where("auth_status", "=", "draft") // Matching retiree security logic
+        .executeTakeFirst();
 }
 
 export async function getProjectProposalById(
@@ -332,7 +535,7 @@ export async function getProjectProposalById(
                     }),
                 );
 
-                return { ...attr, costs: costsWithDetails };
+                return { ...attr, attribution_costs: costsWithDetails };
             }),
         );
     };
@@ -402,147 +605,4 @@ export async function getAllProposalSummaries(
         .orderBy("pp.proposal_year", "desc")
         .orderBy("pp.priority_rank", "asc")
         .execute();
-}
-
-export async function updateProjectProposal(proposalId: string, payload: any) {
-    return await db.transaction().execute(async (trx) => {
-        const { payload: p, auth_status } = payload;
-
-        // 1. Update form status
-        if (auth_status) {
-            await trx
-                .updateTable("forms")
-                .set({ auth_status })
-                .where("id", "=", proposalId)
-                .execute();
-        }
-
-        // 2. Wipe existing related data (Cascading Cleanup)
-        // We delete from cost_sources which cascades (if set in DB) or we manually delete relations
-        await sql`
-            DELETE FROM cost_sources 
-            WHERE id IN (
-                SELECT cost_source_id FROM cost_by_components WHERE proposal_id = ${proposalId}
-                UNION SELECT cost_source_id FROM attribution_costs 
-                    WHERE attribution_id IN (SELECT id FROM local_financial_attributions WHERE proposal_id = ${proposalId})
-                UNION SELECT cost_source_id FROM local_infrastructure_requirements WHERE proposal_id = ${proposalId}
-                UNION SELECT cost_source_id FROM local_locations WHERE proposal_id = ${proposalId}
-                UNION SELECT cost_source_id FROM foreign_financial_targets WHERE proposal_id = ${proposalId}
-            )
-        `.execute(trx);
-
-        // Add the parent table to the manual delete list
-        await trx
-            .deleteFrom("local_financial_attributions")
-            .where("proposal_id", "=", proposalId)
-            .execute();
-
-        const nonCostTables = [
-            "pap_prerequisites",
-            "local_physical_targets",
-            "foreign_physical_targets",
-        ] as const;
-        for (const table of nonCostTables) {
-            await trx
-                .deleteFrom(table)
-                .where("proposal_id", "=", proposalId)
-                .execute();
-        }
-
-        // 3. Update main proposal row
-        await trx
-            .updateTable("project_proposals")
-            .set({
-                proposal_year: p.proposal_year,
-                priority_rank: p.priority_rank,
-                is_new: p.is_new,
-                is_infrastructure: p.is_infrastructure,
-                for_ict: p.for_ict,
-                total_proposal_cost: p.total_proposal_cost,
-                updated_at: sql`now()`,
-            })
-            .where("id", "=", proposalId)
-            .execute();
-
-        // 4. Re-insert arrays
-        if (p.pap_prerequisites?.length) {
-            await trx
-                .insertInto("pap_prerequisites")
-                .values(
-                    p.pap_prerequisites.map((i: any) => ({
-                        ...i,
-                        proposal_id: proposalId,
-                    })),
-                )
-                .execute();
-        }
-
-        await insertWithCostSource(
-            trx,
-            "cost_by_components",
-            proposalId,
-            p.cost_by_components,
-            "component",
-        );
-
-        if (p.type === "202") {
-            await insertAttributions(
-                trx,
-                proposalId,
-                p.local_financial_attributions,
-            );
-            await insertWithCostSource(
-                trx,
-                "local_infrastructure_requirements",
-                proposalId,
-                p.local_infrastructure_requirements,
-                "infra",
-            );
-            await insertWithCostSource(
-                trx,
-                "local_locations",
-                proposalId,
-                p.local_locations,
-                "loc",
-            );
-
-            if (p.local_physical_targets?.length) {
-                await trx
-                    .insertInto("local_physical_targets")
-                    .values(
-                        p.local_physical_targets.map((i: any) => ({
-                            ...i,
-                            proposal_id: proposalId,
-                        })),
-                    )
-                    .execute();
-            }
-        } else {
-            await insertWithCostSource(
-                trx,
-                "foreign_financial_targets",
-                proposalId,
-                p.foreign_financial_targets,
-                "for_fin",
-            );
-            if (p.foreign_physical_targets?.length) {
-                await trx
-                    .insertInto("foreign_physical_targets")
-                    .values(
-                        p.foreign_physical_targets.map((i: any) => ({
-                            ...i,
-                            proposal_id: proposalId,
-                        })),
-                    )
-                    .execute();
-            }
-        }
-
-        return { success: true };
-    });
-}
-
-export async function deleteProjectProposal(id: string) {
-    // Relying on ON DELETE CASCADE from the forms table
-    await db.deleteFrom("forms").where("id", "=", id).execute();
 }
