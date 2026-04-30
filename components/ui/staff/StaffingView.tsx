@@ -212,11 +212,13 @@ export default function StaffingView({
                             {session.user.role !== 'dbm' ? 'Edit Form' : 'Overwrite Form'}
                         </Link>
                         
-                        <div className="flex justify-end gap-2">
-                            <form action={updateAuthStatus}>
-                                <button type="submit" className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80">Submit Form</button>
-                            </form>
-                        </div>
+                        {session.user.role !== 'dbm' && (
+                            <div className="flex justify-end gap-2">
+                                <form action={updateAuthStatus}>
+                                    <button type="submit" className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80">Submit Form</button>
+                                </form>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>

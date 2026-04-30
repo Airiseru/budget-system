@@ -3,10 +3,10 @@ import {
     Entity, NewEntity,
     User, UserRole,  UserUpdate, UserEntity,
     Department, NewDepartment, DepartmentUpdate,
-    Agency, NewAgency, AgencyUpdate, EntitySegments,
+    Agency, NewAgency, AgencyUpdate,
     OperatingUnit, NewOperatingUnit, OperatingUnitUpdate
 } from '../../../types/entities'
-import { Expression, sql } from 'kysely'
+import { sql } from 'kysely'
 
 // ENTITIES
 export async function getAllEntities(): Promise<Entity[]> {
@@ -135,7 +135,10 @@ export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise
             'operating_units.id as id',
             'operating_units.name as name',
             'operating_units.abbr as abbr',
-            'operating_units.uacs_code as uacs_code'
+            'operating_units.uacs_code as uacs_code',
+            'operating_units.agency_id as agency_id',
+            'operating_units.parent_ou_id as parent_ou_id',
+            'operating_units.status as status',
         ])
         .where('agency_id', '=', agency_id)
         .execute()
@@ -152,7 +155,7 @@ export async function createOperatingUnit(operating_unit: Partial<NewOperatingUn
         // Create operating unit
         return await trx.insertInto('operating_units')
             .values({ ...(operating_unit as NewOperatingUnit), id: new_entity.id, agency_id })
-            .returning(['id', 'name', 'abbr', 'uacs_code'])
+            .returning(['id', 'name', 'abbr', 'uacs_code', 'agency_id', 'parent_ou_id', 'status'])
             .executeTakeFirstOrThrow()
     })
 }
@@ -169,8 +172,8 @@ export async function deleteOperatingUnit(id: string): Promise<void> {
     await db.deleteFrom('operating_units').where('id', '=', id).returningAll().executeTakeFirst()
 }
 
-export async function getAllEntitySegments() {
-    const departments = await db
+export async function getAllEntitySegments(isCreate: boolean = false) {
+    let departmentsQuery = await db
         .selectFrom('departments')
         .innerJoin('entities', 'entities.id', 'departments.id')
         .select([
@@ -181,9 +184,15 @@ export async function getAllEntitySegments() {
             'departments.uacs_code as uacs_code',
             'departments.status as status',
         ])
-        .execute()
+        .orderBy('departments.uacs_code', 'asc')
 
-    const agencies = await db
+    if (isCreate) {
+        departmentsQuery = departmentsQuery.where('departments.status', '=', 'active')
+    }
+
+    const departments = await departmentsQuery.execute()
+
+    let agenciesQuery = await db
         .selectFrom('agencies')
         .innerJoin('entities', 'entities.id', 'agencies.id')
         .select([
@@ -196,9 +205,15 @@ export async function getAllEntitySegments() {
             'agencies.department_id as department_id',
             'agencies.status as status',
         ])
-        .execute()
+        .orderBy('agencies.uacs_code', 'asc')
 
-    const operatingUnits = await db
+    if (isCreate) {
+        agenciesQuery = agenciesQuery.where('agencies.status', '=', 'active')
+    }
+
+    const agencies = await agenciesQuery.execute()
+
+    let operatingUnitsQuery = await db
         .selectFrom('operating_units')
         .innerJoin('entities', 'entities.id', 'operating_units.id')
         .select([
@@ -208,9 +223,16 @@ export async function getAllEntitySegments() {
             'operating_units.abbr as abbr',
             'operating_units.uacs_code as uacs_code',
             'operating_units.agency_id as agency_id',
+            'operating_units.parent_ou_id as parent_ou_id',
             'operating_units.status as status',
         ])
-        .execute()
+        .orderBy('operating_units.uacs_code', 'asc')
+
+    if (isCreate) {
+        operatingUnitsQuery = operatingUnitsQuery.where('operating_units.status', '=', 'active')
+    }
+
+    const operatingUnits = await operatingUnitsQuery.execute()
 
     return { departments, agencies, operatingUnits }
 }
@@ -227,6 +249,7 @@ export async function getEntitySegmentsByDepartment(departmentId: string) {
             'agencies.uacs_code as uacs_code',
             'agencies.abbr as abbr',
             'agencies.type as type',
+            'agencies.status as status',
         ])
         .where('department_id', '=', departmentId)
         .execute()
@@ -244,6 +267,8 @@ export async function getEntitySegmentsByDepartment(departmentId: string) {
                 'operating_units.agency_id',
                 'operating_units.abbr as abbr',
                 'operating_units.uacs_code as uacs_code',
+                'operating_units.parent_ou_id as parent_ou_id',
+                'operating_units.status as status',
             ])
             .where('operating_units.agency_id', 'in', agencyIds)
             .execute()
@@ -261,28 +286,27 @@ export async function getFullEntityById(
             return await db.selectFrom('departments')
                 .selectAll()
                 .where('id', '=', id)
-                .where('status', '=', 'active')
                 .executeTakeFirst()
         } 
         else if (type === 'agency') {
             return await db.selectFrom('agencies')
                 .selectAll()
                 .where('id', '=', id)
-                .where('status', '=', 'active')
                 .executeTakeFirst()
         } 
         else if (type === 'operating_unit') {
             return await db.selectFrom('operating_units')
                 .leftJoin('agencies', 'agencies.id', 'operating_units.agency_id')
                 .where('operating_units.id', '=', id)
-                .where('operating_units.status', '=', 'active')
                 .select([
                     'operating_units.id as id',
                     'operating_units.name as name',
                     'operating_units.uacs_code as uacs_code',
                     'operating_units.abbr as abbr',
                     'operating_units.agency_id as agency_id',
-                    'agencies.department_id as department_id', 
+                    'operating_units.parent_ou_id as parent_ou_id',
+                    'operating_units.status as status',
+                    'agencies.department_id as department_id',
                 ])
                 .executeTakeFirst()
         }
@@ -407,4 +431,90 @@ export async function updateUser(id: string, updateWith: UserUpdate): Promise<vo
 
 export async function deleteUser(id: string): Promise<void> {
     await db.updateTable('users').set({ deleted_at: new Date(), role: 'archived' }).where('id', '=', id).executeTakeFirstOrThrow()
+}
+
+async function getOperatingUnitDescendantIds(rootOuId: string): Promise<string[]> {
+    const descendantIds: string[] = []
+    let frontier = [rootOuId]
+
+    while (frontier.length > 0) {
+        const children = await db
+            .selectFrom('operating_units')
+            .select('id')
+            .where('parent_ou_id', 'in', frontier)
+            .execute()
+
+        frontier = children.map(child => child.id)
+        descendantIds.push(...frontier)
+    }
+
+    return descendantIds
+}
+
+export async function setEntityAndDescendantsInactive(entityId: string): Promise<void> {
+    const entity = await getEntityById(entityId)
+    if (!entity) {
+        throw new Error('Entity not found')
+    }
+
+    await db.transaction().execute(async (trx) => {
+        if (entity.type === 'department') {
+            await trx
+                .updateTable('departments')
+                .set({ status: 'inactive' })
+                .where('id', '=', entityId)
+                .execute()
+
+            const agencies = await trx
+                .selectFrom('agencies')
+                .select('id')
+                .where('department_id', '=', entityId)
+                .execute()
+
+            const agencyIds = agencies.map(agency => agency.id)
+
+            if (agencyIds.length > 0) {
+                await trx
+                    .updateTable('agencies')
+                    .set({ status: 'inactive' })
+                    .where('id', 'in', agencyIds)
+                    .execute()
+
+                await trx
+                    .updateTable('operating_units')
+                    .set({ status: 'inactive' })
+                    .where('agency_id', 'in', agencyIds)
+                    .execute()
+            }
+
+            return
+        }
+
+        if (entity.type === 'agency') {
+            await trx
+                .updateTable('agencies')
+                .set({ status: 'inactive' })
+                .where('id', '=', entityId)
+                .execute()
+
+            await trx
+                .updateTable('operating_units')
+                .set({ status: 'inactive' })
+                .where('agency_id', '=', entityId)
+                .execute()
+
+            return
+        }
+
+        if (entity.type === 'operating_unit') {
+            const descendantIds = await getOperatingUnitDescendantIds(entityId)
+            const idsToInactivate = [entityId, ...descendantIds]
+
+            await trx
+                .updateTable('operating_units')
+                .set({ status: 'inactive' })
+                .where('id', 'in', idsToInactivate)
+                .execute()
+        }
+    })
 }

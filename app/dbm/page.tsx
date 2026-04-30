@@ -28,6 +28,10 @@ export default async function HomePage() {
                     url='/dbm/forms'
                     label='View All Forms'
                 />
+                <GeneralButton
+                    url='/dbm/entities'
+                    label='Manage Entities'
+                />
                 <HomeButton url="/home"></HomeButton>
             </div>
         </main>

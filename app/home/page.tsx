@@ -20,14 +20,14 @@ export default async function HomePage() {
         <main className="m-4">
             <h1></h1>
             <div className="flex gap-2">
-                <Button variant="outline">
-                    <Link href="/paps/">PAPs</Link>
-                </Button>
                 {isDBM && (
                     <Button variant="outline">
                         <Link href="/dbm/">DBM Modules</Link>
                     </Button>
                 )}
+                <Button variant="outline">
+                    <Link href="/paps/">PAPs</Link>
+                </Button>
                 <Button variant="outline">
                     <Link href="/forms/proposals/">
                         Form 202/203 (Project Proposals)

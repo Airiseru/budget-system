@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import {
     Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
-import { Department, Agency } from '@/src/types/entities'
+import { Department, Agency, OperatingUnit } from '@/src/types/entities'
 
 type Props = {
     canCreate: {
@@ -15,9 +15,19 @@ type Props = {
         operating_unit: boolean
     };
     entityType: 'department' | 'agency' | 'operating_unit'
-    entity: any
+    entity: {
+        id: string
+        name: string
+        abbr?: string | null
+        uacs_code: string
+        type?: string | null
+        department_id?: string | null
+        agency_id?: string | null
+        parent_ou_id?: string | null
+    }
     departments: Partial<Department[]>
     agencies: Partial<Agency[]>
+    operatingUnits: Partial<OperatingUnit[]>
 }
 
 const agencyTypeLabels: Record<string, string> = {
@@ -25,15 +35,17 @@ const agencyTypeLabels: Record<string, string> = {
     attached_agency: 'Attached Agency',
 }
 
-export function EditEntityForm({ canCreate, entityType, entity, departments, agencies }: Props) {
+export function EditEntityForm({ canCreate, entityType, entity, departments, agencies, operatingUnits }: Props) {
     const [state, action, pending] = useActionState(updateEntity, undefined)
     const [selectedDepartmentId, setSelectedDepartmentId] = useState<string>(entity.department_id || '')
     const [selectedAgencyType, setSelectedAgencyType] = useState<string>(entity.type || '')
     const [selectedAgencyId, setSelectedAgencyId] = useState<string>(entity.agency_id || '')
+    const [selectedParentOuId, setSelectedParentOuId] = useState<string>(entity.parent_ou_id || '')
 
     const handleDepartmentChange = (value: string | null) => {
         setSelectedDepartmentId(value ?? '')
-        setSelectedAgencyId('') 
+        setSelectedAgencyId('')
+        setSelectedParentOuId('')
     }
 
     const handleAgencyTypeChange = (value: string | null) => {
@@ -43,12 +55,20 @@ export function EditEntityForm({ canCreate, entityType, entity, departments, age
 
     const handleAgencyIdChange = (value: string | null) => {
         setSelectedAgencyId(value ?? '')
+        setSelectedParentOuId('')
+    }
+
+    const handleParentOuChange = (value: string | null) => {
+        setSelectedParentOuId(value === 'none' || !value ? '' : value)
     }
 
     // Filter agencies by selected department
     const filteredAgencies = selectedDepartmentId 
         ? agencies.filter(a => a?.department_id === selectedDepartmentId)
         : agencies
+    const filteredOperatingUnits = selectedAgencyId
+        ? operatingUnits.filter(ou => ou?.agency_id === selectedAgencyId && ou?.id !== entity.id)
+        : []
 
     return (
         <form action={action} className="space-y-6 border border-border rounded-lg p-6">
@@ -71,7 +91,7 @@ export function EditEntityForm({ canCreate, entityType, entity, departments, age
                     autoComplete="off"
                 />
                 {state?.fieldErrors?.name && (
-                    <p className="text-red-500 text-sm italic">{state.fieldErrors.name}</p>
+                    <p className="text-red-500 text-sm italic">{state.fieldErrors.abbr}</p>
                 )}
             </div>
 
@@ -96,9 +116,17 @@ export function EditEntityForm({ canCreate, entityType, entity, departments, age
                     name="uacs_code"
                     defaultValue={state?.values?.uacs_code ?? entity.uacs_code}
                     className="border border-border px-3 py-2 my-1 w-full rounded bg-background font-mono"
+                    placeholder={entityType === 'operating_unit' && selectedParentOuId ? '00001' : undefined}
                     required
                     autoComplete="off"
                 />
+                {entityType === 'operating_unit' && (
+                    <p className="text-xs text-muted-foreground">
+                        {selectedParentOuId
+                            ? 'Lower-level operating units must use a 5-digit UACS Code.'
+                            : 'Top-level operating units must use a 2-digit UACS Code.'}
+                    </p>
+                )}
                 {state?.fieldErrors?.uacs_code && (
                     <p className="text-red-500 text-sm italic">{state.fieldErrors.uacs_code}</p>
                 )}
@@ -152,25 +180,51 @@ export function EditEntityForm({ canCreate, entityType, entity, departments, age
 
             {/* Operating Unit-Specific Fields */}
             {(entityType === 'operating_unit' && (canCreate.department || canCreate.agency)) && (
-                <div className="space-y-2">
-                    <label htmlFor="agency_id" className="font-medium">Under Agency</label>
-                    <input id="agency_id" type="hidden" name="agency_id" value={selectedAgencyId} />
-                    <Select
-                        value={selectedAgencyId}
-                        onValueChange={handleAgencyIdChange}
-                    >
-                        <SelectTrigger className="border px-3 py-5 my-1 w-full rounded border-border text-base bg-background">
-                            <SelectValue placeholder="Select parent agency">
-                                {selectedAgencyId ? agencies.find(a => a?.id === selectedAgencyId)?.name : 'Select Parent Agency'}
-                            </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                            {filteredAgencies.map(agency => (
-                                <SelectItem key={agency?.id} value={agency?.id}>{agency?.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+                <>
+                    <div className="space-y-2">
+                        <label htmlFor="agency_id" className="font-medium">Under Agency</label>
+                        <input id="agency_id" type="hidden" name="agency_id" value={selectedAgencyId} />
+                        <Select
+                            value={selectedAgencyId}
+                            onValueChange={handleAgencyIdChange}
+                        >
+                            <SelectTrigger className="border px-3 py-5 my-1 w-full rounded border-border text-base bg-background">
+                                <SelectValue placeholder="Select parent agency">
+                                    {selectedAgencyId ? agencies.find(a => a?.id === selectedAgencyId)?.name : 'Select Parent Agency'}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {filteredAgencies.map(agency => (
+                                    <SelectItem key={agency?.id} value={agency?.id}>{agency?.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label htmlFor="parent_ou_id" className="font-medium">Parent Operating Unit</label>
+                        <input id="parent_ou_id" type="hidden" name="parent_ou_id" value={selectedParentOuId} />
+                        <Select
+                            value={selectedParentOuId || 'none'}
+                            onValueChange={handleParentOuChange}
+                            disabled={!selectedAgencyId}
+                        >
+                            <SelectTrigger className="border px-3 py-5 my-1 w-full rounded border-border text-base bg-background">
+                                <SelectValue placeholder="Optional: choose a parent operating unit">
+                                    {selectedParentOuId
+                                        ? operatingUnits.find(ou => ou?.id === selectedParentOuId)?.name
+                                        : 'Top-level OU under the selected agency'}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Top-level OU under the selected agency</SelectItem>
+                                {filteredOperatingUnits.map(ou => (
+                                    <SelectItem key={ou?.id} value={ou?.id}>{ou?.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </>
             )}
 
             <Button type="submit" disabled={pending} className="w-full py-5 text-md bg-accent-foreground text-white border border-accent-foreground hover:bg-accent-foreground/90">

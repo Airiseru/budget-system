@@ -2,7 +2,7 @@
 
 import { Department, Agency, OperatingUnit } from '@/src/types/entities'
 import { Button } from '@/components/ui/button'
-import { Pencil, Trash2 } from 'lucide-react'
+import { CircleOff, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow
@@ -14,6 +14,7 @@ type Props = {
     agencies: Partial<Agency[]>
     operatingUnits: Partial<OperatingUnit[]>
     entityName: string
+    basePath?: string
 }
 
 type Row = {
@@ -23,17 +24,18 @@ type Row = {
     uacs_code: string
     type: string
     badge: string
+    status: string
     parent: string
+    depth: number
     editUrl: string
-    deleteUrl: string
+    deactivateUrl: string
 }
 
-export function EntitiesTable({ departments, agencies, operatingUnits, entityName }: Props) {
+export function EntitiesTable({ departments, agencies, operatingUnits, entityName, basePath = '/admin/entities' }: Props) {
     // mapping of department id to agencies
     const agenciesByDeptId = new Map<string | null, Agency[]>()
 
-    // mapping of agency id to operating units
-    const ousByAgencyId = new Map<string, OperatingUnit[]>()
+    const ousByParentId = new Map<string | null, OperatingUnit[]>()
 
     agencies?.forEach(agency => {
         if (!agency) return
@@ -43,14 +45,33 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
     })
 
     operatingUnits?.forEach(ou => {
-        if (!ou || !ou.agency_id) return
-        if (!ousByAgencyId.has(ou.agency_id)) ousByAgencyId.set(ou.agency_id, []) // create empty array if it doesn't exist
-        ousByAgencyId.get(ou.agency_id)!.push(ou)
+        if (!ou) return
+        const key = ou.parent_ou_id ?? null
+        if (!ousByParentId.has(key)) ousByParentId.set(key, [])
+        ousByParentId.get(key)!.push(ou)
     })
 
     const rows: Row[] = []
 
     // helper to add an agency and its operating units
+    function addOperatingUnit(ou: OperatingUnit, parentName: string, depth: number) {
+        rows.push({
+            id: ou.id,
+            name: ou.name,
+            abbr: ou.abbr ? ` (${ou.abbr})` : '',
+            uacs_code: ou.uacs_code,
+            type: ou.parent_ou_id ? 'Lower-Level OU' : 'Operating Unit',
+            badge: 'outline',
+            status: (ou.status ?? 'active'),
+            parent: parentName,
+            depth,
+            editUrl: `${basePath}/operating-unit/${ou.id}/edit`,
+            deactivateUrl: `${basePath}/operating-unit/${ou.id}/deactivate`,
+        })
+
+        ousByParentId.get(ou.id)?.forEach(childOu => addOperatingUnit(childOu, ou.name, depth + 1))
+    }
+
     function addAgency(agency: Agency, parentName: string) {
         rows.push({
             id: agency.id,
@@ -59,24 +80,18 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             uacs_code: agency.uacs_code,
             type: agency.type === 'bureau' ? 'Bureau' : 'Attached Agency',
             badge: 'secondary',
+            status: agency.status ?? 'active',
             parent: parentName,
-            editUrl: `/admin/entities/agency/${agency.id}/edit`,
-            deleteUrl: `/admin/entities/agency/${agency.id}/delete`,
+            depth: 0,
+            editUrl: `${basePath}/agency/${agency.id}/edit`,
+            deactivateUrl: `${basePath}/agency/${agency.id}/deactivate`,
         })
 
-        ousByAgencyId.get(agency.id)?.forEach(ou => {
-            rows.push({
-                id: ou.id,
-                name: ou.name,
-                abbr: ou.abbr ? ` (${ou.abbr})` : '',
-                uacs_code: ou.uacs_code,
-                type: 'Operating Unit',
-                badge: 'outline',
-                parent: agency.name,
-                editUrl: `/admin/entities/operating-unit/${ou.id}/edit`,
-                deleteUrl: `/admin/entities/operating-unit/${ou.id}/delete`,
+        operatingUnits
+            ?.filter(ou => ou?.agency_id === agency.id && !ou?.parent_ou_id)
+            .forEach(ou => {
+                if (ou) addOperatingUnit(ou, agency.name, 1)
             })
-        })
     }
 
     // departments and their children
@@ -89,9 +104,11 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             uacs_code: dept.uacs_code,
             type: 'Department',
             badge: 'default',
+            status: dept.status ?? 'active',
             parent: '—',
-            editUrl: `/admin/entities/department/${dept.id}/edit`,
-            deleteUrl: `/admin/entities/department/${dept.id}/delete`,
+            depth: 0,
+            editUrl: `${basePath}/department/${dept.id}/edit`,
+            deactivateUrl: `${basePath}/department/${dept.id}/deactivate`,
         })
         agenciesByDeptId.get(dept.id)?.forEach(agency => addAgency(agency, dept.name))
     })
@@ -107,9 +124,8 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
     // independent agencies (no department)
     agenciesByDeptId.get(null)?.forEach(agency => addAgency(agency, 'Independent'))
 
-    // operating units with no agency in the list (agency-level admin)
-    // add any OUs that weren't already added via addAgency
-    const addedOuIds = new Set(rows.filter(r => r.type === 'Operating Unit').map(r => r.id))
+    // operating units with no agency in the list
+    const addedOuIds = new Set(rows.map(r => r.id))
     operatingUnits?.forEach(ou => {
         if (!ou || addedOuIds.has(ou.id)) return
         rows.push({
@@ -117,11 +133,13 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             name: ou.name,
             abbr: ou.abbr ? ` (${ou.abbr})` : '',
             uacs_code: ou.uacs_code,
-            type: 'Operating Unit',
+            type: ou.parent_ou_id ? 'Lower-Level OU' : 'Operating Unit',
             badge: 'outline',
+            status: ou.status ?? 'active',
             parent: '—',
-            editUrl: `/admin/entities/operating-unit/${ou.id}/edit`,
-            deleteUrl: `/admin/entities/operating-unit/${ou.id}/delete`,
+            depth: ou.parent_ou_id ? 1 : 0,
+            editUrl: `${basePath}/operating-unit/${ou.id}/edit`,
+            deactivateUrl: `${basePath}/operating-unit/${ou.id}/deactivate`,
         })
     })
 
@@ -142,6 +160,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                             <TableHead>Name</TableHead>
                             <TableHead>UACS Code</TableHead>
                             <TableHead>Type</TableHead>
+                            <TableHead>Status</TableHead>
                             <TableHead>Under</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -149,25 +168,36 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                     <TableBody>
                         {rows.map(row => (
                             <TableRow key={row.id}>
-                                <TableCell className="font-medium">{row.name}{row.abbr}</TableCell>
+                                <TableCell className="font-medium" style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                                    {row.depth > 0 ? '↳ ' : ''}
+                                    {row.name}{row.abbr}
+                                </TableCell>
                                 <TableCell className="font-mono text-sm text-muted-foreground">{row.uacs_code}</TableCell>
                                 <TableCell>
                                     <Badge variant={row.badge as 'default' | 'secondary' | 'outline'}>
                                         {row.type}
                                     </Badge>
                                 </TableCell>
+                                <TableCell>
+                                    <Badge
+                                        variant={row.status === 'inactive' ? 'destructive' : 'secondary'}
+                                        className={row.status === 'active' ? 'bg-emerald-100 text-emerald-700' : ''}
+                                    >
+                                        {row.status.toUpperCase()}
+                                    </Badge>
+                                </TableCell>
                                 <TableCell className="text-muted-foreground text-sm">{row.parent}</TableCell>
                                 <TableCell className="text-right">
-                                    <Link href={row.editUrl}>
-                                        <Button variant="ghost" size="icon">
+                                    <Button variant="ghost" size="icon" disabled={row.status === 'inactive'}>
+                                        <Link href={row.editUrl}>
                                             <Pencil className="w-4 h-4" />
-                                        </Button>
-                                    </Link>
-                                    <Link href={row.deleteUrl}>
-                                        <Button variant="ghost" size="icon">
-                                            <Trash2 className="w-4 h-4 text-destructive" />
-                                        </Button>
-                                    </Link>
+                                        </Link>
+                                    </Button>
+                                    <Button variant="ghost" size="icon" disabled={row.status === 'inactive'}>
+                                        <Link href={row.deactivateUrl}>
+                                            <CircleOff className="w-4 h-4 text-destructive" />
+                                        </Link>
+                                    </Button>
                                 </TableCell>
                             </TableRow>
                         ))}

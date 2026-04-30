@@ -2,7 +2,7 @@
 
 import { signup } from "@/src/actions/auth"
 import { useActionState, useState } from "react"
-import { Department, Agency } from "@/src/types/entities"
+import { Department, Agency, OperatingUnit } from "@/src/types/entities"
 import BackButton from "@/components/ui/BackButton"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,9 +19,10 @@ import { Eye, EyeOff } from 'lucide-react'
 type Props = {
     departments: Department[];
     agencies: Agency[];
+    operatingUnits: OperatingUnit[];
 }
 
-export default function SignUpForm({ departments, agencies }: Props) {
+export default function SignUpForm({ departments, agencies, operatingUnits }: Props) {
     const [state, action, pending] = useActionState(signup, undefined)
     const [selectedEntityId, setSelectedEntityId] = useState<string>(state?.values?.entity_id || '')
     const [showPassword, setShowPassword] = useState(false)
@@ -37,6 +38,8 @@ export default function SignUpForm({ departments, agencies }: Props) {
         if (dept) return `${dept.name} (Central Office)`
         const agency = agencies.find(a => a.id === id)
         if (agency) return agency.name
+        const operatingUnit = operatingUnits.find(ou => ou.id === id)
+        if (operatingUnit) return operatingUnit.name
         return ''
     }
 
@@ -89,9 +92,18 @@ export default function SignUpForm({ departments, agencies }: Props) {
                                         </SelectItem>
                                         
                                         {childAgencies.map((agency) => (
-                                            <SelectItem key={agency.id} value={agency.id}>
-                                                {agency.name}
-                                            </SelectItem>
+                                            <div key={agency.id}>
+                                                <SelectItem value={agency.id}>
+                                                    {agency.name}
+                                                </SelectItem>
+                                                {operatingUnits
+                                                    .filter(ou => ou.agency_id === agency.id)
+                                                    .map((ou) => (
+                                                        <SelectItem key={ou.id} value={ou.id}>
+                                                            {`↳ ${ou.name}`}
+                                                        </SelectItem>
+                                                    ))}
+                                            </div>
                                         ))}
                                     </SelectGroup>
                                 )
@@ -102,9 +114,18 @@ export default function SignUpForm({ departments, agencies }: Props) {
                                 <SelectGroup>
                                     <SelectLabel className="bg-muted/50">Independent Agencies & SUCs</SelectLabel>
                                     {independentAgencies.map((agency) => (
-                                        <SelectItem key={agency.id} value={agency.id}>
-                                            {agency.name}
-                                        </SelectItem>
+                                        <div key={agency.id}>
+                                            <SelectItem value={agency.id}>
+                                                {agency.name}
+                                            </SelectItem>
+                                            {operatingUnits
+                                                .filter(ou => ou.agency_id === agency.id)
+                                                .map((ou) => (
+                                                    <SelectItem key={ou.id} value={ou.id}>
+                                                        {`↳ ${ou.name}`}
+                                                    </SelectItem>
+                                                ))}
+                                        </div>
                                     ))}
                                 </SelectGroup>
                             )}

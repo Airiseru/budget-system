@@ -1,7 +1,7 @@
 'use server'
 
 import { sessionWithEntity } from './auth'
-import { requireAdmin } from './admin'
+import { requireDbm } from './admin'
 import { createEntityRepository } from '../db/factory'
 import { Department, Agency, OperatingUnit } from '../types/entities'
 import { NewEntityFormState, EditEntityFormState, DeleteEntityFormState } from '../lib/validations/entities'
@@ -11,31 +11,35 @@ import { DepartmentSchema, AgencySchema, OperatingUnitSchema } from '../lib/vali
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
-export async function loadEntities(needsAdmin = false): Promise<{} | {
-    departments: Partial<Department[]>,
-    agencies: Partial<Agency[]>,
-    operatingUnits: Partial<OperatingUnit[]>,
+type LoadEntitiesResult = Record<string, any> | {
+    departments: Partial<Department[]>
+    agencies: Partial<Agency[]>
+    operatingUnits: Partial<OperatingUnit[]>
     entityName: string
-}> {
+}
+
+export async function loadEntities(needsAdmin = false, isCreate: boolean = false): Promise<LoadEntitiesResult> {
     if (needsAdmin) {
-        await requireAdmin()
+        await requireDbm()
     }
 
     const session = await sessionWithEntity()
     if (!session) return {}
+    if (session.user.role !== 'dbm') return {}
     if (!session.user.entity_id) return {}
 
-    if (session.user_entity.entity_type === "national") {
+    if (session.user_entity.entity_type === "national" || session.user.role === "dbm") {
+        const entityName = session.user.role === "dbm" ? "All Entities" : session.user_entity.entity_name || ""
         return {
-            ...await EntityRepository.getAllEntitySegments(),
-            entityName: session.user_entity.entity_name,
+            ...await EntityRepository.getAllEntitySegments(isCreate),
+            entityName,
         }
     }
     else if (session.user_entity.entity_type === "department") {
         return {
             departments: [],
             ...await EntityRepository.getEntitySegmentsByDepartment(session.user.entity_id),
-            entityName: session.user_entity.entity_name,
+            entityName: session.user_entity.entity_name || "",
         }
     }
     else if (session.user_entity.entity_type === "agency") {
@@ -43,7 +47,7 @@ export async function loadEntities(needsAdmin = false): Promise<{} | {
             departments: [],
             agencies: [],
             operatingUnits: await EntityRepository.getAllOperatingUnitsByAgencyId(session.user.entity_id),
-            entityName: session.user_entity.entity_name,
+            entityName: session.user_entity.entity_name || "",
         }
     }
 
@@ -64,6 +68,8 @@ export async function createNewEntity(
     const abbr = formData.get('abbr') as string
     const uacs_code = formData.get('uacs_code') as string
     const type = formData.get('type') as string
+    const raw_parent_ou_id = formData.get('parent_ou_id') as string
+    const parent_ou_id = (raw_parent_ou_id === 'none' || !raw_parent_ou_id) ? null : raw_parent_ou_id
     
     // Check if department_id is null
     const raw_dept_id = formData.get('department_id') as string
@@ -71,16 +77,10 @@ export async function createNewEntity(
     
     const agency_id = formData.get('agency_id') as string
 
-    const values = { name, abbr, uacs_code, type, department_id: department_id ?? undefined, agency_id }
+    const values = { name, abbr, uacs_code, type, department_id: department_id ?? undefined, agency_id, parent_ou_id: parent_ou_id ?? undefined }
 
-    const userEntityType = session.user_entity.entity_type
-    const userEntityId = session.user.entity_id
-
-    if (userEntityType === 'agency' && entityType !== 'operating_unit') {
-        return { formErrors: ['Agency admins can only create operating units'] }
-    }
-    if (userEntityType === 'department' && entityType === 'department') {
-        return { formErrors: ['Department admins cannot create departments'] }
+    if (session.user.role !== 'dbm') {
+        return { formErrors: ['Only DBM can manage entities.'] }
     }
 
     try {
@@ -97,13 +97,7 @@ export async function createNewEntity(
 
         else if (entityType === 'agency') {
             const validatedFields = AgencySchema.safeParse({ name, abbr, uacs_code, type, department_id })
-
-            const finalDeptId = 
-                (userEntityType === "national" || !userEntityType) // National Admin
-                    ? (department_id || undefined) // Uses form data (converts "" to undefined)
-                    : userEntityType === "department" // Department Admin
-                        ? userEntityId // Forces their own department ID
-                        : undefined
+            const finalDeptId = department_id || undefined
 
             if (!validatedFields.success) {
                 return {
@@ -118,31 +112,27 @@ export async function createNewEntity(
         }
 
         else if (entityType === 'operating_unit') {
-            const finalAgencyid = 
-                (userEntityType === "national" || userEntityType === "department" || !userEntityType) // National or Department Admin
-                    ? (agency_id || undefined) // Uses form data (converts "" to undefined)
-                    : userEntityType === "agency" // Agency Admin
-                        ? userEntityId // Forces their own agency ID
-                        : undefined
+            const parentOu = parent_ou_id ? await EntityRepository.getOperatingUnitById(parent_ou_id) : null
+            const finalAgencyid = parentOu?.agency_id || agency_id || undefined
             
-            const validatedFields = OperatingUnitSchema.safeParse({ name, abbr, uacs_code, agency_id: finalAgencyid })
+            const validatedFields = OperatingUnitSchema.safeParse({ name, abbr, uacs_code, agency_id: finalAgencyid, parent_ou_id })
 
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, abbr, uacs_code, agency_id: finalAgencyid ?? undefined }
+                    values: { name, abbr, uacs_code, agency_id: finalAgencyid ?? undefined, parent_ou_id: parent_ou_id ?? undefined }
                 }
             }
-            await EntityRepository.createOperatingUnit({ name, uacs_code }, finalAgencyid || "")
+            await EntityRepository.createOperatingUnit({ name, abbr, uacs_code, parent_ou_id }, finalAgencyid || "")
         }
-    } catch (err) {
+    } catch {
         return {
             formErrors: ['Failed to create entity. Please try again'],
             values: values
         }
     }
 
-    redirect('/admin/entities')
+    redirect('/dbm/entities')
 }
 
 export async function updateEntity(state: EditEntityFormState, formData: FormData): Promise<EditEntityFormState> {
@@ -150,7 +140,7 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
 
     // 1. Basic Auth Checks
     if (!session) redirect('/login')
-    if (session.user.role !== 'admin') {
+    if (session.user.role !== 'dbm') {
         return { formErrors: ['Unauthorized access.'] }
     }
 
@@ -161,6 +151,8 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
     const abbr = formData.get('abbr') as string
     const uacs_code = formData.get('uacs_code') as string
     const type = formData.get('type') as string 
+    const raw_parent_ou_id = formData.get('parent_ou_id') as string
+    const parent_ou_id = (raw_parent_ou_id === 'none' || !raw_parent_ou_id) ? null : raw_parent_ou_id
     
     // Safely handle the "none" string from the shadcn select and convert it to null
     const raw_dept_id = formData.get('department_id') as string
@@ -176,18 +168,8 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
         uacs_code, 
         type, 
         department_id: department_id ?? undefined, 
-        agency_id 
-    }
-
-    // 3. RBAC
-    const userEntityType = session.user_entity.entity_type
-    const userEntityId = session.user.entity_id
-
-    if (userEntityType === 'agency' && entity_type !== 'operating_unit') {
-        return { formErrors: ['Agency admins can only update operating units'] }
-    }
-    if (userEntityType === 'department' && entity_type === 'department') {
-        return { formErrors: ['Department admins cannot update departments'] }
+        agency_id,
+        parent_ou_id: parent_ou_id ?? undefined
     }
     
     try {
@@ -202,14 +184,9 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
             await EntityRepository.updateDepartment(entity_id, { name, abbr, uacs_code })
         } 
         else if (entity_type === 'agency') {
-            const finalDeptId = 
-                (userEntityType === "national" || !userEntityType) // National Admin
-                    ? (department_id || undefined) // Uses form data (converts "" to undefined)
-                    : userEntityType === "department" // Department Admin
-                        ? userEntityId // Forces their own department ID
-                        : undefined
+            const finalDeptId = department_id || undefined
 
-            const validatedFields = AgencySchema.safeParse({ name, abbr, uacs_code, type, finalDeptId })
+            const validatedFields = AgencySchema.safeParse({ name, abbr, uacs_code, type, department_id: finalDeptId })
 
             if (!validatedFields.success) {
                 return {
@@ -227,19 +204,15 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
             })
         } 
         else if (entity_type === 'operating_unit') {
-            const finalAgencyid = 
-                (userEntityType === "national" || userEntityType === "department" || !userEntityType) // National or Department Admin
-                    ? (agency_id || undefined) // Uses form data (converts "" to undefined)
-                    : userEntityType === "agency" // Agency Admin
-                        ? userEntityId // Forces their own agency ID
-                        : undefined
+            const parentOu = parent_ou_id ? await EntityRepository.getOperatingUnitById(parent_ou_id) : null
+            const finalAgencyid = parentOu?.agency_id || agency_id || undefined
             
-            const validatedFields = OperatingUnitSchema.safeParse({ name, abbr, uacs_code, agency_id: finalAgencyid })
+            const validatedFields = OperatingUnitSchema.safeParse({ name, abbr, uacs_code, agency_id: finalAgencyid, parent_ou_id })
 
             if (!validatedFields.success) {
                 return {
                     ...z.flattenError(validatedFields.error),
-                    values: { name, abbr, uacs_code, agency_id: finalAgencyid ?? undefined }
+                    values: { name, abbr, uacs_code, agency_id: finalAgencyid ?? undefined, parent_ou_id: parent_ou_id ?? undefined }
                 }
             }
 
@@ -247,10 +220,11 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
                 name, 
                 abbr,
                 uacs_code, 
-                agency_id: finalAgencyid || undefined
+                agency_id: finalAgencyid || undefined,
+                parent_ou_id
             })
         }
-    } catch (err) {
+    } catch {
         return {
             formErrors: ['Failed to update entity. Please check your data and try again.'],
             values
@@ -258,27 +232,25 @@ export async function updateEntity(state: EditEntityFormState, formData: FormDat
     }
 
     // 4. On absolute success, route them back to the table
-    redirect('/admin/entities')
+    redirect('/dbm/entities')
 }
 
-export async function deleteEntityAction(state: DeleteEntityFormState, formData: FormData): Promise<DeleteEntityFormState> {
+export async function deactivateEntityAction(state: DeleteEntityFormState, formData: FormData): Promise<DeleteEntityFormState> {
     const session = await sessionWithEntity()
 
-    if (!session || session.user.role !== 'admin') {
+    if (!session || session.user.role !== 'dbm') {
         return { formErrors: ['Unauthorized access.'] }
     }
 
     const entity_id = formData.get('entity_id') as string
 
     try {
-        await EntityRepository.deleteEntity(entity_id)
-    } catch (err) {
-        // This catches Foreign Key Constraint errors (e.g., trying to delete a Department that still has Agencies)
+        await EntityRepository.setEntityAndDescendantsInactive(entity_id)
+    } catch {
         return {
-            formErrors: ['Failed to delete entity. Please ensure there are no sub-agencies or operating units attached to it before deleting.'],
+            formErrors: ['Failed to deactivate entity. Please try again.'],
         }
     }
 
-    // 3. Route back to the main table on success
-    redirect('/admin/entities')
+    redirect('/dbm/entities')
 }
