@@ -7,7 +7,7 @@ import { sessionWithEntity } from "@/src/actions/auth";
 import { redirect, notFound } from "next/navigation";
 import { getCurrentSignatoryRole } from "@/src/lib/workflows";
 import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
-import { canSign } from "@/src/lib/workflows";
+import { canSign, roleInWorkflow } from "@/src/lib/workflows";
 import { revalidatePath } from "next/cache";
 import ProposalView from "@/components/ui/proposals/ProposalView";
 
@@ -54,6 +54,8 @@ export default async function RetireeDetailsPage({
           )
         : false;
 
+    const userInWorkflow = roleInWorkflow(session.user.workflow_role ?? "", workflow)
+
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(
         data.id ?? "",
         session.user.id,
@@ -81,6 +83,7 @@ export default async function RetireeDetailsPage({
         <ProposalView
             data={data}
             session={session}
+            userInWorkflow={userInWorkflow}
             userCanSign={userCanSign}
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}

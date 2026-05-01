@@ -18,6 +18,7 @@ import {
 interface ProposalViewProps {
     data: any;
     session: any;
+    userInWorkflow: boolean
     userCanSign: boolean;
     currentSignatoryRole: string | null;
     existingSignature: any;
@@ -79,6 +80,7 @@ const getStatusStyles = (status: string) => {
 export default function ProposalView({
     data,
     session,
+    userInWorkflow,
     userCanSign,
     currentSignatoryRole,
     existingSignature,
