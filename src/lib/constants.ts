@@ -1,3 +1,9 @@
+export const ENTITY_TYPE_LABELS: Record<string, string> = {
+    department: 'Department',
+    agency: 'Agency',
+    operating_unit: 'Operating Unit',
+}
+
 export const FORM_TYPES: Record<string, string> = {
     all: 'All',
     bp_staffing: 'BP Form 204',

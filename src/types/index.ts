@@ -7,6 +7,7 @@ import {
     DepartmentsTable,
     AgenciesTable,
     OperatingUnitsTable,
+    EntityRequestsTable,
 } from "./entities";
 import { AuditLogTable, MerkleRootTable } from "./audit";
 import {
@@ -53,6 +54,7 @@ export interface Database {
     departments: DepartmentsTable;
     agencies: AgenciesTable;
     operating_units: OperatingUnitsTable;
+    entity_requests: EntityRequestsTable;
 
     // audit
     audit_logs: AuditLogTable;

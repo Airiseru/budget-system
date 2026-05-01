@@ -4,7 +4,8 @@ import {
     User, UserRole,  UserUpdate, UserEntity,
     Department, NewDepartment, DepartmentUpdate,
     Agency, NewAgency, AgencyUpdate,
-    OperatingUnit, NewOperatingUnit, OperatingUnitUpdate
+    OperatingUnit, NewOperatingUnit, OperatingUnitUpdate,
+    EntityRequest, NewEntityRequest, EntityRequestUpdate
 } from '../../../types/entities'
 import { sql } from 'kysely'
 
@@ -128,7 +129,9 @@ export async function getOperatingUnitById(id: string): Promise<OperatingUnit | 
     return await db.selectFrom('operating_units').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
 }
 
-export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise<Partial<OperatingUnit>[]> {
+type OperatingUnitSummary = Pick<OperatingUnit, 'id' | 'name' | 'abbr' | 'uacs_code' | 'agency_id' | 'parent_ou_id' | 'status'>
+
+export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise<OperatingUnitSummary[]> {
     return await db
         .selectFrom('operating_units')
         .select([
@@ -431,6 +434,83 @@ export async function updateUser(id: string, updateWith: UserUpdate): Promise<vo
 
 export async function deleteUser(id: string): Promise<void> {
     await db.updateTable('users').set({ deleted_at: new Date(), role: 'archived' }).where('id', '=', id).executeTakeFirstOrThrow()
+}
+
+export async function createEntityRequest(request: NewEntityRequest): Promise<EntityRequest> {
+    return await db
+        .insertInto('entity_requests')
+        .values(request)
+        .returningAll()
+        .executeTakeFirstOrThrow()
+}
+
+export async function getEntityRequestById(id: string) {
+    return await db
+        .selectFrom('entity_requests')
+        .leftJoin('departments as request_departments', 'request_departments.id', 'entity_requests.requested_by_id')
+        .leftJoin('agencies as request_agencies', 'request_agencies.id', 'entity_requests.requested_by_id')
+        .leftJoin('operating_units as request_ous', 'request_ous.id', 'entity_requests.requested_by_id')
+        .leftJoin('users', 'users.id', 'entity_requests.requested_by_user_id')
+        .leftJoin('departments as parent_departments', 'parent_departments.id', 'entity_requests.proposed_parent_department_id')
+        .leftJoin('agencies as parent_agencies', 'parent_agencies.id', 'entity_requests.proposed_parent_agency_id')
+        .leftJoin('operating_units as parent_ous', 'parent_ous.id', 'entity_requests.proposed_parent_ou_id')
+        .select([
+            'entity_requests.id',
+            'entity_requests.requested_by_id',
+            'entity_requests.requested_by_type',
+            'entity_requests.requested_by_user_id',
+            'entity_requests.proposed_name',
+            'entity_requests.proposed_abbr',
+            'entity_requests.proposed_classification',
+            'entity_requests.proposed_agency_type',
+            'entity_requests.proposed_parent_department_id',
+            'entity_requests.proposed_parent_agency_id',
+            'entity_requests.proposed_parent_ou_id',
+            'entity_requests.legal_basis',
+            'entity_requests.status',
+            'entity_requests.dbm_remarks',
+            'entity_requests.resulting_id',
+            'entity_requests.created_at',
+            'users.name as requested_by_user_name',
+            sql<string>`COALESCE(request_departments.name, request_agencies.name, request_ous.name, '')`.as('requested_by_entity_name'),
+            'parent_departments.name as proposed_parent_department_name',
+            'parent_agencies.name as proposed_parent_agency_name',
+            'parent_ous.name as proposed_parent_ou_name',
+        ])
+        .where('entity_requests.id', '=', id)
+        .executeTakeFirst()
+}
+
+export async function getPendingEntityRequests() {
+    return await db
+        .selectFrom('entity_requests')
+        .leftJoin('departments as request_departments', 'request_departments.id', 'entity_requests.requested_by_id')
+        .leftJoin('agencies as request_agencies', 'request_agencies.id', 'entity_requests.requested_by_id')
+        .leftJoin('operating_units as request_ous', 'request_ous.id', 'entity_requests.requested_by_id')
+        .leftJoin('users', 'users.id', 'entity_requests.requested_by_user_id')
+        .select([
+            'entity_requests.id',
+            'entity_requests.proposed_name',
+            'entity_requests.proposed_abbr',
+            'entity_requests.proposed_classification',
+            'entity_requests.proposed_agency_type',
+            'entity_requests.legal_basis',
+            'entity_requests.status',
+            'entity_requests.created_at',
+            'users.name as requested_by_user_name',
+            sql<string>`COALESCE(request_departments.name, request_agencies.name, request_ous.name, '')`.as('requested_by_entity_name'),
+        ])
+        .where('entity_requests.status', '=', 'pending')
+        .orderBy('entity_requests.created_at', 'asc')
+        .execute()
+}
+
+export async function updateEntityRequest(id: string, updateWith: EntityRequestUpdate): Promise<void> {
+    await db
+        .updateTable('entity_requests')
+        .set(updateWith)
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
 }
 
 async function getOperatingUnitDescendantIds(rootOuId: string): Promise<string[]> {

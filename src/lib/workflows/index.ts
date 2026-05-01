@@ -16,6 +16,10 @@ export type Workflow = {
     transitions: Record<string, WorkflowTransition>
 }
 
+export function roleInWorkflow(role: string, workflow: Workflow): boolean {
+    return workflow.roles.includes(role)
+}
+
 export function canSign(
     authStatus: string,
     userAccessLevel: string,

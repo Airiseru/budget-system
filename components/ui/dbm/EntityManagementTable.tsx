@@ -19,6 +19,7 @@ type Props = {
     operatingUnits: OperatingUnitOption[]
     entityName: string
     basePath?: string
+    showActions?: boolean
 }
 
 type Row = {
@@ -35,16 +36,14 @@ type Row = {
     deactivateUrl: string
 }
 
-export function EntitiesTable({ departments, agencies, operatingUnits, entityName, basePath = '/admin/entities' }: Props) {
-    // mapping of department id to agencies
+export function EntityManagementTable({ departments, agencies, operatingUnits, entityName, basePath = '/dbm/entities', showActions = true }: Props) {
     const agenciesByDeptId = new Map<string | null, AgencyOption[]>()
-
     const ousByParentId = new Map<string | null, OperatingUnitOption[]>()
 
     agencies?.forEach(agency => {
         if (!agency) return
-        const key = agency.department_id ?? null // null key for independent agencies
-        if (!agenciesByDeptId.has(key)) agenciesByDeptId.set(key, []) // create empty array if it doesn't exist
+        const key = agency.department_id ?? null
+        if (!agenciesByDeptId.has(key)) agenciesByDeptId.set(key, [])
         agenciesByDeptId.get(key)!.push(agency)
     })
 
@@ -57,7 +56,6 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
 
     const rows: Row[] = []
 
-    // helper to add an agency and its operating units
     function addOperatingUnit(ou: OperatingUnitOption, parentName: string, depth: number) {
         rows.push({
             id: ou.id,
@@ -66,7 +64,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             uacs_code: ou.uacs_code,
             type: ou.parent_ou_id ? 'Lower-Level OU' : 'Operating Unit',
             badge: 'outline',
-            status: (ou.status ?? 'active'),
+            status: ou.status ?? 'active',
             parent: parentName,
             depth,
             editUrl: `${basePath}/operating-unit/${ou.id}/edit`,
@@ -98,7 +96,6 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
             })
     }
 
-    // departments and their children
     departments?.forEach(dept => {
         if (!dept) return
         rows.push({
@@ -117,19 +114,16 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
         agenciesByDeptId.get(dept.id)?.forEach(agency => addAgency(agency, dept.name))
     })
 
-    // agencies under the department
     if (!departments || departments.filter(Boolean).length === 0) {
         agenciesByDeptId.forEach((deptAgencies, deptId) => {
-            if (deptId === null) return  // independent agencies handled separately
+            if (deptId === null) return
             deptAgencies.forEach(agency => addAgency(agency, entityName))
         })
     }
 
-    // independent agencies (no department)
     agenciesByDeptId.get(null)?.forEach(agency => addAgency(agency, 'Independent'))
 
-    // operating units with no agency in the list
-    const addedOuIds = new Set(rows.map(r => r.id))
+    const addedOuIds = new Set(rows.map(row => row.id))
     operatingUnits?.forEach(ou => {
         if (!ou || addedOuIds.has(ou.id)) return
         rows.push({
@@ -166,7 +160,7 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                             <TableHead>Type</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Under</TableHead>
-                            <TableHead className="text-right">Actions</TableHead>
+                            {showActions && <TableHead className="text-right">Actions</TableHead>}
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -191,18 +185,20 @@ export function EntitiesTable({ departments, agencies, operatingUnits, entityNam
                                     </Badge>
                                 </TableCell>
                                 <TableCell className="text-muted-foreground text-sm">{row.parent}</TableCell>
-                                <TableCell className="text-right">
-                                    <Button variant="ghost" size="icon" disabled={row.status === 'inactive'}>
+                                {showActions && (
+                                    <TableCell className="text-right">
                                         <Link href={row.editUrl}>
-                                            <Pencil className="w-4 h-4" />
+                                            <Button variant="ghost" size="icon" disabled={row.status === 'inactive'}>
+                                                <Pencil className="w-4 h-4" />
+                                            </Button>
                                         </Link>
-                                    </Button>
-                                    <Button variant="ghost" size="icon" disabled={row.status === 'inactive'}>
                                         <Link href={row.deactivateUrl}>
-                                            <CircleOff className="w-4 h-4 text-destructive" />
+                                            <Button variant="ghost" size="icon" disabled={row.status === 'inactive'}>
+                                                <CircleOff className="w-4 h-4 text-destructive" />
+                                            </Button>
                                         </Link>
-                                    </Button>
-                                </TableCell>
+                                    </TableCell>
+                                )}
                             </TableRow>
                         ))}
                     </TableBody>

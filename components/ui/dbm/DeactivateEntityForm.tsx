@@ -13,7 +13,7 @@ type Props = {
     currentStatus?: 'active' | 'inactive'
 }
 
-export function DeleteEntityForm({ entityId, entityType, entityName, basePath = '/admin/entities', currentStatus = 'active' }: Props) {
+export function DeactivateEntityForm({ entityId, entityType, entityName, basePath = '/admin/entities', currentStatus = 'active' }: Props) {
     const [state, action, pending] = useActionState(deactivateEntityAction, undefined)
 
     return (

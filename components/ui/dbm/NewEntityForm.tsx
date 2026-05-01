@@ -8,15 +8,19 @@ import {
 } from '@/components/ui/select'
 import { Department, Agency, OperatingUnit } from '@/src/types/entities'
 
+type DepartmentOption = Pick<Department, 'id' | 'name'>
+type AgencyOption = Pick<Agency, 'id' | 'name' | 'department_id'>
+type OperatingUnitOption = Pick<OperatingUnit, 'id' | 'name' | 'agency_id'>
+
 type Props = {
     canCreate: {
         department: boolean
         agency: boolean
         operating_unit: boolean
     };
-    departments: Partial<Department[]>
-    agencies: Partial<Agency[]>
-    operatingUnits: Partial<OperatingUnit[]>
+    departments: DepartmentOption[]
+    agencies: AgencyOption[]
+    operatingUnits: OperatingUnitOption[]
 }
 
 const entityTypeLabels: Record<string, string> = {

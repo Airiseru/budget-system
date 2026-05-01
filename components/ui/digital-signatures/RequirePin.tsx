@@ -67,7 +67,7 @@ export function RequirePin({
             const signaturePayload = buildSignaturePayload({
                 entity_id: entityId,
                 user_id: userId,
-                changed_at: date.toISOString(),
+                changed_at: date,
                 ...actionPayload
             })
 

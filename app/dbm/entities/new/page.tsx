@@ -1,6 +1,6 @@
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
-import { NewEntityForm } from '@/components/ui/admin/NewEntityForm'
+import { NewEntityForm } from '@/components/ui/dbm/NewEntityForm'
 import BackButton from '@/components/ui/BackButton'
 import { loadEntities } from '@/src/actions/entities'
 

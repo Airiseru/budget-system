@@ -10,6 +10,7 @@ import {
     getCurrentSignatoryRole,
     getNextStatus,
     canSign,
+    roleInWorkflow,
 } from "@/src/lib/workflows";
 import { submitForm } from "@/src/actions/form";
 import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
@@ -49,7 +50,8 @@ export default async function RetireeDetailsPage({
     const currentSignatoryRole = getCurrentSignatoryRole(
         currentStatus,
         workflow,
-    );
+    )
+
     const userCanSign = currentSignatoryRole
         ? canSign(
               currentStatus,
@@ -58,7 +60,9 @@ export default async function RetireeDetailsPage({
               currentSignatoryRole,
               workflow,
           )
-        : false;
+        : false
+
+    const userInWorkflow = roleInWorkflow(session.user.workflow_role ?? "", workflow)
 
     const nextStatus =
         getNextStatus(currentStatus, workflow, "submit") || "approved";
@@ -122,6 +126,7 @@ export default async function RetireeDetailsPage({
             versionTabs={versionFamily.forms}
             originalFormId={versionFamily.originalFormId}
             isDbmEvaluator={isActingAsEvaluator}
+            userInWorkflow={userInWorkflow}
             userCanSign={userCanSign}
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}

@@ -27,6 +27,7 @@ interface StaffingViewProps {
         updated_at: Date
     }[]
     workflowData: {
+        userInWorkflow: boolean
         userCanSign: boolean
         currentSignatoryRole: string | null
         existingSignature: any
@@ -337,6 +338,7 @@ export default function StaffingView({
                 entityId={summary.entity_id}
                 authStatus={summary.auth_status ?? ""} 
                 statusMessage={signSectionStatusMessage}
+                userInWorkflow={workflowData.userInWorkflow}
                 userCanSign={canSignCurrentVersion && !existingSignature}
                 signatoryRole={existingSignature ? existingSignature.role : (currentSignatoryRole ?? "")}
                 alreadySigned={!!existingSignature}

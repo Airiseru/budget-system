@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { sessionWithEntity } from '@/src/actions/auth'
-import { DeleteEntityForm } from '@/components/ui/admin/DeleteEntityForm'
+import { DeactivateEntityForm } from '@/components/ui/dbm/DeactivateEntityForm'
 import BackButton from '@/components/ui/BackButton'
 import { createEntityRepository } from '@/src/db/factory'
 
@@ -39,7 +39,7 @@ export default async function DeactivateEntityPage({
                 <div className="w-[73px]" />
             </div>
 
-            <DeleteEntityForm
+            <DeactivateEntityForm
                 entityId={entity.id}
                 entityType={dbEntityType}
                 entityName={entity.name}

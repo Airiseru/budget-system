@@ -1,6 +1,6 @@
 import { loadEntities } from "@/src/actions/entities"
-import { EntitiesTable } from '@/components/ui/admin/EntitiesTable'
-import NewEntityButton from '@/components/ui/admin/NewEntityButton'
+import { EntityManagementTable } from '@/components/ui/dbm/EntityManagementTable'
+import NewEntityButton from '@/components/ui/dbm/NewEntityButton'
 import BackButton from "@/components/ui/BackButton"
 
 export default async function EntitiesPage() {
@@ -31,7 +31,7 @@ export default async function EntitiesPage() {
                 <NewEntityButton basePath="/dbm/entities" />
             </div>
 
-            <EntitiesTable
+            <EntityManagementTable
                 departments={departments}
                 agencies={agencies}
                 operatingUnits={operatingUnits}

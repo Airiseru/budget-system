@@ -15,6 +15,7 @@ type Props = {
     entityId: string;
     authStatus: string;
     statusMessage?: string;
+    userInWorkflow: boolean;
     userCanSign: boolean;
     signatoryRole?: string;
     nextSignatoryRole?: string;
@@ -47,6 +48,7 @@ export function SignSection({
     entityId,
     authStatus,
     statusMessage,
+    userInWorkflow,
     userCanSign,
     signatoryRole,
     alreadySigned,
@@ -56,9 +58,9 @@ export function SignSection({
     workflow,
 }: Props) {
     const shouldShowLatestRejection =
-        !!latestRejection?.remarks && signatories.length === 0;
+        !!latestRejection?.remarks && signatories.length === 0
     const shouldShowPastSignatures =
-        shouldShowLatestRejection && pastSignatories.length > 0;
+        shouldShowLatestRejection && pastSignatories.length > 0
 
     return (
         <div className="border border-border rounded-lg p-6 space-y-4">
@@ -192,7 +194,7 @@ export function SignSection({
                 </div>
             ) : authStatus !== "approved" ? (
                 <p className="text-sm text-muted-foreground italic">
-                    You are not authorized to sign at this stage.
+                    {userInWorkflow ? "You are not authorized to sign at this stage." : "You are not part of this workflow."}
                 </p>
             ) : null}
         </div>

@@ -10,6 +10,9 @@ export default function AdminPage() {
                 <Button variant="outline">
                     <Link href="/admin/pending">Pending Approvals</Link>
                 </Button>
+                <Button variant="outline">
+                    <Link href="/admin/entities">Entities</Link>
+                </Button>
                 <HomeButton url="/home"></HomeButton>
             </div>
         </main>

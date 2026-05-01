@@ -8,6 +8,10 @@ import {
 } from '@/components/ui/select'
 import { Department, Agency, OperatingUnit } from '@/src/types/entities'
 
+type DepartmentOption = Pick<Department, 'id' | 'name'>
+type AgencyOption = Pick<Agency, 'id' | 'name' | 'department_id'>
+type OperatingUnitOption = Pick<OperatingUnit, 'id' | 'name' | 'agency_id'>
+
 type Props = {
     canCreate: {
         department: boolean
@@ -25,9 +29,9 @@ type Props = {
         agency_id?: string | null
         parent_ou_id?: string | null
     }
-    departments: Partial<Department[]>
-    agencies: Partial<Agency[]>
-    operatingUnits: Partial<OperatingUnit[]>
+    departments: DepartmentOption[]
+    agencies: AgencyOption[]
+    operatingUnits: OperatingUnitOption[]
 }
 
 const agencyTypeLabels: Record<string, string> = {
@@ -100,7 +104,7 @@ export function EditEntityForm({ canCreate, entityType, entity, departments, age
                 <input
                     id="abbr"
                     name="abbr"
-                    defaultValue={state?.values?.abbr ?? entity.abbr}
+                    defaultValue={state?.values?.abbr ?? entity.abbr ?? ''}
                     className="border border-border px-3 py-2 my-1 w-full rounded bg-background"
                     autoComplete="off"
                 />

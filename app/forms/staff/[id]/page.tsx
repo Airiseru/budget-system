@@ -1,5 +1,5 @@
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow"
-import { getCurrentSignatoryRole, canSign, getNextStatus } from "@/src/lib/workflows"
+import { getCurrentSignatoryRole, canSign, getNextStatus, roleInWorkflow } from "@/src/lib/workflows"
 import { createStaffingRepository, createKeyRepository, createPapRepository, createFormRepository, createAuditRepository } from "@/src/db/factory"
 import { submitForm } from "@/src/actions/form"
 import { sessionWithEntity } from "@/src/actions/auth"
@@ -31,6 +31,8 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const userCanSign = currentSignatoryRole
         ? canSign(summary.auth_status ?? "", session.user.access_level, session.user.workflow_role ?? "", currentSignatoryRole, workflow)
         : false
+
+    const userInWorkflow = roleInWorkflow(session.user.workflow_role ?? "", workflow)
 
     const nextStatus = getNextStatus(summary.auth_status ?? "", workflow, 'submit') || "approved"
 
@@ -82,6 +84,7 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
             updateAuthStatus={updateAuthStatus}
             deleteFormAction={deleteFormAction}
             workflowData={{
+                userInWorkflow,
                 userCanSign,
                 currentSignatoryRole,
                 existingSignature,

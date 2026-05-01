@@ -125,6 +125,31 @@ export type OperatingUnit = Selectable<OperatingUnitsTable>
 export type NewOperatingUnit = Insertable<OperatingUnitsTable>
 export type OperatingUnitUpdate = Updateable<OperatingUnitsTable>
 
+export type EntityRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface EntityRequestsTable {
+    id: Generated<string>
+    requested_by_id: string
+    requested_by_type: string
+    requested_by_user_id: string
+    proposed_name: string
+    proposed_abbr: string | null
+    proposed_classification: 'department' | 'agency' | 'operating_unit'
+    proposed_agency_type: 'bureau' | 'attached_agency' | null
+    proposed_parent_department_id: string | null
+    proposed_parent_agency_id: string | null
+    proposed_parent_ou_id: string | null
+    legal_basis: string
+    status: EntityRequestStatus
+    dbm_remarks: string | null
+    resulting_id: string | null
+    created_at: Generated<Date>
+}
+
+export type EntityRequest = Selectable<EntityRequestsTable>
+export type NewEntityRequest = Insertable<EntityRequestsTable>
+export type EntityRequestUpdate = Updateable<EntityRequestsTable>
+
 export type EntitySegments = {
     entity_id: string
     entity_type: string

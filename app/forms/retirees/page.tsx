@@ -25,6 +25,7 @@ export default async function RetireesPage() {
         // Fetching all retiree list submissions
         const data = await RetireeRepo.getAllRetireeSubmissions(
             session.user_entity.entity_type ?? '',
+            session.user.role ?? '',
             session.user.entity_id ?? ''
         ) 
 

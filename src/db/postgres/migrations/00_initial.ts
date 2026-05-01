@@ -156,6 +156,31 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 
+    // Requests to create new entity
+    await db.schema
+        .createTable('entity_requests')
+        .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
+
+        // Requester details
+        .addColumn('requested_by_id', 'uuid', (col) => col.references('entities.id').notNull())
+        .addColumn('requested_by_type', 'varchar', (col) => col.notNull()) // departments, agencies, operating_units
+        .addColumn('requested_by_user_id', 'varchar', (col) => col.references('users.id').notNull())
+        
+        // Request details
+        .addColumn('proposed_name', 'varchar', (col) => col.notNull())
+        .addColumn('proposed_classification', 'varchar', (col) => col.notNull())
+        .addColumn('legal_basis', 'text', (col) => col.notNull()) // e.g., "Republic Act No. 11234"
+        
+        // Workflow details
+        .addColumn('status', 'varchar', (col) => col.notNull().defaultTo('pending')) // pending, approved, rejected
+        .addColumn('dbm_remarks', 'text') // Additional remarks from DBM
+        
+        // Link to master data if approved
+        .addColumn('resulting_id', 'uuid', (col) => col.references('entities.id'))
+        
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+        .execute()
+
     // Create B-tree indexes
     await db.schema.createIndex('idx_entities_id').on('entities').column('id').execute()
     await db.schema.createIndex('idx_forms_entity_id').on('forms').column('entity_id').execute()
@@ -187,6 +212,7 @@ export async function down(db: Kysely<any>): Promise<void> {
     // Drop tables
     await db.schema.dropTable('entities').execute()
     await db.schema.dropTable('users').execute()
+    await db.schema.dropTable('forms').execute()
     await db.schema.dropTable('user_keys').execute()
     await db.schema.dropTable('signatories').execute()
     await db.schema.dropTable('sessions').execute()
@@ -198,5 +224,5 @@ export async function down(db: Kysely<any>): Promise<void> {
     await db.schema.dropTable('departments').execute()
     await db.schema.dropTable('agencies').execute()
     await db.schema.dropTable('operating_units').execute()
-    await db.schema.dropTable('forms').execute()
+    await db.schema.dropTable('entity_requests').execute()
 }

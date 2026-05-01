@@ -22,6 +22,7 @@ interface RetireeViewProps {
         auth_status: string | null;
         updated_at: Date;
     }[];
+    userInWorkflow: boolean;
     userCanSign: boolean;
     currentSignatoryRole: string | null;
     existingSignature: any;
@@ -48,6 +49,7 @@ export default function RetireeView({
     isDbmEvaluator = false,
     originalFormId,
     versionTabs,
+    userInWorkflow,
     userCanSign,
     currentSignatoryRole,
     existingSignature,
@@ -91,18 +93,21 @@ export default function RetireeView({
                                 ? "Edit Form"
                                 : "Overwrite Form"}
                         </Link>
-                        <div className="flex justify-end gap-2">
-                            <form action={updateAuthStatus}>
-                                <button
-                                    type="submit"
-                                    className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
-                                >
-                                    {session.user.role !== "dbm"
-                                        ? "Submit Form"
-                                        : "Finalize Overwrite"}
-                                </button>
-                            </form>
-                        </div>
+
+                        {session.user.role !== 'dbm' && (
+                            <div className="flex justify-end gap-2">
+                                <form action={updateAuthStatus}>
+                                    <button
+                                        type="submit"
+                                        className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
+                                    >
+                                        {session.user.role !== "dbm"
+                                            ? "Submit Form"
+                                            : "Finalize Overwrite"}
+                                    </button>
+                                </form>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -392,6 +397,7 @@ export default function RetireeView({
                 entityId={data.entity_id}
                 authStatus={data.auth_status ?? ""}
                 statusMessage={signSectionStatusMessage}
+                userInWorkflow={userInWorkflow}
                 userCanSign={canSignCurrentVersion && !existingSignature}
                 signatoryRole={
                     existingSignature

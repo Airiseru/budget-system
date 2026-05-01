@@ -104,7 +104,10 @@ export async function getRetireesFormById(id: string) {
 
 export async function getAllRetireeSubmissions(
     entityType: string,
-    entityId: string
+    userRole: string,
+    entityId: string,
+    inDbmModule: boolean = false,
+    fiscalYear: number = new Date().getFullYear() + 1,
 ) {
     let query = db
         .selectFrom('retirees_list')
@@ -118,17 +121,56 @@ export async function getAllRetireeSubmissions(
             'forms.entity_id as entity_id',
             'forms.parent_form_id as parent_form_id',
             'forms.version as version'
-        ]);
+        ])
+        .where('forms.parent_form_id', 'is', null)
+        .orderBy('retirees_list.submission_date', 'desc')
+    
+    if (entityType === "national") {
+        return await query.execute()
+    }
 
-    if (entityType !== 'admin') {
-        // Use the explicit table name in the where clause
-        query = query.where('forms.entity_id', '=', entityId);
+    // DBM can see everything once form is submitted
+    if (userRole === 'dbm' && inDbmModule) {
+        return await query
+            .where(({ eb, or }) => or([
+                eb('forms.auth_status', '=', 'dbm'),
+                eb('forms.auth_status', '=', 'done'),
+            ]))
+            .where('forms.fiscal_year', '=', fiscalYear)
+            .execute()
+    }
+
+    // Departments can see their own and children forms
+    if (entityType === 'department') {
+        return await query
+            .leftJoin('agencies', 'agencies.id', 'forms.entity_id')
+            .leftJoin('operating_units', 'operating_units.id', 'forms.entity_id')
+            .where(({ eb, or }) => or([
+                eb('forms.entity_id', '=', entityId),
+                eb('agencies.department_id', '=', entityId),
+                eb('operating_units.agency_id', 'in',
+                    db.selectFrom('agencies')
+                        .where('department_id', '=', entityId)
+                        .select('id')
+                ),
+            ]))
+            .execute()
+    }
+
+    // Agencies can see their own and forms of children operating unit
+    if (entityType === 'agency') {
+        return await query
+            .leftJoin('operating_units', 'operating_units.id', 'forms.entity_id')
+            .where(({ eb, or }) => or([
+                eb('forms.entity_id', '=', entityId),
+                eb('operating_units.agency_id', '=', entityId),
+            ]))
+            .execute()
     }
 
     return await query
-        .where('forms.parent_form_id', 'is', null)
-        .orderBy('forms.fiscal_year', 'desc')
-        .execute();
+        .where('forms.entity_id', '=', entityId)
+        .execute()
 }
 
 export async function updateRetirees(formId: string, retirees: NewRetireeRecord[]) {
