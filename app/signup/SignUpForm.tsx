@@ -73,8 +73,7 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
                                     ? getEntityName(selectedEntityId) 
                                     : <span className="text-gray-400">Select your Department or Agency</span>
                                 }
-                        </SelectValue>
-
+                            </SelectValue>
                         </SelectTrigger>
                         
                         <SelectContent>
@@ -88,7 +87,7 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
                                         <SelectLabel className="bg-muted/50">{dept.name}</SelectLabel>
                                         
                                         <SelectItem value={dept.id}>
-                                            {dept.name} (Central Office)
+                                            {dept.name}
                                         </SelectItem>
                                         
                                         {childAgencies.map((agency) => (

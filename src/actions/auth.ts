@@ -29,11 +29,15 @@ export async function sessionWithEntity() {
         entity?.entity_type === 'operating_unit' ? entity.operating_unit_name :
         null
 
+    const entityFullUacs = await EntityRepository.getFullUacsCodeByEntityId(session.user.entity_id || '')
+
     return {
         ...session,
         user_entity: {
             entity_type: entity?.entity_type,
             entity_name: entityName,
+            entity_full_uacs: entityFullUacs?.fullCode,
+            entity_full_name: entityFullUacs?.entityName
         }
     }
 }

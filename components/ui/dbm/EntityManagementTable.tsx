@@ -166,7 +166,7 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
                     <TableBody>
                         {rows.map(row => (
                             <TableRow key={row.id}>
-                                <TableCell className="font-medium" style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
+                                <TableCell className="font-medium max-w-md whitespace-normal break-words align-center" style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
                                     {row.depth > 0 ? '↳ ' : ''}
                                     {row.name}{row.abbr}
                                 </TableCell>
@@ -184,7 +184,7 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
                                         {row.status.toUpperCase()}
                                     </Badge>
                                 </TableCell>
-                                <TableCell className="text-muted-foreground text-sm">{row.parent}</TableCell>
+                                <TableCell className="text-muted-foreground text-sm max-w-md whitespace-normal break-words align-center">{row.parent}</TableCell>
                                 {showActions && (
                                     <TableCell className="text-right">
                                         <Link href={row.editUrl}>

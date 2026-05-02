@@ -4,6 +4,10 @@ export const ENTITY_TYPE_LABELS: Record<string, string> = {
     operating_unit: 'Operating Unit',
 }
 
+export type UACS_CATEOGIRES = 'funding_source' | 'location' | 'object_code'
+
+export const VALID_UACS_CATEGORIES: UACS_CATEOGIRES[] = ['funding_source', 'location', 'object_code']
+
 export const FORM_TYPES: Record<string, string> = {
     all: 'All',
     bp_staffing: 'BP Form 204',

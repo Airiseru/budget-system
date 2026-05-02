@@ -1,9 +1,10 @@
-import { sessionDetails } from '@/src/actions/auth'
+import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
+import { ROLE_LABELS, ACCESS_LEVEL_LABELS } from '@/src/lib/constants'
 
 export default async function UserSettingsPage() {
-    const session = await sessionDetails()
+    const session = await sessionWithEntity()
     if (!session) redirect('/login')
 
     return (
@@ -29,12 +30,16 @@ export default async function UserSettingsPage() {
                     <p className="font-medium">{session.user.email}</p>
                 </div>
                 <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Designation</p>
+                    <p className="font-medium">{session.user_entity.entity_full_name}</p>
+                </div>
+                <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Role</p>
-                    <p className="font-medium capitalize">{session.user.role}</p>
+                    <p className="font-medium capitalize">{ROLE_LABELS[session.user.role]}</p>
                 </div>
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Access Level</p>
-                    <p className="font-medium capitalize">{session.user.access_level}</p>
+                    <p className="font-medium capitalize">{ACCESS_LEVEL_LABELS[session.user.access_level]}</p>
                 </div>
             </div>
 

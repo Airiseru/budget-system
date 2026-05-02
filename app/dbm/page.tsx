@@ -36,6 +36,10 @@ export default async function HomePage() {
                     url='/dbm/entity-requests'
                     label='Entity Requests'
                 />
+                <GeneralButton
+                    url='/dbm/uacs'
+                    label='Manage UACS Codes'
+                />
                 <HomeButton url="/home"></HomeButton>
             </div>
         </main>

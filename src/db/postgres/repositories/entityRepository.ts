@@ -129,6 +129,144 @@ export async function getOperatingUnitById(id: string): Promise<OperatingUnit | 
     return await db.selectFrom('operating_units').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
 }
 
+function normalizeSegment(code: string | null | undefined, length: number) {
+    if (!code) return ''.padEnd(length, '0')
+    return code.slice(0, length).padEnd(length, '0')
+}
+
+async function getOperatingUnitUacsSegments(operatingUnitId: string) {
+    let current = await getOperatingUnitById(operatingUnitId)
+    if (!current) {
+        return { topLevelCode: '00', lowerLevelCode: '00000' }
+    }
+
+    if (!current.parent_ou_id) {
+        return {
+            topLevelCode: normalizeSegment(current.uacs_code, 2),
+            lowerLevelCode: '00000',
+        }
+    }
+
+    const lowerLevelCode = normalizeSegment(current.uacs_code, 5)
+
+    while (current?.parent_ou_id) {
+        current = await getOperatingUnitById(current.parent_ou_id)
+        if (!current) break
+        if (!current.parent_ou_id) {
+            return {
+                topLevelCode: normalizeSegment(current.uacs_code, 2),
+                lowerLevelCode,
+            }
+        }
+    }
+
+    return { topLevelCode: '00', lowerLevelCode }
+}
+
+export async function getFullUacsCodeByEntityId(entityId: string): Promise<Record<string, string> | null> {
+    const entity = await getEntityById(entityId).catch(() => null)
+    if (!entity) return null
+
+    if (entity.type === 'department') {
+        const department = await getDepartmentById(entityId).catch(() => null)
+        if (!department) return null
+        const entityName = department.name
+        return {
+            fullCode: `${normalizeSegment(department.uacs_code, 2)}0000000000`,
+            entityName
+        }
+    }
+
+    if (entity.type === 'agency') {
+        const agency = await getAgencyById(entityId).catch(() => null)
+        if (!agency) return null
+        const department = await getDepartmentById(agency.department_id ?? '').catch(() => null)
+        const departmentCode = agency.department_id
+            ? normalizeSegment(department?.uacs_code, 2)
+            : '00'
+
+        const entityName = `${agency.name} under the ${department?.name}`
+
+        return {
+            fullCode: `${departmentCode}${normalizeSegment(agency.uacs_code, 3)}0000000`,
+            entityName
+        }
+    }
+
+    if (entity.type === 'operating_unit') {
+        const operatingUnit = await getOperatingUnitById(entityId).catch(() => null)
+        if (!operatingUnit) return null
+
+        const agency = await getAgencyById(operatingUnit.agency_id).catch(() => null)
+        const department = await getDepartmentById(agency?.department_id ?? '').catch(() => null)
+        const departmentCode = agency?.department_id
+            ? normalizeSegment(department?.uacs_code, 2)
+            : '00'
+        const agencyCode = normalizeSegment(agency?.uacs_code, 3)
+        const { topLevelCode, lowerLevelCode } = await getOperatingUnitUacsSegments(entityId)
+
+        const entityName = `${operatingUnit.name} under the ${department?.name}'s ${agency?.name}`
+
+        return {
+            fullCode: `${departmentCode}${agencyCode}${topLevelCode}${lowerLevelCode}`,
+            entityName
+        }
+    }
+
+    return null
+}
+
+export async function getFullEntityNameById(entityId: string): Promise<string | null> {
+    const entity = await getEntityById(entityId).catch(() => null)
+    if (!entity) return null
+    let text = ""
+
+    if (entity.type === 'operating_unit') {
+        const operatingUnit = await getOperatingUnitById(entityId).catch(() => null)
+        if (!operatingUnit) return null
+
+        let parentOperatingUnit = null
+
+        if (operatingUnit.parent_ou_id) {
+            parentOperatingUnit = await getOperatingUnitById(operatingUnit.parent_ou_id).catch(() => null)
+            if (!parentOperatingUnit) return null
+        }
+
+        const agency = await getAgencyById(operatingUnit.agency_id).catch(() => null)
+        if (!agency) return null
+
+        const department = await getDepartmentById(agency.department_id ?? '').catch(() => null)
+        if (!department) return null
+
+        text = `${operatingUnit.name}`
+
+        if (parentOperatingUnit) {
+            text = `${parentOperatingUnit.name} - ${text}`
+        }
+        
+        text += `under the ${department.name}'s ${agency.name}`
+    }
+
+    else if (entity.type === 'agency') {
+        const agency = await getAgencyById(entityId).catch(() => null)
+        if (!agency) return null
+
+        const department = await getDepartmentById(agency.department_id ?? '').catch(() => null)
+        if (!department) return null
+
+        text = `${agency.name} under the ${department.name}`
+    }
+
+    else if (entity.type === 'department') {
+        const department = await getDepartmentById(entityId).catch(() => null)
+        if (!department) return null
+
+        text = `${department.name}`
+    }
+
+    return text
+}
+
 type OperatingUnitSummary = Pick<OperatingUnit, 'id' | 'name' | 'abbr' | 'uacs_code' | 'agency_id' | 'parent_ou_id' | 'status'>
 
 export async function getAllOperatingUnitsByAgencyId(agency_id: string): Promise<OperatingUnitSummary[]> {
