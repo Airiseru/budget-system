@@ -38,14 +38,11 @@ export default async function DBMFormsPage({ searchParams }: { searchParams: Pro
             offset
         })
 
-        const hasNextPage = forms.length === limit;
-
         return (
             <AllFormView 
                 forms={forms}
                 page={page}
                 totalPages={totalPages}
-                hasNextPage={hasNextPage}
                 selectedYear={selectedYear}
                 selectedStatus={selectedStatus}
                 selectedType={selectedType}

@@ -651,7 +651,7 @@ export async function updateEntityRequest(id: string, updateWith: EntityRequestU
         .executeTakeFirstOrThrow()
 }
 
-async function getOperatingUnitDescendantIds(rootOuId: string): Promise<string[]> {
+export async function getOperatingUnitDescendantIds(rootOuId: string): Promise<string[]> {
     const descendantIds: string[] = []
     let frontier = [rootOuId]
 

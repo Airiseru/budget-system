@@ -1,6 +1,7 @@
 import { db } from '../database'
 import { TLB_FACTOR } from '@/src/lib/constants';
 import { NewRetireeRecord, NewRetireesList } from '@/src/types/retirees';
+import { getOperatingUnitDescendantIds } from './entityRepository';
 
 async function createRetireeSubmissionRecord(
     trx: any,
@@ -165,6 +166,13 @@ export async function getAllRetireeSubmissions(
                 eb('forms.entity_id', '=', entityId),
                 eb('operating_units.agency_id', '=', entityId),
             ]))
+            .execute()
+    }
+
+    if (entityType === 'operating_unit') {
+        const descendantOuIds = await getOperatingUnitDescendantIds(entityId)
+        return await query
+            .where('forms.entity_id', 'in', [entityId, ...descendantOuIds])
             .execute()
     }
 

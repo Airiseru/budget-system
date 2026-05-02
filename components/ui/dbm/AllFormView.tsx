@@ -10,7 +10,6 @@ interface DBMFormViewProps {
     forms: any[]
     page: number
     totalPages: number
-    hasNextPage: boolean
     selectedYear?: number
     selectedStatus: string
     selectedType: string
@@ -34,7 +33,6 @@ export default function AllFormView({
     forms, 
     page,
     totalPages,
-    hasNextPage, 
     selectedYear, 
     selectedStatus, 
     selectedType 
@@ -73,7 +71,7 @@ export default function AllFormView({
     }
     
     return (
-        <main className="m-6 py-10 max-w-7xl mx-auto space-y-6">
+        <main className="m-6 py-10 max-w-7xl mx-auto space-y-6 px-4">
             <div className="flex items-center justify-between">
                 <BackButton url="/dbm/" />
                 <div className="text-center">
@@ -161,7 +159,7 @@ export default function AllFormView({
                             ) : (
                                 forms.map((form) => (
                                     <tr key={form.id} className="hover:bg-secondary/20 transition-colors group">
-                                        <td className="px-4 py-3">
+                                        <td className="px-4 py-3 max-w-md whitespace-normal break-words align-center">
                                             <div className="flex items-center gap-4">
                                                 <Building2 size={16} className="text-muted-foreground/70 shrink-0" />
                                                 <div>

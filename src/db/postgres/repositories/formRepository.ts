@@ -1,5 +1,6 @@
 import { db } from '../database'
 import { Form, NewForm } from '../../../types/forms'
+import { getOperatingUnitDescendantIds } from './entityRepository'
 
 export interface FormFilters {
     fiscal_year?: number;
@@ -203,6 +204,11 @@ export async function getFormsByEntity(
             .where('agency_id', '=', entityId)
             .execute();
         validEntityIds.push(...ous.map(o => o.id))
+    }
+
+    else if (entityType === "operating_unit") {
+        const descendantOuIds = await getOperatingUnitDescendantIds(entityId)
+        validEntityIds.push(...descendantOuIds)
     }
 
     let query = db

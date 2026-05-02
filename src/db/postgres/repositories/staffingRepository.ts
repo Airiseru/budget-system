@@ -1,6 +1,7 @@
 import { db } from '../database'
 import { StaffingSummary, NewStaffingSummary, Position, NewPosition, StaffingSummaryWithPositions, NewCompensation, Compensation } from '../../../types/staffing'
 import { jsonArrayFrom } from 'kysely/helpers/postgres'
+import { getOperatingUnitDescendantIds } from './entityRepository'
 
 // --- HELPERS ---
 
@@ -396,7 +397,14 @@ export async function getAllStaffingSummaries(
             .execute()
     }
 
-    // 4. Operating Unit: Can only see their own
+    // 4. Operating Unit: Can see their own and descendant lower-level OUs
+    if (entityType === 'operating_unit') {
+        const descendantOuIds = await getOperatingUnitDescendantIds(userEntityId)
+        return await query
+            .where('forms.entity_id', 'in', [userEntityId, ...descendantOuIds])
+            .execute()
+    }
+
     return await query
         .where('forms.entity_id', '=', userEntityId)
         .execute()
