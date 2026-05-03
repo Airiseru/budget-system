@@ -56,6 +56,11 @@ export default async function ProposalsPage() {
                                 New BP 203 (Foreign)
                             </Button>
                         </Link>
+                        <Link href="/forms/proposals/rank">
+                            <Button variant="secondary">
+                                Change Priority Ranks
+                            </Button>
+                        </Link>
                     </div>
                 )}
             </ButtonGroup>
@@ -91,7 +96,11 @@ export default async function ProposalsPage() {
                                         <div className="flex items-center gap-3">
                                             <Badge
                                                 variant="outline"
-                                                className="bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300"
+                                                className={
+                                                    proposal.type === "202"
+                                                        ? "bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20"
+                                                        : "bg-secondary-foreground/10 text-secondary-foreground border-secondary-foreground/20"
+                                                }
                                             >
                                                 BP {proposal.type}
                                             </Badge>
@@ -111,6 +120,9 @@ export default async function ProposalsPage() {
                                                     "Draft"}
                                             </Badge>
                                         </div>
+                                        <p className="text-md text-primary-500 font-bold">
+                                            Project Title: {proposal.title}
+                                        </p>
                                         <p className="text-sm text-muted-foreground">
                                             Cost:{" "}
                                             {proposal.total_proposal_currency}{" "}

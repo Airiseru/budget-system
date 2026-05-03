@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ProposalSchema } from "@/src/schemas/proposal.schema";
+import { ProposalSchema } from "@/src/lib/validations/proposal.schema";
 
 interface AttributionYearTier {
     year: number;
@@ -114,9 +114,35 @@ interface ExpenseRow {
     tier?: number | null;
 }
 
+// bp form 203
+
+interface ForeignExpenseRow {
+    lp_imprest: number | string; // Loan Proceeds - Imprest/Special Account
+    lp_direct: number | string; // Loan Proceeds - Direct Payment
+    grant: number | string;
+    gop_counterpart: number | string;
+}
+
+interface ForeignFinancialTarget {
+    year: number;
+    costs: ForeignExpenseRow;
+}
+
+interface ForeignExpenseBreakdown {
+    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
+    lp_cash: number | string;
+    lp_non_cash: number | string;
+    gop: number | string;
+}
+
+interface ProjectComponent203 {
+    component_name: string;
+    costs: ForeignExpenseBreakdown[];
+}
+
 interface ProjectProposalPayload {
     proposal_year: number;
-    priority_rank: number;
+    // priority_rank: number;
     is_new: boolean;
     myca_issuance?: boolean | null;
     is_infrastructure: boolean;
@@ -132,7 +158,9 @@ interface ProjectProposalPayload {
         remarks?: string | null;
     }[];
 
-    cost_by_components: { component_name: string; costs: ExpenseRow[] }[];
+    cost_by_components:
+        | { component_name: string; costs: ExpenseRow[] }[]
+        | ProjectComponent203[];
     local_locations: { location: string; costs: ExpenseRow[] }[];
 
     local_financial_attributions: LocalFinancialAttribution[];
@@ -152,7 +180,7 @@ interface ProjectProposalPayload {
     foreign_physical_targets: { name: string }[];
 }
 
-const PrerequisiteRow = ({ pre, index, updateRow }: any) => (
+const PrerequisiteRow = ({ pre, index, updateRow, removeRow }: any) => (
     <tr className="border-b border-muted-100 last:border-0 hover:bg-muted-50/30 transition-colors">
         <td className="py-3 px-4 text-sm text-muted-700 font-medium border-r bg-background">
             <input
@@ -222,6 +250,16 @@ const PrerequisiteRow = ({ pre, index, updateRow }: any) => (
                 }
             />
         </td>
+        {index >= 13 && (
+            <td>
+                <button
+                    onClick={() => removeRow("pap_prerequisites", index)}
+                    className="text-red-400 hover:text-red-600 transition-colors"
+                >
+                    ✕
+                </button>
+            </td>
+        )}
     </tr>
 );
 
@@ -340,7 +378,7 @@ export default function ProposalForm({
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         // Top-level fields from project or defaults
         proposal_year: project?.proposal_year || 2026,
-        priority_rank: project?.priority_rank || 1,
+        // priority_rank: project?.priority_rank || 1,
         is_new: project?.is_new ?? false,
         myca_issuance: project?.myca_issuance ?? false,
         is_infrastructure: project?.is_infrastructure ?? false,
@@ -405,6 +443,22 @@ export default function ProposalForm({
         });
     };
 
+    const removeRow = <K extends keyof ProjectProposalPayload>(
+        field: K,
+        index: number,
+    ) => {
+        setPayload((prev) => {
+            const currentArray = prev[field];
+            if (Array.isArray(currentArray)) {
+                return {
+                    ...prev,
+                    [field]: currentArray.filter((_, i) => i !== index),
+                };
+            }
+            return prev;
+        });
+    };
+
     const updateExpense = (
         field: FinancialTableKey,
         parentIdx: number,
@@ -425,27 +479,66 @@ export default function ProposalForm({
         });
     };
 
+    const handleForeignChange = (
+        index: number,
+        field: string,
+        value: string,
+    ) => {
+        const updatedTargets = [...payload.foreign_financial_targets];
+        const currentCosts = (updatedTargets[index] as any).costs || {};
+
+        updatedTargets[index] = {
+            ...updatedTargets[index],
+            costs: {
+                ...currentCosts,
+                [field]: value,
+            },
+        };
+
+        setPayload((prev) => ({
+            ...prev,
+            foreign_financial_targets: updatedTargets,
+        }));
+    };
+
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setErrors({});
 
-        // Calculate the total based on the current state of the payload
-        const totalCost = calculateTotal(payload);
+        // 1. Map the components to ensure they always have an 'amount'
+        // for the Zod validator to stay happy.
+        const normalizedComponents = payload.cost_by_components.map(
+            (comp: any) => ({
+                ...comp,
+                costs: comp.costs.map((c: any) => {
+                    if (payload.type === "203") {
+                        // Sum the fields into 'amount' so the schema doesn't fail
+                        return {
+                            ...c,
+                            amount:
+                                Number(c.lp_cash || 0) +
+                                Number(c.lp_non_cash || 0) +
+                                Number(c.gop || 0),
+                            currency: "PHP",
+                        };
+                    }
+                    return c;
+                }),
+            }),
+        );
 
-        // Create the final payload including the calculated total
         const finalPayload = {
             ...payload,
-            total_proposal_cost: totalCost, // This updates the "0" you saw earlier
+            cost_by_components: normalizedComponents,
+            total_proposal_cost: calculateTotal({
+                ...payload,
+                cost_by_components: normalizedComponents,
+            }),
         };
 
-        const combinedData = {
-            ...summaryData,
-            ...finalPayload,
-        };
-
-        console.log(finalPayload);
-
+        const combinedData = { ...summaryData, ...finalPayload };
         const result = ProposalSchema.safeParse(combinedData);
+        console.log(finalPayload);
 
         if (!result.success) {
             const formattedErrors: Record<string, string> = {};
@@ -483,9 +576,25 @@ export default function ProposalForm({
             if (res.ok) {
                 router.push("/forms/proposals");
             } else {
-                // Consider adding error handling for non-ok responses
+                // Read the body ONCE
                 const errorData = await res.json();
-                console.error("Submission failed:", errorData);
+                console.log("NOOOOOOOOOOO");
+                console.log(errorData);
+
+                // Check the error code from the parsed object
+                if (
+                    errorData.code === "23505" ||
+                    errorData.error?.includes("unique_entity_rank")
+                ) {
+                    console.log("YOOO");
+                    setErrors({
+                        priority_rank:
+                            "This priority rank is already taken by another proposal.",
+                    });
+                } else {
+                    console.error("Submission failed:", errorData);
+                    // Handle other general errors
+                }
             }
         } catch (err) {
             console.error("Fetch error:", err);
@@ -500,121 +609,90 @@ export default function ProposalForm({
         targetClass: "PS" | "MOOE" | "CO" | "FINEX",
         value: string,
     ) => {
-        const parentArray = payload[field] as any[];
+        // Treat the array specifically as ExpenseRow-based for this function
+        const parentArray = payload[field] as { costs: ExpenseRow[] }[];
         const currentCosts = [...(parentArray[parentIdx].costs || [])];
+
         const existingIdx = currentCosts.findIndex(
             (c) => c.expense_class === targetClass,
         );
 
         if (existingIdx > -1) {
-            // This likely still works as it uses updateExpense
             updateExpense(field, parentIdx, existingIdx, { amount: value });
         } else {
-            // Create new entry for this expense class
-            const newCosts = [
+            const newCosts: ExpenseRow[] = [
                 ...currentCosts,
                 { expense_class: targetClass, amount: value, currency: "PHP" },
             ];
-
-            // FIX: Cast the update object as any to satisfy the complex union type
+            // Cast the update to any to bypass the union check here
             updateRow(field, parentIdx, { costs: newCosts } as any);
         }
     };
 
-    const calculateTotal = (payload: ProjectProposalPayload) => {
-        // Sum from cost_by_components
-        const componentTotal = payload.cost_by_components.reduce(
-            (sum, comp) => {
-                return (
-                    sum +
-                    comp.costs.reduce(
-                        (cSum, c) => cSum + Number(c.amount || 0),
-                        0,
-                    )
-                );
-            },
-            0,
-        );
+    const handleMatrixChange203 = (
+        componentIdx: number,
+        expenseClass: string,
+        field: string,
+        value: string,
+    ) => {
+        setPayload((prev) => {
+            // 1. Cast the array as 203 components specifically to allow internal mutations
+            const updatedComponents = [
+                ...(prev.cost_by_components as ProjectComponent203[]),
+            ];
 
-        console.log(componentTotal);
+            const component = { ...updatedComponents[componentIdx] };
+            const costs = [...(component.costs || [])];
 
-        return componentTotal;
+            const costIdx = costs.findIndex(
+                (c) => c.expense_class === expenseClass,
+            );
+
+            if (costIdx > -1) {
+                costs[costIdx] = { ...costs[costIdx], [field]: value };
+            } else {
+                costs.push({
+                    expense_class: expenseClass as any,
+                    lp_cash: field === "lp_cash" ? value : "0",
+                    lp_non_cash: field === "lp_non_cash" ? value : "0",
+                    gop: field === "gop" ? value : "0",
+                });
+            }
+
+            component.costs = costs;
+            updatedComponents[componentIdx] = component;
+
+            // 2. Return the whole state, casting updatedComponents back to its union type
+            return {
+                ...prev,
+                cost_by_components:
+                    updatedComponents as ProjectProposalPayload["cost_by_components"],
+            };
+        });
     };
 
-    // const getAmount = (
-    //     costs: ExpenseRow[],
-    //     year: number,
-    //     tier: number,
-    //     expenseClass: string,
-    // ) => {
-    //     return (
-    //         costs.find(
-    //             (c: any) =>
-    //                 c.expense_class === expenseClass &&
-    //                 c.year === year &&
-    //                 (tier === null || c.tier === tier),
-    //         )?.amount ?? ""
-    //     );
-    // };
+    const calculateTotal = (payload: ProjectProposalPayload) => {
+        return payload.cost_by_components.reduce((sum, comp) => {
+            // We check if the first cost item has the 'amount' property
+            // to distinguish between 202 and 203
+            const rowTotal = comp.costs.reduce((cSum, c) => {
+                if ("amount" in c) {
+                    // Logic for ExpenseRow (BP 202)
+                    return cSum + Number(c.amount || 0);
+                } else {
+                    // Logic for ForeignExpenseBreakdown (BP 203)
+                    return (
+                        cSum +
+                        (Number(c.lp_cash || 0) +
+                            Number(c.lp_non_cash || 0) +
+                            Number(c.gop || 0))
+                    );
+                }
+            }, 0);
 
-    // const calculateRowTotal = (
-    //     costs: ExpenseRow[],
-    //     year: number,
-    //     expenseClass: string,
-    // ) => {
-    //     return costs
-    //         .filter(
-    //             (c: any) => c.year === year && c.expense_class === expenseClass,
-    //         )
-    //         .reduce((sum, c) => sum + Number(c.amount || 0), 0);
-    // };
-
-    // const handleMatrixUpdate = (
-    //     parentIdx: number,
-    //     year: number,
-    //     tier: number | null,
-    //     expenseClass: string,
-    //     value: string,
-    // ) => {
-    //     setPayload((prev) => {
-    //         const updatedAttributions = [...prev.local_financial_attributions];
-    //         const currentCosts = [
-    //             ...(updatedAttributions[parentIdx].costs || []),
-    //         ];
-
-    //         const existingIdx = currentCosts.findIndex(
-    //             (c: any) =>
-    //                 c.year === year &&
-    //                 c.tier === tier &&
-    //                 c.expense_class === expenseClass,
-    //         );
-
-    //         if (existingIdx > -1) {
-    //             currentCosts[existingIdx] = {
-    //                 ...currentCosts[existingIdx],
-    //                 amount: value,
-    //             };
-    //         } else {
-    //             currentCosts.push({
-    //                 expense_class: expenseClass as any,
-    //                 amount: value,
-    //                 currency: "PHP",
-    //                 year,
-    //                 tier,
-    //             } as any);
-    //         }
-
-    //         updatedAttributions[parentIdx] = {
-    //             ...updatedAttributions[parentIdx],
-    //             costs: currentCosts,
-    //         };
-
-    //         return {
-    //             ...prev,
-    //             local_financial_attributions: updatedAttributions,
-    //         };
-    //     });
-    // };
+            return sum + rowTotal;
+        }, 0);
+    };
 
     return (
         <form
@@ -624,7 +702,7 @@ export default function ProposalForm({
             <div className="p-4 bg-muted-50 border-l-4 border-muted-600 rounded-r-lg">
                 <h2 className="text-lg font-bold text-muted-800">
                     BP Form {type}:{" "}
-                    {type === "202" ? "New Project" : "Expansion"}
+                    {payload.is_new === true ? "New Project" : "Expansion"}
                 </h2>
             </div>
 
@@ -759,7 +837,11 @@ export default function ProposalForm({
                         </label>
                         <input
                             type="number"
-                            className="w-full border-b border-muted-200 py-2 outline-none"
+                            className={`w-full border-b border-muted-200 py-2 outline-none ${
+                                errors.priority_rank
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
                             value={summaryData.priority_rank}
                             onChange={(e) =>
                                 setSummaryData({
@@ -768,6 +850,11 @@ export default function ProposalForm({
                                 })
                             }
                         />
+                        {errors.priority_rank && (
+                            <p className="text-red-500 text-[10px]">
+                                {errors.priority_rank}
+                            </p>
+                        )}
                     </div>
                     <div className="mb-6 p-4 bg-muted/50 border-l-4 border-muted-400 rounded-r-lg shadow-sm w-full col-span-full">
                         <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">
@@ -883,6 +970,7 @@ export default function ProposalForm({
                                 >
                                     Remarks
                                 </th>
+                                <th rowSpan={2}></th>
                             </tr>
                             <tr className="bg-background border-b">
                                 <th className="py-2 text-[9px] font-bold text-muted-500 uppercase text-center border-r w-20">
@@ -906,14 +994,14 @@ export default function ProposalForm({
                                 >
                                     Approving Authorities
                                 </td>
-                                <td className="flex flex-row-reverse">
+                                <td className="" colSpan={2}>
                                     <button
                                         type="button"
                                         onClick={() =>
                                             addRow("pap_prerequisites", {
                                                 name: "",
                                                 type: "authority",
-                                                status: "Not Applicable",
+                                                status: "True",
                                                 remarks: "",
                                             })
                                         }
@@ -931,6 +1019,7 @@ export default function ProposalForm({
                                             pre={pre}
                                             index={i}
                                             updateRow={updateRow}
+                                            removeRow={removeRow}
                                         />
                                     ),
                             )}
@@ -952,7 +1041,7 @@ export default function ProposalForm({
                                             addRow("pap_prerequisites", {
                                                 name: "",
                                                 type: "document",
-                                                status: "Not Applicable",
+                                                status: "True",
                                                 remarks: "",
                                             })
                                         }
@@ -970,6 +1059,7 @@ export default function ProposalForm({
                                             pre={pre}
                                             index={i}
                                             updateRow={updateRow}
+                                            removeRow={removeRow}
                                         />
                                     ),
                             )}
@@ -977,139 +1067,172 @@ export default function ProposalForm({
                     </table>
                 </div>
             </div>
-            <div>
-                <div
-                    className={`rounded-xl border shadow-sm overflow-hidden ${
-                        errors.cost_by_components
-                            ? "border-red-500 bg-red-50"
-                            : "border-muted-200"
-                    }`}
-                >
-                    <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                        <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
-                            COSTING BY COMPONENT(S)
-                        </h3>
-                        <button
-                            type="button"
-                            onClick={() =>
-                                addRow("cost_by_components", {
-                                    component_name: "",
-                                    costs: [],
-                                })
-                            }
-                            className="text-secondary-foreground-600 text-xs font-bold hover:underline"
-                        >
-                            + ADD COMPONENT
-                        </button>
-                    </div>
-
-                    <div className="p-0">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="bg-muted-50/50 border-b border-muted-100">
-                                    <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
-                                        Component Name
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        PS
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        MOOE
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        CO
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        FINEX
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-muted-50">
-                                {payload.cost_by_components.map((comp, i) => {
-                                    const errorKey = `cost_by_components.${i}.component_name`;
-                                    return (
-                                        <tr
-                                            key={i}
-                                            className="hover:bg-muted-50/30 transition-colors"
-                                        >
-                                            {/* Column 1: Name */}
-                                            <td className="py-3 px-4">
-                                                <input
-                                                    className={`w-full bg-transparent font-medium text-muted-700 outline-none placeholder:text-muted-300 ${errors[errorKey] ? "border-red-500" : ""}}`}
-                                                    placeholder="Component Name"
-                                                    value={comp.component_name}
-                                                    onChange={(e) =>
-                                                        updateRow(
-                                                            "cost_by_components",
-                                                            i,
-                                                            {
-                                                                component_name:
-                                                                    e.target
-                                                                        .value,
-                                                            } as any,
-                                                        )
-                                                    }
-                                                />
-                                            </td>
-
-                                            {/* Financial Columns */}
-                                            {(
-                                                [
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ] as const
-                                            ).map((itemClass) => (
-                                                <td
-                                                    key={itemClass}
-                                                    className="py-3 px-2"
-                                                >
-                                                    <input
-                                                        type="number"
-                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
-                                                        placeholder="0"
-                                                        value={
-                                                            comp.costs.find(
-                                                                (c) =>
-                                                                    c.expense_class ===
-                                                                    itemClass,
-                                                            )?.amount ?? ""
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleMatrixChange(
-                                                                "cost_by_components",
-                                                                i,
-                                                                itemClass,
-                                                                e.target.value,
-                                                            )
-                                                        }
-                                                    />
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    );
-                                })}
-                            </tbody>
-                        </table>
-
-                        {payload.cost_by_components.length === 0 && (
-                            <div className="p-8 text-center text-muted-400 text-xs italic">
-                                No components added. Click "+ ADD COMPONENT" to
-                                begin.
-                            </div>
-                        )}
-                    </div>
-                </div>
-                {errors.cost_by_components && (
-                    <p className="text-red-500 text-[10px] mt-1">
-                        {errors.cost_by_components}
-                    </p>
-                )}
-            </div>
 
             {type === "202" && (
                 <div className="space-y-8">
+                    <div>
+                        <div
+                            className={`rounded-xl border shadow-sm overflow-hidden ${
+                                errors.cost_by_components
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                                    COSTING BY COMPONENT(S)
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        addRow("cost_by_components", {
+                                            component_name: "",
+                                            costs: [],
+                                        })
+                                    }
+                                    className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                >
+                                    + ADD COMPONENT
+                                </button>
+                            </div>
+
+                            <div className="p-0">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-muted-50/50 border-b border-muted-100">
+                                            <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
+                                                Component Name
+                                            </th>
+                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                                PS
+                                            </th>
+                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                                MOOE
+                                            </th>
+                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                                CO
+                                            </th>
+                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                                FINEX
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-muted-50">
+                                        {payload.cost_by_components.map(
+                                            (comp, i) => {
+                                                // Cast comp to the 202 version since we are in the 202 block
+                                                const comp202 = comp as {
+                                                    component_name: string;
+                                                    costs: ExpenseRow[];
+                                                };
+                                                const errorKey = `cost_by_components.${i}.component_name`;
+
+                                                return (
+                                                    <tr
+                                                        key={i}
+                                                        className="hover:bg-muted-50/30 transition-colors"
+                                                    >
+                                                        <td className="py-3 px-4">
+                                                            <input
+                                                                value={
+                                                                    comp202.component_name
+                                                                }
+                                                                className={`w-full bg-transparent font-medium text-muted-700 outline-none placeholder:text-muted-300 ${errors[errorKey] ? "border-red-500" : ""}}`}
+                                                                placeholder="Component Name"
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "cost_by_components",
+                                                                        i,
+                                                                        {
+                                                                            component_name:
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                        } as any,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+
+                                                        {/* Financial Columns */}
+                                                        {(
+                                                            [
+                                                                "PS",
+                                                                "MOOE",
+                                                                "CO",
+                                                                "FINEX",
+                                                            ] as const
+                                                        ).map((itemClass) => (
+                                                            <td
+                                                                key={itemClass}
+                                                                className="py-3 px-2"
+                                                            >
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                                    placeholder="0"
+                                                                    value={
+                                                                        comp202.costs.find(
+                                                                            (
+                                                                                c,
+                                                                            ) =>
+                                                                                c.expense_class ===
+                                                                                itemClass,
+                                                                        )
+                                                                            ?.amount ??
+                                                                        ""
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleMatrixChange(
+                                                                            "cost_by_components",
+                                                                            i,
+                                                                            itemClass,
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </td>
+                                                        ))}
+                                                        <td className="py-3 px-4">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeRow(
+                                                                        "cost_by_components",
+                                                                        i,
+                                                                    )
+                                                                }
+                                                                className="text-red-400 hover:text-red-600 transition-colors"
+                                                                title="Remove Component"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            },
+                                        )}
+                                    </tbody>
+                                </table>
+
+                                {payload.cost_by_components.length === 0 && (
+                                    <div className="p-8 text-center text-muted-400 text-xs italic">
+                                        No components added. Click "+ ADD
+                                        COMPONENT" to begin.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        {errors.cost_by_components && (
+                            <p className="text-red-500 text-[10px] mt-1">
+                                {errors.cost_by_components}
+                            </p>
+                        )}
+                    </div>
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
                             <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
@@ -1204,6 +1327,20 @@ export default function ProposalForm({
                                                     />
                                                 </td>
                                             ))}
+                                            <td className="py-3 px-2 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        removeRow(
+                                                            "local_locations",
+                                                            i,
+                                                        )
+                                                    }
+                                                    className="text-red-400 hover:text-red-600"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1319,7 +1456,7 @@ export default function ProposalForm({
                                                     className="border-b-2 border-chart-5/50"
                                                 >
                                                     <tr className="border-chart-5/20 font-bold border-b divide-x">
-                                                        <td className="py-3 px-4">
+                                                        <td className="py-3 px-4 flex flex-row gap-4">
                                                             <input
                                                                 className="w-full font-bold text-xs text-slate-800 outline-none bg-transparent placeholder:font-normal"
                                                                 placeholder="Enter PAP Description..."
@@ -1339,6 +1476,18 @@ export default function ProposalForm({
                                                                     )
                                                                 }
                                                             />
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeRow(
+                                                                        "local_financial_attributions",
+                                                                        attrIdx,
+                                                                    )
+                                                                }
+                                                                className="text-red-400 hover:text-red-600"
+                                                            >
+                                                                ✕
+                                                            </button>
                                                         </td>
                                                         {cols.map(
                                                             (col, colIdx) => {
@@ -1771,6 +1920,21 @@ export default function ProposalForm({
                                                         />
                                                     </td>
                                                 ))}
+                                                <td className="py-3 px-4">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeRow(
+                                                                "local_infrastructure_requirements",
+                                                                i,
+                                                            )
+                                                        }
+                                                        className="text-red-400 hover:text-red-600 transition-colors"
+                                                        title="Remove Component"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </td>
                                             </tr>
                                         ),
                                     )}
@@ -1785,6 +1949,11 @@ export default function ProposalForm({
                                 </div>
                             )}
                         </div>
+                        {errors.local_infrastructure_requirements && (
+                            <p className="text-red-500 text-[10px]">
+                                {errors.local_infrastructure_requirements}
+                            </p>
+                        )}
                     </div>
 
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
@@ -1828,6 +1997,16 @@ export default function ProposalForm({
                                         } as any)
                                     }
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        removeRow("local_physical_targets", i)
+                                    }
+                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                    title="Remove Component"
+                                >
+                                    ✕
+                                </button>
                             </div>
                         ))}
                         {payload.local_physical_targets.length === 0 && (
@@ -1842,80 +2021,489 @@ export default function ProposalForm({
 
             {/* 5. FOREIGN ASSISTANCE (BP 203 ONLY) */}
             {type === "203" && (
-                <div className="space-y-8">
-                    <div className="bg-background rounded-xl border shadow-sm p-4">
-                        <h3 className="text-xs font-black text-orange-600 uppercase mb-4">
-                            Foreign Financial Targets
-                        </h3>
-                        {payload.foreign_financial_targets.map((target, i) => (
-                            <div
-                                key={i}
-                                className="mb-6 p-4 bg-orange-50/30 rounded-lg"
+                <div className="space-y-6">
+                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
+                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                                12.2 Costing by Components (BP 203)
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    addRow("cost_by_components", {
+                                        component_name: "",
+                                        costs: [],
+                                    })
+                                }
+                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
                             >
-                                <input
-                                    type="number"
-                                    className="font-bold bg-transparent border-b mb-2"
-                                    value={target.year}
-                                    onChange={(e) =>
-                                        updateRow(
-                                            "foreign_financial_targets",
-                                            i,
-                                            {
-                                                year: parseInt(e.target.value),
-                                            } as any,
-                                        )
-                                    }
-                                />
-                                <ExpenseSubForm
-                                    field="foreign_financial_targets"
-                                    parentIdx={i}
-                                    costs={(target as any).costs || []}
-                                    updateRow={updateRow}
-                                    updateExpense={updateExpense}
-                                />
-                            </div>
-                        ))}
-                        <button
-                            type="button"
-                            onClick={() =>
-                                addRow("foreign_financial_targets", {
-                                    year: payload.proposal_year,
-                                    total_amt: 0,
-                                    costs: [],
-                                } as any)
-                            }
-                            className="text-xs text-orange-600 font-bold"
-                        >
-                            + ADD FINANCIAL YEAR
-                        </button>
+                                + ADD COMPONENT
+                            </button>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b text-[10px] font-black text-muted-400 uppercase">
+                                        <th className="py-4 px-4 border-r w-64">
+                                            Components
+                                        </th>
+                                        {["PS", "MOOE", "CO", "FINEX"].map(
+                                            (ec) => (
+                                                <th
+                                                    key={ec}
+                                                    className="px-2 text-center border-r min-w-[180px]"
+                                                >
+                                                    <div className="mb-2 border-b pb-1">
+                                                        {ec}
+                                                    </div>
+                                                    <div className="grid grid-cols-3 text-[8px] gap-1 pb-1">
+                                                        <span>LP Cash</span>
+                                                        <span>LP Non-Cash</span>
+                                                        <span>GOP</span>
+                                                    </div>
+                                                </th>
+                                            ),
+                                        )}
+                                        <th className="w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-muted-50">
+                                    {payload.cost_by_components.map(
+                                        (comp, i) => (
+                                            <tr
+                                                key={i}
+                                                className="hover:bg-muted-50/30 transition-colors group"
+                                            >
+                                                <td className="py-3 px-4 border-r align-top">
+                                                    <input
+                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                        placeholder="Enter Component Name..."
+                                                        value={
+                                                            comp.component_name
+                                                        }
+                                                        onChange={(e) =>
+                                                            updateRow(
+                                                                "cost_by_components",
+                                                                i,
+                                                                {
+                                                                    component_name:
+                                                                        e.target
+                                                                            .value,
+                                                                } as any,
+                                                            )
+                                                        }
+                                                    />
+                                                </td>
+                                                {[
+                                                    "PS",
+                                                    "MOOE",
+                                                    "CO",
+                                                    "FINEX",
+                                                ].map((ec) => {
+                                                    const expense =
+                                                        (comp.costs.find(
+                                                            (c) =>
+                                                                c.expense_class ===
+                                                                ec,
+                                                        ) as any) || {};
+                                                    const cellTotal =
+                                                        Number(
+                                                            expense.lp_cash ||
+                                                                0,
+                                                        ) +
+                                                        Number(
+                                                            expense.lp_non_cash ||
+                                                                0,
+                                                        ) +
+                                                        Number(
+                                                            expense.gop || 0,
+                                                        );
+
+                                                    return (
+                                                        <td
+                                                            key={ec}
+                                                            className="p-2 border-r align-top"
+                                                        >
+                                                            <div className="grid grid-cols-3 gap-1 mb-2">
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full text-right bg-white border border-muted-200 rounded text-[10px] p-1 outline-none focus:border-blue-400"
+                                                                    value={
+                                                                        expense.lp_cash ||
+                                                                        ""
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleMatrixChange203(
+                                                                            i,
+                                                                            ec,
+                                                                            "lp_cash",
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                />
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full text-right bg-white border border-muted-200 rounded text-[10px] p-1 outline-none focus:border-blue-400"
+                                                                    value={
+                                                                        expense.lp_non_cash ||
+                                                                        ""
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleMatrixChange203(
+                                                                            i,
+                                                                            ec,
+                                                                            "lp_non_cash",
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                />
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full text-right bg-white border border-muted-200 rounded text-[10px] p-1 outline-none focus:border-blue-400"
+                                                                    value={
+                                                                        expense.gop ||
+                                                                        ""
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        handleMatrixChange203(
+                                                                            i,
+                                                                            ec,
+                                                                            "gop",
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </div>
+                                                            <div className="text-[9px] text-right text-muted-400 font-bold border-t pt-1">
+                                                                Total:{" "}
+                                                                {cellTotal.toLocaleString()}
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="py-3 px-2 text-center align-top">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeRow(
+                                                                "cost_by_components",
+                                                                i,
+                                                            )
+                                                        }
+                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ),
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    <div className="bg-background rounded-xl border shadow-sm p-4">
-                        <h3 className="text-xs font-black text-muted-400 uppercase mb-4">
-                            Foreign Physical Targets
-                        </h3>
-                        {payload.foreign_physical_targets.map((target, i) => (
-                            <input
-                                key={i}
-                                className="w-full border-b mb-2 text-sm"
-                                placeholder="Target Name/Description"
-                                value={target.name}
-                                onChange={(e) =>
-                                    updateRow("foreign_physical_targets", i, {
-                                        name: e.target.value,
-                                    } as any)
+                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
+                        {/* Header with Add Button */}
+                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                                Foreign Financial Targets (Loan/Grant)
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    // Find the highest year currently in the targets,
+                                    // default to proposal_year - 1 so the first entry becomes proposal_year
+                                    const lastYear =
+                                        payload.foreign_financial_targets.reduce(
+                                            (max, item) =>
+                                                item.year > max
+                                                    ? item.year
+                                                    : max,
+                                            payload.proposal_year - 1,
+                                        );
+
+                                    addRow("foreign_financial_targets", {
+                                        year: lastYear + 1, // Auto-increment the year
+                                        total_amt: 0,
+                                        costs: {
+                                            lp_imprest: 0,
+                                            lp_direct: 0,
+                                            grant: 0,
+                                            gop_counterpart: 0,
+                                        } as any,
+                                    });
+                                }}
+                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                            >
+                                + ADD FINANCIAL TARGET
+                            </button>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-[10px] font-black text-muted-400 uppercase">
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-4 border-r w-24"
+                                        >
+                                            Year
+                                        </th>
+                                        <th
+                                            colSpan={2}
+                                            className="py-2 text-center border-b border-r"
+                                        >
+                                            LP (Loan Proceeds)
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-2 text-center border-r"
+                                        >
+                                            Grant
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-2 text-center border-r"
+                                        >
+                                            GOP
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-2 text-center bg-muted-100/50"
+                                        >
+                                            Total
+                                        </th>
+                                        <th rowSpan={2} className="w-10"></th>
+                                    </tr>
+                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-[9px] font-black text-muted-400 uppercase">
+                                        <th className="py-2 px-2 text-center border-r">
+                                            Imprest/Special
+                                        </th>
+                                        <th className="py-2 px-2 text-center border-r">
+                                            Direct Payment
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-muted-50">
+                                    {payload.foreign_financial_targets.map(
+                                        (target, i) => {
+                                            const costs =
+                                                (target as any).costs || {};
+                                            const rowTotal =
+                                                Number(costs.lp_imprest || 0) +
+                                                Number(costs.lp_direct || 0) +
+                                                Number(costs.grant || 0) +
+                                                Number(
+                                                    costs.gop_counterpart || 0,
+                                                );
+
+                                            return (
+                                                <tr
+                                                    key={i}
+                                                    className="hover:bg-muted-50/30 transition-colors group"
+                                                >
+                                                    <td className="py-3 px-4 border-r">
+                                                        <input
+                                                            type="number"
+                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                            value={target.year}
+                                                            onChange={(e) =>
+                                                                updateRow(
+                                                                    "foreign_financial_targets",
+                                                                    i,
+                                                                    {
+                                                                        year: parseInt(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        ),
+                                                                    } as any,
+                                                                )
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <input
+                                                            type="number"
+                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                            placeholder="0"
+                                                            value={
+                                                                costs.lp_imprest ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleForeignChange(
+                                                                    i,
+                                                                    "lp_imprest",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <input
+                                                            type="number"
+                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                            placeholder="0"
+                                                            value={
+                                                                costs.lp_direct ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleForeignChange(
+                                                                    i,
+                                                                    "lp_direct",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <input
+                                                            type="number"
+                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                            placeholder="0"
+                                                            value={
+                                                                costs.grant ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleForeignChange(
+                                                                    i,
+                                                                    "grant",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <input
+                                                            type="number"
+                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                            placeholder="0"
+                                                            value={
+                                                                costs.gop_counterpart ||
+                                                                ""
+                                                            }
+                                                            onChange={(e) =>
+                                                                handleForeignChange(
+                                                                    i,
+                                                                    "gop_counterpart",
+                                                                    e.target
+                                                                        .value,
+                                                                )
+                                                            }
+                                                        />
+                                                    </td>
+                                                    <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                        {rowTotal.toLocaleString()}
+                                                    </td>
+                                                    <td className="py-3 px-2 text-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeRow(
+                                                                    "foreign_financial_targets",
+                                                                    i,
+                                                                )
+                                                            }
+                                                            className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        },
+                                    )}
+                                </tbody>
+                            </table>
+                            {payload.foreign_financial_targets.length === 0 && (
+                                <div className="p-8 text-center text-muted-400 text-xs italic">
+                                    No foreign financial targets added. Click "+
+                                    ADD FINANCIAL TARGET" to begin.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Physical Targets Section Styled similarly */}
+                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden">
+                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                                Foreign Physical Targets
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    addRow("foreign_physical_targets", {
+                                        name: "",
+                                    })
                                 }
-                            />
-                        ))}
-                        <button
-                            type="button"
-                            onClick={() =>
-                                addRow("foreign_physical_targets", { name: "" })
-                            }
-                            className="text-xs text-secondary-foreground-600 font-bold"
-                        >
-                            + ADD TARGET
-                        </button>
+                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                            >
+                                + ADD TARGET
+                            </button>
+                        </div>
+                        <div className="p-4 space-y-2">
+                            {payload.foreign_physical_targets.map(
+                                (target, i) => (
+                                    <div
+                                        key={i}
+                                        className="flex gap-4 items-center"
+                                    >
+                                        <input
+                                            className="flex-1 border-b border-muted-200 py-2 outline-none text-sm focus:border-secondary-foreground-400 transition-colors"
+                                            placeholder="Target Name/Description"
+                                            value={target.name}
+                                            onChange={(e) =>
+                                                updateRow(
+                                                    "foreign_physical_targets",
+                                                    i,
+                                                    {
+                                                        name: e.target.value,
+                                                    } as any,
+                                                )
+                                            }
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                removeRow(
+                                                    "foreign_physical_targets",
+                                                    i,
+                                                )
+                                            }
+                                            className="text-red-400 hover:text-red-600"
+                                        >
+                                            ✕
+                                        </button>
+                                    </div>
+                                ),
+                            )}
+                            {payload.foreign_physical_targets.length === 0 && (
+                                <div className="py-4 text-center text-muted-400 text-xs italic">
+                                    No physical targets added.
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
             )}

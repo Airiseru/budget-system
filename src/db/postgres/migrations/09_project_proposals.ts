@@ -30,6 +30,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn("id", "uuid", (col) =>
             col.primaryKey().references("forms.id").onDelete("cascade"),
         )
+        .addColumn("entity_id", "uuid", (col) => col.notNull())
         .addColumn("title", "text", (col) => col.notNull())
         .addColumn("proposal_year", "integer", (col) => col.notNull())
         .addColumn("priority_rank", "integer", (col) => col.notNull())
@@ -49,6 +50,10 @@ export async function up(db: Kysely<any>): Promise<void> {
         .addColumn("updated_at", "timestamp", (col) =>
             col.defaultTo(sql`now()`),
         )
+        .addUniqueConstraint("unique_entity_rank", [
+            "entity_id",
+            "priority_rank",
+        ])
         .execute();
 
     // PAP Prerequisites
@@ -188,10 +193,11 @@ export async function up(db: Kysely<any>): Promise<void> {
                 .notNull(),
         )
         .addColumn("year", "integer", (col) => col.notNull())
-        .addColumn("total_amt", "decimal", (col) => col.notNull())
-        .addColumn("cost_source_id", "uuid", (col) =>
-            col.references("cost_sources.id").onDelete("cascade").notNull(),
-        )
+        .addColumn("lp_imprest", "decimal", (col) => col.defaultTo(0))
+        .addColumn("lp_direct", "decimal", (col) => col.defaultTo(0))
+        .addColumn("grant_amt", "decimal", (col) => col.defaultTo(0))
+        .addColumn("gop_counterpart", "decimal", (col) => col.defaultTo(0))
+        .addColumn("total_amt", "numeric(20, 2)", (col) => col.notNull())
         .execute();
 
     // Foreign Physical Targets

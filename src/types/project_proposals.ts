@@ -8,6 +8,7 @@ import {
 
 export interface ProjectProposalTable {
     id: Generated<string>;
+    entity_id: string;
     title: string;
     proposal_year: number;
     priority_rank: number;

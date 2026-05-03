@@ -152,6 +152,7 @@ export async function createProjectProposal(
             .insertInto("project_proposals")
             .values({
                 id: form.id,
+                entity_id: entityId,
                 title: proposalData.title,
                 proposal_year: proposalData.proposal_year,
                 priority_rank: proposalData.priority_rank,
@@ -386,6 +387,7 @@ export async function getAllProposalSummaries(
             "f.auth_status",
             "pp.submission_date",
             "pp.is_infrastructure",
+            "pp.title",
         ]);
 
     // If an entityId is provided, filter the results (Security Gate)
@@ -537,6 +539,39 @@ export async function updateProjectProposal(proposalId: string, payload: any) {
                     .execute();
             }
         }
+
+        return { success: true };
+    });
+}
+
+export async function swapProposalRanks(
+    entityId: string,
+    proposalIdA: string,
+    rankA: number,
+    proposalIdB: string,
+    rankB: number,
+) {
+    return await db.transaction().execute(async (trx) => {
+        // 1. Move A to a temporary placeholder rank to free up rankA
+        await trx
+            .updateTable("project_proposals")
+            .set({ priority_rank: -1 })
+            .where("id", "=", proposalIdA)
+            .execute();
+
+        // 2. Move B to A's old rank
+        await trx
+            .updateTable("project_proposals")
+            .set({ priority_rank: rankA })
+            .where("id", "=", proposalIdB)
+            .execute();
+
+        // 3. Move A to B's old rank
+        await trx
+            .updateTable("project_proposals")
+            .set({ priority_rank: rankB })
+            .where("id", "=", proposalIdA)
+            .execute();
 
         return { success: true };
     });
