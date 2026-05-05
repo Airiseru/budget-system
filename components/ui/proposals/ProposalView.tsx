@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import Link from "next/link";
 import {
-    ArrowLeft,
     Pencil,
     MapPin,
     Target,
@@ -12,54 +11,39 @@ import {
     FileText,
     Gavel,
 } from "lucide-react";
-import { FullProjectProposal } from "@/src/types/project_proposals";
-
-type ProposalExpenseClass = "PS" | "MOOE" | "CO" | "FE" | "FINEX";
-
-type ProposalExpenseValue = {
-    expense_class: ProposalExpenseClass;
-    amount: number;
-};
-
-type ProposalCostEntry = {
-    year?: number;
-    tier?: number;
-    expense_class?: ProposalExpenseClass;
-    amount?: number;
-    expense_classes?: ProposalExpenseValue[];
-};
-
-type ProposalCostedItem = {
-    component_name?: string;
-    description?: string;
-    location?: string;
-    costs?: ProposalCostEntry[];
-};
-
-type ProposalPrerequisite = {
-    name: string;
-    type: string;
-    status: string;
-    remarks: string | null;
-};
-
-type ProposalLocalPhysicalTarget = {
-    target_description: string;
-    year: number;
-};
-
-type ProposalViewData = FullProjectProposal & {
-    pap_prerequisites?: ProposalPrerequisite[];
-    cost_by_components?: ProposalCostedItem[];
-    local_financial_attributions?: ProposalCostedItem[];
-    local_locations?: ProposalCostedItem[];
-    local_physical_targets?: ProposalLocalPhysicalTarget[];
-    local_infrastructure_requirements?: ProposalCostedItem[];
-};
+import BackButton from "../BackButton";
+import FormDeleteButton from "../FormDeleteButton";
+import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
 
 interface ProposalViewProps {
-    data: ProposalViewData;
-    budgetPrepClosedForEntityActions?: boolean;
+    data: any;
+    session: any;
+    backUrl: string;
+    isDbmEvaluator?: boolean;
+    originalFormId: string;
+    versionTabs: {
+        id: string;
+        version: number;
+        parent_form_id: string | null;
+        auth_status: string | null;
+        updated_at: Date;
+    }[];
+    userInWorkflow: boolean;
+    userCanSign: boolean;
+    currentSignatoryRole: string | null;
+    existingSignature: any;
+    allSignatures: any[];
+    pastSignatures: {
+        id: string;
+        user_name: string;
+        role: string;
+        created_at: Date;
+    }[];
+    latestRejection: {
+        remarks: string | null;
+        changed_at: Date;
+        user_name: string | null;
+    } | null;
     updateAuthStatus: () => Promise<void>;
 }
 
@@ -115,98 +99,180 @@ const getStatusStyles = (status: string) => {
 
 export default function ProposalView({
     data,
-    budgetPrepClosedForEntityActions = false,
+    session,
+    backUrl,
+    isDbmEvaluator = false,
+    originalFormId,
+    versionTabs,
+    userInWorkflow,
+    userCanSign,
+    currentSignatoryRole,
+    existingSignature,
+    allSignatures,
+    pastSignatures,
+    latestRejection,
     updateAuthStatus,
 }: ProposalViewProps) {
+    const formData = {
+        id: data.id,
+        fiscal_year: data.fiscal_year,
+        form_id: data.id,
+    };
+
+    console.log("PROPOSAL VIEW");
+    console.log(data);
+
+    // --- NEW VERSIONING LOGIC ---
+    const familyHasApprovedVersion = versionTabs.some(
+        (version) => version.auth_status === "approved",
+    );
+    const canEditCurrentVersion =
+        !familyHasApprovedVersion &&
+        ((data.auth_status === "draft" &&
+            session.user.access_level === "encode") ||
+            (data.auth_status === "pending_dbm" && isDbmEvaluator));
+
+    const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign;
+
+    const signSectionStatusMessage =
+        familyHasApprovedVersion && data.auth_status !== "approved"
+            ? "DBM has already approved a different version of this form. This version is locked."
+            : undefined;
+
     return (
-        <div className="m-6 max-w-5xl mx-auto space-y-10 pb-20">
-            {budgetPrepClosedForEntityActions && data.auth_status === "draft" && (
-                <BudgetPrepClosedBanner message="The budget preparation phase for this fiscal year is over. You can no longer edit, submit, or sign this form until DBM reopens the cycle for this fiscal year." />
-            )}
+        <div className="p-6 max-w-7xl mx-auto space-y-6 pb-20">
             {/* NAVIGATION & ACTIONS */}
             <div className="flex justify-between items-center mb-6">
-                <Link
-                    href="/forms/proposals"
-                    className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-                >
-                    <ArrowLeft size={16} />
-                    Back to List
-                </Link>
-                {data.auth_status === "draft" && !budgetPrepClosedForEntityActions && (
+                <BackButton url={backUrl} label="Back" />
+                {canEditCurrentVersion && (
                     <div className="flex flex-row gap-2">
                         <Link
                             href={`/forms/proposals/${data.id}/edit`}
-                            className="flex items-center gap-2 bg-secondary-foreground hover:bg-secondary-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
+                            className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
                         >
                             <Pencil size={14} />
-                            Edit Form
+                            {session.user.role !== "dbm"
+                                ? "Edit Form"
+                                : "Overwrite Form"}
                         </Link>
                         <form action={updateAuthStatus}>
                             <button
                                 type="submit"
-                                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 font-semibold text-sm transition-all"
+                                className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
                             >
-                                Submit Form
+                                {session.user.role !== "dbm"
+                                    ? "Submit Form"
+                                    : "Finalize Overwrite"}
                             </button>
                         </form>
                     </div>
                 )}
             </div>
 
-            {/* HEADER: TITLE & CORE STATS */}
-            <header className="border-b pb-8">
-                <div className="flex justify-between items-start mb-4">
-                    <div className="space-y-1">
-                        <Badge
-                            variant="outline"
-                            className="mb-2 uppercase tracking-widest text-[10px]"
-                        >
-                            BP Form {data.type}
-                        </Badge>
-                        <h1 className="text-4xl font-black tracking-tighter text-muted-900 uppercase">
-                            {data.title || "Untitled Project Proposal"}
-                        </h1>
-                        <p className="text-muted-500 font-medium flex items-center gap-2">
-                            Fiscal Year {data.proposal_year} •{" "}
-                            {data.is_new ? "New Project" : "Expanded Project"}
-                        </p>
-                    </div>
-                    <Badge className="px-6 py-2 text-sm uppercase bg-muted-900">
-                        {data.auth_status?.replace("_", " ")}
+            {/* HEADER SECTION */}
+            <div className="text-center space-y-2 mb-8">
+                <Badge
+                    variant="outline"
+                    className="uppercase tracking-widest text-[10px]"
+                >
+                    BP Form {data.type}
+                </Badge>
+                <h1 className="text-3xl font-bold tracking-tight uppercase">
+                    {data.title || "Untitled Project Proposal"}
+                </h1>
+                <div className="flex justify-center gap-2 items-center">
+                    <Badge
+                        variant={
+                            STATUS_BADGE_COLORS[data.auth_status ?? "draft"] ??
+                            "default"
+                        }
+                        className="py-1.5 px-4 rounded-full"
+                    >
+                        {STATUS_LABELS[data.auth_status ?? ""] ??
+                            data.auth_status}
                     </Badge>
                 </div>
+                <p className="text-muted-500 text-sm">
+                    Fiscal Year {data.proposal_year} •{" "}
+                    {data.is_new ? "New" : "Expanded"} Project
+                </p>
+            </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                    <div className="p-4 bg-muted-50 rounded-xl border border-muted-100">
-                        <p className="text-[10px] font-bold text-muted-400 uppercase">
-                            Total Proposal Cost
-                        </p>
-                        <p className="text-2xl font-mono font-black text-muted-800">
-                            {data.total_proposal_currency}{" "}
-                            {Number(data.total_proposal_cost).toLocaleString()}
-                        </p>
+            {/* --- NEW VERSION TABS --- */}
+            {versionTabs.length > 1 && (
+                <section className="space-y-3 mb-10">
+                    <div className="flex flex-wrap gap-2 justify-center">
+                        {versionTabs.map((tab) => {
+                            const isActive = tab.id === data.id;
+                            const isOriginal = tab.id === originalFormId;
+                            return (
+                                <Link
+                                    key={tab.id}
+                                    href={`/forms/proposals/${tab.id}`}
+                                    className={`min-w-[168px] rounded-xl border px-4 py-3 text-left transition-colors ${
+                                        isActive
+                                            ? "border-accent-foreground bg-accent-foreground/10 text-accent-foreground"
+                                            : "border-border bg-card hover:border-accent-foreground/40 hover:bg-accent/40"
+                                    }`}
+                                >
+                                    <div className="flex items-center justify-between gap-3">
+                                        <span className="text-sm font-bold">
+                                            {isOriginal
+                                                ? `Original (v${tab.version})`
+                                                : `DBM (v${tab.version})`}
+                                        </span>
+                                        <span className="text-xs font-medium">
+                                            {
+                                                STATUS_LABELS[
+                                                    tab.auth_status ?? "draft"
+                                                ]
+                                            }
+                                        </span>
+                                    </div>
+                                    <p className="mt-1 text-xs text-muted-foreground">
+                                        Updated{" "}
+                                        {new Date(
+                                            tab.updated_at,
+                                        ).toLocaleDateString()}
+                                    </p>
+                                </Link>
+                            );
+                        })}
                     </div>
-                    <div className="p-4 bg-muted-50 rounded-xl border border-muted-100">
-                        <p className="text-[10px] font-bold text-muted-400 uppercase">
-                            Priority Rank
-                        </p>
-                        <p className="text-2xl font-black text-muted-800">
-                            #{data.priority_rank}
-                        </p>
-                    </div>
-                    <div className="p-4 bg-muted-50 rounded-xl border border-muted-100">
-                        <p className="text-[10px] font-bold text-muted-400 uppercase">
-                            Sector Classification
-                        </p>
-                        <p className="text-sm font-bold text-muted-800">
-                            {data.is_infrastructure
-                                ? "Infrastructure"
-                                : "Non-Infrastructure"}
-                            {data.for_ict && " • ICT"}
-                        </p>
-                    </div>
+                </section>
+            )}
+
+            {/* CORE STATS GRID */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="bg-white p-4 border rounded-lg shadow-sm">
+                    <label className="text-[10px] uppercase font-bold text-slate-400">
+                        Total Proposal Cost
+                    </label>
+                    <p className="text-lg font-semibold font-mono">
+                        {data.total_proposal_currency}{" "}
+                        {Number(data.total_proposal_cost).toLocaleString()}
+                    </p>
                 </div>
-            </header>
+                <div className="bg-white p-4 border rounded-lg shadow-sm">
+                    <label className="text-[10px] uppercase font-bold text-slate-400">
+                        Priority Rank
+                    </label>
+                    <p className="text-lg font-semibold">
+                        #{data.priority_rank}
+                    </p>
+                </div>
+                <div className="p-4 bg-muted-50 rounded-xl border border-muted-100">
+                    <p className="text-[10px] font-bold text-muted-400 uppercase">
+                        Sector Classification
+                    </p>
+                    <p className="text-sm font-bold text-muted-800">
+                        {data.is_infrastructure
+                            ? "Infrastructure"
+                            : "Non-Infrastructure"}
+                        {data.for_ict && " • ICT"}
+                    </p>
+                </div>
+            </div>
 
             {/* MAIN CONTENT GRID */}
             <div className="flex flex-col gap-10">
@@ -400,11 +466,12 @@ export default function ProposalView({
                                         // 1. Extract and sort unique expense classes based on the preferred order
                                         const uniqueClasses = Array.from(
                                             new Set(
-                                                attr.costs?.flatMap((c) =>
-                                                    c.expense_classes?.map(
-                                                        (ec) =>
-                                                            ec.expense_class,
-                                                    ),
+                                                attr.attribution_costs?.flatMap(
+                                                    (c: any) =>
+                                                        c.expense_classes?.map(
+                                                            (ec: any) =>
+                                                                ec.expense_class,
+                                                        ),
                                                 ),
                                             ),
                                         ).sort(
@@ -419,12 +486,13 @@ export default function ProposalView({
                                             tier: number | null,
                                             cls: string | null = null,
                                         ) => {
-                                            const yData = attr.costs?.find(
-                                                (c) =>
-                                                    c.year === year &&
-                                                    (tier === null ||
-                                                        c.tier === tier),
-                                            );
+                                            const yData =
+                                                attr.attribution_costs?.find(
+                                                    (c: any) =>
+                                                        c.year === year &&
+                                                        (tier === null ||
+                                                            c.tier === tier),
+                                                );
                                             if (!yData) return 0;
 
                                             if (cls) {
@@ -671,30 +739,46 @@ export default function ProposalView({
                 </div>
             )}
 
-            {/* SIGNATURE SECTION TO BE FIXED */}
-            {/* <div className="pt-12 border-t">
-                <SignSection
-                    formId={data.id ?? ""}
-                    tableName="project_proposals"
-                    formData={{
-                        id: data.id,
-                        fiscal_year: data.proposal_year,
-                        title: data.title,
-                    }}
-                    userId={session.user.id}
-                    entityId={data.entity_id}
-                    authStatus={data.auth_status ?? ""}
-                    userCanSign={userCanSign}
-                    signatoryRole={
-                        existingSignature
-                            ? existingSignature.role
-                            : (currentSignatoryRole ?? "")
-                    }
-                    alreadySigned={!!existingSignature}
-                    signatories={allSignatures}
-                    workflow={PROPOSAL_WORKFLOW}
-                />
-            </div> */}
+            {/* SIGN SECTION */}
+            <SignSection
+                formId={data.id ?? ""}
+                tableName="project_proposals" // Fixed: Ensure this matches your DB table
+                formData={data}
+                userId={session.user.id}
+                entityId={data.entity_id}
+                authStatus={data.auth_status ?? ""}
+                statusMessage={signSectionStatusMessage}
+                userInWorkflow={userInWorkflow}
+                userCanSign={canSignCurrentVersion && !existingSignature}
+                signatoryRole={
+                    existingSignature
+                        ? existingSignature.role
+                        : (currentSignatoryRole ?? "")
+                }
+                alreadySigned={!!existingSignature}
+                signatories={allSignatures}
+                pastSignatories={pastSignatures}
+                latestRejection={latestRejection}
+                workflow={PROPOSAL_WORKFLOW}
+            />
+
+            {/* DANGER ZONE */}
+            {data.auth_status === "draft" && !familyHasApprovedVersion && (
+                <div className="pt-6 border-t mt-12 flex justify-between items-center">
+                    <div>
+                        <h3 className="text-sm font-bold text-gray-900">
+                            Danger Zone
+                        </h3>
+                        <p className="text-xs text-gray-500">
+                            Irreversible actions for this record.
+                        </p>
+                    </div>
+                    <FormDeleteButton
+                        id={data.id}
+                        onDelete={deleteFormAction}
+                    />
+                </div>
+            )}
         </div>
     );
 }
