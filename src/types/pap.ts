@@ -8,17 +8,22 @@ import {
 
 export interface PapTable {
     id: Generated<string>
-    entity_id: string
+    entity_id: string | null
     org_outcome_id: string
     pip_code: string | null
-    tier: 1 | 2
     category: 'local' | 'foreign'
     title: string
     description: string | null
     purpose: string
     beneficiaries: string
     project_type: string | null
-    uacs_pap_code: string | null
+    cost_structure_code: string | null
+    organizational_outcome_code: string | null
+    program_code: string | null
+    subprogram_code: string | null
+    identifier_code: '1' | '2' | '3'
+    project_title_code: string | null
+    reserved_codes: string | null
     actual_start_date: Date | null
     project_status: 'draft' | 'proposed' | 'approved' | 'for release' | 'terminating' | 'on-going' | 'completed' | 'rejected' | 'cancelled'
     auth_status: string | null

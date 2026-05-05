@@ -18,7 +18,7 @@ interface StaffingSummaryProps {
     highestSG: number;
     fiscalYear?: number;
     staff?: StaffingSummaryWithPositions;
-    availablePaps: { id: string; title: string; tier: number }[];
+    availablePaps: { id: string; title: string }[];
     userId: string;
     entityId: string;
     entityName: string;
@@ -37,7 +37,6 @@ type PositionFormInput = {
     id?: string;
     staffing_summary_id?: string;
     pap_id: string;
-    tier?: number;
     staff_type: string;
     organizational_unit: string;
     position_title: string;
@@ -185,9 +184,6 @@ export default function StaffForm({
         }
     };
 
-    const getTierForPap = (papId: string) =>
-        availablePaps.find((p) => p.id === papId)?.tier ?? 1;
-
     // ---- position handlers ----
 
     const updatePosition = (
@@ -240,14 +236,14 @@ export default function StaffForm({
     };
 
     const handlePapChange = (index: number, papId: string) => {
-        updatePosition(index, { pap_id: papId, tier: getTierForPap(papId) });
+        updatePosition(index, { pap_id: papId });
         clearFieldError(`positions.${index}.pap_id`);
     };
 
     const handlePositionChange = (
         index: number,
         field: keyof PositionFormInput,
-        value: any,
+        value: PositionFormInput[keyof PositionFormInput],
     ) => {
         updatePosition(index, { [field]: value });
         clearFieldError(`positions.${index}.${field}`);
@@ -704,13 +700,12 @@ export default function StaffForm({
         </thead>
     );
 
-    const renderTierGroups = (tier: number) => {
+    const renderCategorizedGroups = () => {
         const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
         return staffTypes.map((type) => {
             const hasPositions = formData.positions.some(
                 (p) =>
                     p.pap_id &&
-                    getTierForPap(p.pap_id) === tier &&
                     p.staff_type === type,
             );
             if (!hasPositions) return null;
@@ -726,7 +721,6 @@ export default function StaffForm({
                             <tbody>
                                 {formData.positions.map((p, idx) =>
                                     p.pap_id &&
-                                    getTierForPap(p.pap_id) === tier &&
                                     p.staff_type === type
                                         ? renderPositionRow(p, idx)
                                         : null,
@@ -793,20 +787,11 @@ export default function StaffForm({
                     </div>
                 </div>
 
-                {/* tier 1 */}
                 <div className="mt-10">
                     <h3 className="text-sm font-black text-accent-foreground border-b-2 border-accent-foreground pb-1">
-                        TIER 1: ONGOING PROGRAMS
+                        Categorized Positions
                     </h3>
-                    {renderTierGroups(1)}
-                </div>
-
-                {/* tier 2 */}
-                <div className="mt-10">
-                    <h3 className="text-sm font-black border-b-2 border-secondary-foreground pb-1 text-secondary-foreground">
-                        TIER 2: NEW PROPOSALS
-                    </h3>
-                    {renderTierGroups(2)}
+                    {renderCategorizedGroups()}
                 </div>
 
                 {/* footer actions */}

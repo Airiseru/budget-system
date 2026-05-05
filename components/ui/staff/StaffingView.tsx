@@ -88,10 +88,9 @@ export default function StaffingView({
 
     const overallGrandTotal = overallBasicSalary + overallCompensationTotals.reduce((a: number, b: number) => a + b, 0);
 
-    const renderStaffTypeGroup = (tier: number, type: string) => {
+    const renderStaffTypeGroup = (type: string) => {
         const filteredPositions = (summary?.positions || []).filter((pos: any) => {
-            const pap = paps.find((p: any) => p.id === pos.pap_id);
-            return pap?.tier === tier && pos.staff_type === type;
+            return pos.staff_type === type;
         });
 
         if (filteredPositions.length === 0) return null;
@@ -109,9 +108,9 @@ export default function StaffingView({
 
         return (
             <div key={type} className="space-y-2">
-                <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
+                <h3 className="text-md font-black text-secondary-foreground border-l-4 border-secondary-foreground pl-3 py-1 bg-secondary-foreground/10">
                     {type} Positions
-                </h4>
+                </h3>
                 
                 <div className="border border-slate-300 rounded-lg overflow-x-auto bg-white shadow-sm">
                     <table className="w-full text-sm border-collapse">
@@ -271,19 +270,10 @@ export default function StaffingView({
                 </section>
             )}
 
-            {/* Staff Per Tier */}
+            {/* Staff Per Type */}
             <section className="space-y-10">
-                <div className="space-y-4">
-                    <h3 className="text-sm font-black text-accent-foreground border-l-4 border-accent-foreground pl-3 py-1 bg-accent-foreground/10">TIER 1: ONGOING PROGRAMS</h3>
-                    <div className="space-y-6">
-                        {staffTypes.map(type => renderStaffTypeGroup(1, type))}
-                    </div>
-                </div>
-                <div className="space-y-4">
-                    <h3 className="text-sm font-black text-secondary-foreground border-l-4 border-secondary-foreground pl-3 py-1 bg-secondary-foreground/10">TIER 2: NEW PROPOSALS</h3>
-                    <div className="space-y-6">
-                        {staffTypes.map(type => renderStaffTypeGroup(2, type))}
-                    </div>
+                <div className="space-y-6">
+                    {staffTypes.map(type => renderStaffTypeGroup(type))}
                 </div>
             </section>
 

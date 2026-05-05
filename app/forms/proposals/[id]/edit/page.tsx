@@ -31,11 +31,11 @@ export default async function EditProposalPage({
 
     // This will now pass type checking and logic
     if (project.auth_status !== "draft") {
-        redirect(`/forms/retirees/${id}?error=locked`);
+        redirect(`/forms/proposals/${id}?error=locked`);
     }
 
     if (!session || session.user.access_level !== "encode") {
-        redirect("/forms/retirees?error=unauthorized");
+        redirect("/forms/proposals?error=unauthorized");
     }
 
     return (

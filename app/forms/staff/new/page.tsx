@@ -18,7 +18,7 @@ export default async function NewStaffingPage() {
         redirect('/forms/staff?error=unauthorized');
     }
 
-    let components = []
+    const components = []
 
     const PapRepository = createPapRepository('postgres');
     const paps = await PapRepository.getAllPaps();
@@ -38,7 +38,7 @@ export default async function NewStaffingPage() {
                     schedule={schedule}
                     compensationRules={compensationRules}
                     highestSG={highestSG}
-                    availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
+                    availablePaps={paps.map(p => ({ id: p.id, title: p.title }))}
                     userId={session.user.id}
                     entityId={session.user.entity_id} 
                     entityName={session.user_entity.entity_name || "Unknown Agency"} 

@@ -79,7 +79,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
                 highestSG={highestSG}
                 fiscalYear = {staff.fiscal_year}
                 staff={staff}
-                availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))} 
+                availablePaps={paps.map(p => ({ id: p.id, title: p.title }))} 
                 userId={session.user.id}
                 entityId={session.user.entity_id} 
                 entityName={session.user_entity.entity_name || "Unknown Agency"} 

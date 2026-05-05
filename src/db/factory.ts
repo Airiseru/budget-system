@@ -8,6 +8,7 @@ import * as PostgreRetireeRepository from "@/src/db/postgres/repositories/retire
 import * as PostgreSalaryRepository from "@/src/db/postgres/repositories/salaryRepository";
 import * as PostgreProposalRepository from "@/src/db/postgres/repositories/proposalRepository";
 import * as PostgreUacsRepository from "@/src/db/postgres/repositories/uacsRepository";
+import * as PostgreBudgetSettingsRepository from "@/src/db/postgres/repositories/budgetSettingsRepository";
 
 export function createAuditRepository(dbType: string) {
     switch (dbType) {
@@ -94,6 +95,15 @@ export function createUacsRepository(dbType: string) {
     switch (dbType) {
         case "postgres":
             return PostgreUacsRepository;
+        default:
+            throw new Error(`Unsupported database type: ${dbType}`);
+    }
+}
+
+export function createBudgetSettingsRepository(dbType: string) {
+    switch (dbType) {
+        case "postgres":
+            return PostgreBudgetSettingsRepository;
         default:
             throw new Error(`Unsupported database type: ${dbType}`);
     }
