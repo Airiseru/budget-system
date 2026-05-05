@@ -8,6 +8,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
+import { STATUS_LABELS } from "@/src/lib/constants"
 
 export const dynamic = "force-dynamic";
 
@@ -122,7 +123,7 @@ export default async function ProposalsPage() {
                                                     ]
                                                 }
                                             >
-                                                {proposal.auth_status ??
+                                                {STATUS_LABELS[proposal.auth_status] ??
                                                     "Draft"}
                                             </Badge>
                                         </div>

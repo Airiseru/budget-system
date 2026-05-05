@@ -6,6 +6,8 @@ import {
     Updateable
 } from 'kysely'
 
+import { Feature } from 'geojson'
+
 export interface PapTable {
     id: Generated<string>
     entity_id: string | null
@@ -35,14 +37,22 @@ export type Pap = Selectable<PapTable>
 export type NewPap = Insertable<PapTable>
 export type PapUpdate = Updateable<PapTable>
 
+export interface Address {
+    street: string | null
+    barangay: string | null
+    city: string | null
+    province: string | null
+    region: string | null
+    country: string | null
+}
+
 export interface PapLocationTable {
     id: Generated<string>
     pap_id: string
     uacs_loc_code: string
     description: string | null
-    geometry: Record<string, unknown> | null
-    region: string | null
-    gazetteer: string | null
+    geometry: Feature
+    address: Address
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
