@@ -16,30 +16,9 @@ export default async function PapPage() {
         return redirect('/login')
     }
 
-    try {
-        const data = await PapRepository.getAllPaps()
-    
-        if (data.length === 0) {
-            return (
-                <div className='m-4'>
-                    <ButtonGroup className='my-4'>
-                        <ModeToggle></ModeToggle>
-                        <ButtonGroup>
-                            <Link href="/home">
-                                <Button variant="outline" aria-label="Go Back">Go Back</Button>
-                            </Link>
-                        </ButtonGroup>
-                        <ButtonGroup>
-                            <Link href="/paps/new">
-                                <Button variant="outline" >Create New PAP</Button>
-                            </Link>
-                        </ButtonGroup>
-                    </ButtonGroup>
-                    <h1>No Paps</h1>
-                </div>
-            )
-        }
-    
+    const data = await PapRepository.getAllPaps()
+
+    if (data.length === 0) {
         return (
             <div className='m-4'>
                 <ButtonGroup className='my-4'>
@@ -55,26 +34,38 @@ export default async function PapPage() {
                         </Link>
                     </ButtonGroup>
                 </ButtonGroup>
-
-                <h1 className="text-2xl font-bold">All PAPs</h1>
-                <div>
-                    {data.map((pap) =>
-                        <Link href={`/paps/${pap.id}`} key={pap.id}>
-                            <div key={pap.id} className="border rounded-md m-2 p-4">
-                                <h2 className="font-bold text-primary-foreground">{pap.title}</h2>
-                                <p>{pap.description}</p>
-                            </div>
-                        </Link>
-                    )}
-                </div>
-            </div>
-        )
-    } catch (e) {
-        console.error(e)
-        return (
-            <div>
-                <h1>An error occurred while loading all PAPs</h1>
+                <h1>No Paps</h1>
             </div>
         )
     }
+
+    return (
+        <div className='m-4'>
+            <ButtonGroup className='my-4'>
+                <ModeToggle></ModeToggle>
+                <ButtonGroup>
+                    <Link href="/home">
+                        <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                    </Link>
+                </ButtonGroup>
+                <ButtonGroup>
+                    <Link href="/paps/new">
+                        <Button variant="outline" >Create New PAP</Button>
+                    </Link>
+                </ButtonGroup>
+            </ButtonGroup>
+
+            <h1 className="text-2xl font-bold">All PAPs</h1>
+            <div>
+                {data.map((pap) =>
+                    <Link href={`/paps/${pap.id}`} key={pap.id}>
+                        <div className="border rounded-md m-2 p-4">
+                            <h2 className="font-bold text-primary-foreground">{pap.title}</h2>
+                            <p>{pap.description}</p>
+                        </div>
+                    </Link>
+                )}
+            </div>
+        </div>
+    )
 }

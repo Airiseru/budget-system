@@ -1,7 +1,6 @@
 import { db } from '../database'
-import { sql } from 'kysely'
 import {
-    UserKey, NewUserKey, UserKeyUpdate, UserKeyStatus, UserKeyStatuses,
+    UserKey, NewUserKey, UserKeyStatus, UserKeyStatuses,
     Signatory, NewSignatory
 } from '../../../types/keys'
 

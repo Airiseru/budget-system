@@ -63,7 +63,7 @@ export function DeviceKeyBanner({ userId }: { userId: string }) {
             await registerDeviceKey(publicKeyBase64, deviceName, expiresInDays)
             setSuccess(true)
             setNeedsKey(false)
-        } catch (err) {
+        } catch {
             setError('Failed to register device. Please try again.')
         } finally {
             setIsRegistering(false)

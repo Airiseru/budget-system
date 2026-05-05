@@ -111,8 +111,8 @@ export function RejectButton({ formId, tableName, formData, userId, entityId, si
             setPin('')
             setRemarks('')
             router.refresh()
-        } catch (err: any) {
-            setError(err.message ?? 'Failed to reject. Please try again.')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to reject. Please try again.')
             setStep('pin')
             setPin('')
         }

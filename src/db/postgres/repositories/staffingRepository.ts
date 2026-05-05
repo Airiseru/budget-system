@@ -1,31 +1,12 @@
 import { db } from '../database'
-import { StaffingSummary, NewStaffingSummary, Position, NewPosition, StaffingSummaryWithPositions, NewCompensation, Compensation } from '../../../types/staffing'
+import { NewPosition, StaffingSummaryWithPositions, Compensation } from '../../../types/staffing'
 import { jsonArrayFrom } from 'kysely/helpers/postgres'
 import { getOperatingUnitDescendantIds } from './entityRepository'
+import { Transaction } from 'kysely'
+import { Database } from '@/src/types'
 
-// --- HELPERS ---
-
-// Fixed the missing helper function that was causing 'this' errors
-async function getPositionsWithCompensations(summaryId: string) {
-    const positions = await db
-        .selectFrom('positions')
-        .where('staffing_summary_id', '=', summaryId)
-        .selectAll()
-        .execute();
-
-    if (positions.length === 0) return [];
-
-    const positionIds = positions.map(p => p.id);
-    const compensations = await db
-        .selectFrom('compensations')
-        .where('staff_id', 'in', positionIds)
-        .selectAll()
-        .execute();
-
-    return positions.map(pos => ({
-        ...pos,
-        compensations: compensations.filter(c => c.staff_id === pos.id)
-    }));
+type StaffingSummaryPayload = {
+    fiscal_year: number
 }
 
 interface PositionInput extends Omit<NewPosition, 'staffing_summary_id'> {
@@ -37,10 +18,10 @@ interface PositionInput extends Omit<NewPosition, 'staffing_summary_id'> {
 }
 
 async function createStaffingSubmissionRecord(
-    trx: any,
+    trx: Transaction<Database>,
     entityId: string,
     fiscal_year: number,
-    positions: Omit<NewPosition, 'staffing_summary_id'>[],
+    positions: PositionInput[],
     auth_status: string,
     parent_form_id?: string,
     version?: number
@@ -110,7 +91,7 @@ async function createStaffingSubmissionRecord(
 export async function createStaffingSubmission(
     entityId: string,
     fiscal_year: number,
-    positions: Omit<NewPosition, 'staffing_summary_id'>[],
+    positions: PositionInput[],
     auth_status: string,
     parent_form_id?: string,
     version?: number
@@ -133,8 +114,8 @@ export async function createStaffingSubmission(
 export async function updateStaffingSubmission(
     summaryId: string, 
     payload: { 
-        summary: any, 
-        positions: any[],
+        summary: StaffingSummaryPayload,
+        positions: PositionInput[],
         auth_status?: string
     }
 ) {
@@ -144,11 +125,11 @@ export async function updateStaffingSubmission(
 }
 
 async function updateStaffingSubmissionRecord(
-    trx: any,
+    trx: Transaction<Database>,
     summaryId: string,
     payload: {
-        summary: any,
-        positions: any[],
+        summary: StaffingSummaryPayload,
+        positions: PositionInput[],
         auth_status?: string
     }
 ) {
@@ -170,7 +151,7 @@ async function updateStaffingSubmissionRecord(
 
     if (payload.positions.length > 0) {
         for (const pos of payload.positions) {
-            const { compensations, ...positionData } = pos as any
+            const { compensations, ...positionData } = pos
 
             const insertedPosition = await trx.insertInto('positions')
                 .values({
@@ -183,7 +164,7 @@ async function updateStaffingSubmissionRecord(
 
             if (compensations && compensations.length > 0) {
                 await trx.insertInto('compensations')
-                    .values(compensations.map((comp: any) => ({
+                    .values(compensations.map((comp) => ({
                         name: comp.name,
                         amount: comp.amount,
                         staff_id: insertedPosition.id,
@@ -200,8 +181,8 @@ async function updateStaffingSubmissionRecord(
 export async function createDbmStaffingOverwrite(
     sourceFormId: string,
     payload: {
-        summary: any,
-        positions: any[],
+        summary: StaffingSummaryPayload,
+        positions: PositionInput[],
         auth_status?: string
     }
 ) {
@@ -315,7 +296,7 @@ export async function getAllStaffingSummaries(
     inDbmModule: boolean = false,
     fiscalYear: number = new Date().getFullYear() + 1,
 ) {
-    let query = db
+    const query = db
         .selectFrom('staffing_summaries')
         .innerJoin('forms', 'forms.id', 'staffing_summaries.id')
         .innerJoin('entities', 'entities.id', 'forms.entity_id')

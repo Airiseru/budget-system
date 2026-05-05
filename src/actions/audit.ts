@@ -2,8 +2,6 @@
 
 import { createAuditRepository, createKeyRepository } from "@/src/db/factory"
 import { NewAuditLog, SignedLogInput } from "../types/audit"
-import { sessionWithEntity } from "./auth"
-import { redirect } from 'next/navigation'
 import { computeDiff, isDiffEmpty } from "../lib/diff"
 import { AuditEventType, SignaturePayload } from "../types/audit"
 

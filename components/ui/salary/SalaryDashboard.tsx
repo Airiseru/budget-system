@@ -8,13 +8,14 @@ import { NewCompensationRuleForm } from './CompensationForm'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Plus, TableProperties, Receipt } from 'lucide-react'
+import { AllSalaryRates, CompensationRule } from '@/src/types/salaries'
 
 type Tab = 'salary' | 'compensation'
 type Modal = null | 'new-salary' | 'new-compensation'
 
 type Props = {
-    schedule: any | null
-    compensationRules: any[]
+    schedule: AllSalaryRates | null
+    compensationRules: CompensationRule[]
 }
 
 export function SalaryDashboard({ schedule, compensationRules }: Props) {

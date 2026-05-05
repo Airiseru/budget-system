@@ -1,6 +1,6 @@
 import { Kysely, sql } from 'kysely'
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<unknown>): Promise<void> {
     // Salary Schedules
     await db.schema
         .createTable('salary_schedules')
@@ -42,7 +42,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop tables
     await db.schema.dropTable('salary_schedules').execute()
     await db.schema.dropTable('salary_rates').execute()

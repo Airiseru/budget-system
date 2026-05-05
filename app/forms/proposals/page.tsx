@@ -7,7 +7,7 @@ import { sessionWithEntity } from "@/src/actions/auth";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
-import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
+import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle"
 import { STATUS_LABELS } from "@/src/lib/constants"
 
 export const dynamic = "force-dynamic";
@@ -25,6 +25,19 @@ const statusColors: Record<
     approved: "default",
     rejected: "destructive",
 };
+
+type ProposalSummary = {
+    id: string
+    type: "202" | "203"
+    proposal_year: number
+    priority_rank: number
+    auth_status: string | null
+    title: string
+    total_proposal_currency: string
+    total_proposal_cost: number
+    is_infrastructure: boolean
+    submission_date: Date | string | null
+}
 
 export default async function ProposalsPage() {
     const session = await sessionWithEntity();
@@ -92,7 +105,7 @@ export default async function ProposalsPage() {
                     Budget Proposals (BP 202/203)
                 </h1>
                 <div className="grid gap-4">
-                    {data.map((proposal: any) => (
+                    {data.map((proposal: ProposalSummary) => (
                         <Link
                             href={`/forms/proposals/${proposal.id}`}
                             key={proposal.id}
@@ -123,7 +136,7 @@ export default async function ProposalsPage() {
                                                     ]
                                                 }
                                             >
-                                                {STATUS_LABELS[proposal.auth_status] ??
+                                                {STATUS_LABELS[proposal.auth_status ?? ''] ??
                                                     "Draft"}
                                             </Badge>
                                         </div>

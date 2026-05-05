@@ -1,10 +1,7 @@
 "use client";
 
-import React from "react";
 import { Badge } from "@/components/ui/badge";
-import { SignSection } from "@/components/ui/digital-signatures/SignSection";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
-import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
 import Link from "next/link";
 import {
     ArrowLeft,
@@ -15,23 +12,60 @@ import {
     FileText,
     Gavel,
 } from "lucide-react";
+import { FullProjectProposal } from "@/src/types/project_proposals";
+
+type ProposalExpenseClass = "PS" | "MOOE" | "CO" | "FE" | "FINEX";
+
+type ProposalExpenseValue = {
+    expense_class: ProposalExpenseClass;
+    amount: number;
+};
+
+type ProposalCostEntry = {
+    year?: number;
+    tier?: number;
+    expense_class?: ProposalExpenseClass;
+    amount?: number;
+    expense_classes?: ProposalExpenseValue[];
+};
+
+type ProposalCostedItem = {
+    component_name?: string;
+    description?: string;
+    location?: string;
+    costs?: ProposalCostEntry[];
+};
+
+type ProposalPrerequisite = {
+    name: string;
+    type: string;
+    status: string;
+    remarks: string | null;
+};
+
+type ProposalLocalPhysicalTarget = {
+    target_description: string;
+    year: number;
+};
+
+type ProposalViewData = FullProjectProposal & {
+    pap_prerequisites?: ProposalPrerequisite[];
+    cost_by_components?: ProposalCostedItem[];
+    local_financial_attributions?: ProposalCostedItem[];
+    local_locations?: ProposalCostedItem[];
+    local_physical_targets?: ProposalLocalPhysicalTarget[];
+    local_infrastructure_requirements?: ProposalCostedItem[];
+};
 
 interface ProposalViewProps {
-    data: any;
-    session: any;
-    userInWorkflow: boolean
-    userCanSign: boolean;
+    data: ProposalViewData;
     budgetPrepClosedForEntityActions?: boolean;
-    currentSignatoryRole: string | null;
-    existingSignature: any;
-    allSignatures: any[];
     updateAuthStatus: () => Promise<void>;
-    deleteFormAction: (id: string) => Promise<void>;
 }
 
 const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FE"];
 
-const CostBreakdownColumns = ({ item }: { item: any }) => {
+const CostBreakdownColumns = ({ item }: { item: ProposalCostedItem }) => {
     if (!item.costs || item.costs.length === 0) {
         return (
             <td className="p-4 text-center col-span-4 text-muted-400 italic text-[10px]">
@@ -44,7 +78,7 @@ const CostBreakdownColumns = ({ item }: { item: any }) => {
         <>
             {EXPENSE_CLASSES.map((cls) => {
                 const costEntry = item.costs?.find(
-                    (c: any) => c.expense_class === cls,
+                    (c) => c.expense_class === cls,
                 );
                 return (
                     <td
@@ -81,84 +115,9 @@ const getStatusStyles = (status: string) => {
 
 export default function ProposalView({
     data,
-    session,
-    userInWorkflow,
-    userCanSign,
     budgetPrepClosedForEntityActions = false,
-    currentSignatoryRole,
-    existingSignature,
-    allSignatures,
     updateAuthStatus,
-    deleteFormAction,
 }: ProposalViewProps) {
-    const getAttributionRows = (attributions: any[]) => {
-        const rows: any[] = [];
-
-        attributions?.forEach((attr) => {
-            // We need a row for every unique expense class found in this attribution
-            const uniqueClasses = new Set<string>();
-            attr.costs?.forEach((c: any) =>
-                c.expense_classes?.forEach((ec: any) =>
-                    uniqueClasses.add(ec.expense_class),
-                ),
-            );
-
-            Array.from(uniqueClasses)
-                .sort()
-                .forEach((cls) => {
-                    rows.push({
-                        description: attr.description,
-                        expenseClass: cls,
-                        // Helper to find specific cell value
-                        getValue: (year: number, tier: number | null) => {
-                            const yearData = attr.costs?.find(
-                                (c: any) =>
-                                    c.year === year &&
-                                    (tier === null || c.tier === tier),
-                            );
-                            const classData = yearData?.expense_classes?.find(
-                                (ec: any) => ec.expense_class === cls,
-                            );
-                            return Number(classData?.amount || 0);
-                        },
-                    });
-                });
-        });
-
-        return rows;
-    };
-
-    const getGroupedData = (attributions: any[]) => {
-        return attributions?.map((attr) => {
-            // Get unique expense classes for this specific PAP
-            const classes = new Set<string>();
-            attr.costs?.forEach((c: any) =>
-                c.expense_classes?.forEach((ec: any) =>
-                    classes.add(ec.expense_class),
-                ),
-            );
-
-            return {
-                description: attr.description,
-                expenseClasses: Array.from(classes).sort(),
-                // Helper to pull specific values from the nested JSON
-                getValue: (cls: string, year: number, tier: number | null) => {
-                    const yearData = attr.costs?.find(
-                        (c: any) =>
-                            c.year === year &&
-                            (tier === null || c.tier === tier),
-                    );
-                    const classData = yearData?.expense_classes?.find(
-                        (ec: any) => ec.expense_class === cls,
-                    );
-                    return Number(classData?.amount || 0);
-                },
-            };
-        });
-    };
-
-    const groupedPaps = getGroupedData(data.local_financial_attributions);
-
     return (
         <div className="m-6 max-w-5xl mx-auto space-y-10 pb-20">
             {budgetPrepClosedForEntityActions && data.auth_status === "draft" && (
@@ -262,7 +221,7 @@ export default function ProposalView({
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
                             {data.pap_prerequisites?.map(
-                                (pre: any, i: number) =>
+                                (pre, i: number) =>
                                     pre.type === "authority" && (
                                         <div
                                             key={i}
@@ -297,7 +256,7 @@ export default function ProposalView({
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
                             {data.pap_prerequisites?.map(
-                                (pre: any, i: number) =>
+                                (pre, i: number) =>
                                     pre.type === "document" && (
                                         <div
                                             key={i}
@@ -356,7 +315,7 @@ export default function ProposalView({
                             </thead>
                             <tbody className="divide-y">
                                 {data.cost_by_components?.map(
-                                    (comp: any, i: number) => (
+                                    (comp, i: number) => (
                                         <tr key={i}>
                                             <td className="p-4 font-medium text-muted-700">
                                                 {comp.component_name}
@@ -430,7 +389,7 @@ export default function ProposalView({
                                 </thead>
 
                                 {data.local_financial_attributions?.map(
-                                    (attr: any, pIdx: number) => {
+                                    (attr, pIdx: number) => {
                                         const order = [
                                             "PS",
                                             "MOOE",
@@ -441,15 +400,15 @@ export default function ProposalView({
                                         // 1. Extract and sort unique expense classes based on the preferred order
                                         const uniqueClasses = Array.from(
                                             new Set(
-                                                attr.costs?.flatMap((c: any) =>
+                                                attr.costs?.flatMap((c) =>
                                                     c.expense_classes?.map(
-                                                        (ec: any) =>
+                                                        (ec) =>
                                                             ec.expense_class,
                                                     ),
                                                 ),
                                             ),
                                         ).sort(
-                                            (a: any, b: any) =>
+                                            (a, b) =>
                                                 order.indexOf(a) -
                                                 order.indexOf(b),
                                         ) as string[];
@@ -461,7 +420,7 @@ export default function ProposalView({
                                             cls: string | null = null,
                                         ) => {
                                             const yData = attr.costs?.find(
-                                                (c: any) =>
+                                                (c) =>
                                                     c.year === year &&
                                                     (tier === null ||
                                                         c.tier === tier),
@@ -471,7 +430,7 @@ export default function ProposalView({
                                             if (cls) {
                                                 return Number(
                                                     yData.expense_classes?.find(
-                                                        (ec: any) =>
+                                                        (ec) =>
                                                             ec.expense_class ===
                                                             cls,
                                                     )?.amount || 0,
@@ -480,7 +439,7 @@ export default function ProposalView({
                                             // If no class specified, sum all classes for that year/tier (The PAP Total)
                                             return (
                                                 yData.expense_classes?.reduce(
-                                                    (sum: number, ec: any) =>
+                                                    (sum: number, ec) =>
                                                         sum +
                                                         Number(ec.amount || 0),
                                                     0,
@@ -626,7 +585,7 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y">
                                     {data.local_locations?.map(
-                                        (loc: any, i: number) => (
+                                        (loc, i: number) => (
                                             <tr key={i}>
                                                 <td className="p-4 text-muted-700">
                                                     {loc.location}
@@ -649,7 +608,7 @@ export default function ProposalView({
                         </h4>
                         <div className="border rounded-xl bg-white overflow-hidden divide-y">
                             {data.local_physical_targets?.map(
-                                (pt: any, i: number) => (
+                                (pt, i: number) => (
                                     <div
                                         key={i}
                                         className="p-4 flex justify-between"
@@ -694,7 +653,7 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y">
                                     {data.local_infrastructure_requirements?.map(
-                                        (infra: any, i: number) => (
+                                        (infra, i: number) => (
                                             <tr key={i}>
                                                 <td className="p-4 text-muted-700">
                                                     {infra.description}

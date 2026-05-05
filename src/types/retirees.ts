@@ -1,4 +1,4 @@
-import { Generated, ColumnType, Selectable, Insertable, Updateable } from 'kysely'
+import { Generated, ColumnType, Selectable, Insertable } from 'kysely'
 
 export interface RetireesListTable {
     id: Generated<string>

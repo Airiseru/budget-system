@@ -10,9 +10,56 @@ import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 
+type RetireeRowView = {
+    id: string
+    name: string
+    is_gsis_member: boolean
+    retirement_law: string
+    position: string
+    salary_grade: number
+    highest_monthly_salary: number | string
+    tlb_amount: number | null
+    rg_amount: number | null
+    date_of_birth: Date | string
+    original_appointment: Date | string
+    retirement_effectivity: Date | string
+    number_vacation_leave: number | null
+    number_sick_leave: number | null
+    total_credible_service: number | null
+    number_gratuity_months: number | null
+}
+
+type RetireeFormView = {
+    id: string
+    fiscal_year: number
+    is_mandatory: boolean
+    entity_id: string
+    auth_status: string | null
+    retirees: RetireeRowView[]
+}
+
+type SessionLike = {
+    user: {
+        id: string
+        role: string
+        access_level: string
+    }
+}
+
+type SignatorySummary = {
+    id: string
+    user_name: string
+    role: string
+    created_at: Date
+}
+
+type ExistingSignature = {
+    role: string
+} | null
+
 interface RetireeViewProps {
-    data: any;
-    session: any;
+    data: RetireeFormView;
+    session: SessionLike;
     backUrl: string;
     isDbmEvaluator?: boolean;
     budgetPrepClosedForEntityActions?: boolean;
@@ -28,8 +75,8 @@ interface RetireeViewProps {
     userInWorkflow: boolean;
     userCanSign: boolean;
     currentSignatoryRole: string | null;
-    existingSignature: any;
-    allSignatures: any[];
+    existingSignature: ExistingSignature;
+    allSignatures: SignatorySummary[];
     pastSignatures: {
         id: string;
         user_name: string;
@@ -250,7 +297,7 @@ export default function RetireeView({
                         </thead>
                         <tbody className="divide-y">
                             {data.retirees.map(
-                                (retiree: any, index: number) => (
+                                (retiree: RetireeRowView, index: number) => (
                                     <tr
                                         key={retiree.id}
                                         className="hover:bg-slate-50/50"
@@ -381,7 +428,7 @@ export default function RetireeView({
                                     ₱
                                     {data.retirees
                                         .reduce(
-                                            (sum: number, r: any) =>
+                                            (sum: number, r: RetireeRowView) =>
                                                 sum +
                                                 Number(
                                                     r.highest_monthly_salary,

@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState } from 'react';
-import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, Save, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { z } from "zod";
 import { RetireeRowSchema, BP205Schema } from '@/src/lib/validations/retiree.schema';
@@ -94,12 +94,12 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
     }];
   });
 
-  const [fiscalYear, setFiscalYear] = useState(
+  const [fiscalYear] = useState(
     retireeData?.fiscal_year ?? initialFiscalYear ?? new Date().getFullYear() + 1
   );
 
-  const handleInputChange = (id: string, field: string, value: any) => {
-    setRetirees((prev: any) => prev.map((r: any) => {
+  const handleInputChange = (id: string, field: keyof RetireeRow, value: RetireeRow[keyof RetireeRow]) => {
+    setRetirees((prev) => prev.map((r) => {
       if (r.id !== id) return r;
 
       const updatedRow = { ...r, [field]: value };
@@ -163,7 +163,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
         const err = await response.json();
         setError(err.error || "Failed to save");
       }
-    } catch (err) {
+    } catch {
       setError("A network error occurred.");
     } finally {
       setIsLoading(false);
@@ -414,9 +414,9 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
 
         {/* Footer Info */}
         <div className="flex justify-between items-start text-xs text-muted-500 px-2">
-          <p>* Ensure "Effectivity Date" falls within FY {fiscalYear} for TLP eligibility.</p>
+          <p>* Ensure &quot;Effectivity Date&quot; falls within FY {fiscalYear} for TLP eligibility.</p>
           <div className="text-right">
-              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary)*( Number(r.number_vacation_leave) + Number(r.number_sick_leave))*TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary) * (Number(r.number_vacation_leave) + Number(r.number_sick_leave)) * TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
       </form>

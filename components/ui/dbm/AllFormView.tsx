@@ -14,8 +14,20 @@ import {
 } from "@/components/ui/select"
 import { Filter, ChevronRight, FileText, Building2 } from 'lucide-react'
 
+type DBMFormListItem = {
+    id: string
+    entity_abbr: string | null
+    entity_name: string | null
+    type: string | null
+    codename: string
+    fiscal_year: number
+    version: number
+    auth_status: string | null
+    updated_at: Date | string
+}
+
 interface DBMFormViewProps {
-    forms: any[]
+    forms: DBMFormListItem[]
     page: number
     totalPages: number
     selectedYear?: number

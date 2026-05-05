@@ -125,13 +125,13 @@ export async function verifyAndSubmitSignature(
     pin: string,
     tableName: string,
     formId: string,
-    payload: FormSignaturePayload | Record<string, any>,
+    payload: FormSignaturePayload | Record<string, unknown>,
     keyId: string,
     publicKeySnapshot: string,
     changedAt: Date,
     signatoryRole: string,
     signature: string,
-    signaturePayload: Record<string, any> | string,
+    signaturePayload: Record<string, unknown> | string,
     allowClosedCycleAction: boolean = false
 ) {
     try {
@@ -215,13 +215,13 @@ export async function verifyAndRejectSignature(
     pin: string,
     tableName: string,
     formId: string,
-    payload: FormSignaturePayload | Record<string, any>,
+    payload: FormSignaturePayload | Record<string, unknown>,
     keyId: string,
     publicKeySnapshot: string,
     changedAt: Date,
     signatoryRole: string,
     signature: string,
-    signaturePayload: Record<string, any> | string,
+    signaturePayload: Record<string, unknown> | string,
     allowClosedCycleAction: boolean = false
 ) {
     try {

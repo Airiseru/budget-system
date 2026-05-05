@@ -51,7 +51,7 @@ export function SignatureVerificationBadge({
                 setStatus("invalid");
                 setDetails("Verification failed");
             });
-    }, [signatoryId]);
+    }, [entityId, formId, tableName, signatoryId, formData]);
 
     return (
         <div className="flex items-start gap-3 p-3 rounded-lg border border-border">

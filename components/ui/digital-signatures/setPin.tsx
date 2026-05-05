@@ -31,8 +31,8 @@ export function SetPinForm({ hasPin }: { hasPin: boolean }) {
             setSuccess(true)
             setPin('')
             setConfirmPin('')
-        } catch (err: any) {
-            setError(err.message ?? 'Failed to set PIN. Please try again.')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to set PIN. Please try again.')
         } finally {
             setIsLoading(false)
         }

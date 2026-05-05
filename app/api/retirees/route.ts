@@ -7,6 +7,7 @@ import { logNewForm, logSubmitForm } from '@/src/actions/audit';
 import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle';
 
 const repo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres');
+type ErrorWithMessage = Error & { message?: string }
 
 export async function POST(req: Request) {
     const session = await auth.api.getSession({
@@ -81,8 +82,9 @@ export async function POST(req: Request) {
         }
 
         return NextResponse.json(result, { status: 201 });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error(error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        const message = error instanceof Error ? error.message : (error as ErrorWithMessage).message
+        return NextResponse.json({ error: message ?? "Failed to save" }, { status: 500 });
     }
 }

@@ -10,13 +10,44 @@ import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants"
 import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
+import { StaffingSummaryWithPositions } from "@/src/types/staffing";
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
+type PapOption = {
+    id: string
+    title: string
+}
+
+type SessionLike = {
+    user: {
+        id: string
+        role: string
+        access_level: string
+    }
+}
+
+type SignatorySummary = {
+    id: string
+    user_name: string
+    role: string
+    created_at: Date
+}
+
+type ExistingSignature = {
+    role: string
+} | null
+
+type StaffingPositionView = StaffingSummaryWithPositions["positions"][number]
+
+type StaffingSummaryView = StaffingSummaryWithPositions & {
+    entity_id: string
+}
+
 interface StaffingViewProps {
-    summary: any
-    paps: any[]
-    session: any
+    summary: StaffingSummaryView
+    paps: PapOption[]
+    session: SessionLike
     backUrl: string
     isDbmEvaluator?: boolean
     budgetPrepClosedForEntityActions?: boolean
@@ -33,8 +64,8 @@ interface StaffingViewProps {
         userInWorkflow: boolean
         userCanSign: boolean
         currentSignatoryRole: string | null
-        existingSignature: any
-        allSignatures: any[]
+        existingSignature: ExistingSignature
+        allSignatures: SignatorySummary[]
         pastSignatures: {
             id: string
             user_name: string
@@ -84,11 +115,11 @@ export default function StaffingView({
 
     const allPositions = summary?.positions || [];
 
-    const overallBasicSalary = allPositions.reduce((sum: number, pos: any) => sum + (Number(pos.total_salary) || 0), 0);
+    const overallBasicSalary = allPositions.reduce((sum: number, pos: StaffingPositionView) => sum + (Number(pos.total_salary) || 0), 0);
 
     const overallCompensationTotals = VALID_COMPENSATION_NAMES.map(compName => {
-        return allPositions.reduce((sum: number, pos: any) => {
-            const compMatch = pos.compensations?.find((c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
+        return allPositions.reduce((sum: number, pos: StaffingPositionView) => {
+            const compMatch = pos.compensations?.find((c) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
             return sum + (compMatch ? Number(compMatch.amount) : 0);
         }, 0);
     });
@@ -96,17 +127,17 @@ export default function StaffingView({
     const overallGrandTotal = overallBasicSalary + overallCompensationTotals.reduce((a: number, b: number) => a + b, 0);
 
     const renderStaffTypeGroup = (type: string) => {
-        const filteredPositions = (summary?.positions || []).filter((pos: any) => {
+        const filteredPositions = (summary?.positions || []).filter((pos: StaffingPositionView) => {
             return pos.staff_type === type;
         });
 
         if (filteredPositions.length === 0) return null;
 
-        const totalBasicSalary = filteredPositions.reduce((sum: number, pos: any) => sum + (Number(pos.total_salary) || 0), 0);
+        const totalBasicSalary = filteredPositions.reduce((sum: number, pos: StaffingPositionView) => sum + (Number(pos.total_salary) || 0), 0);
 
         const compensationTotals = VALID_COMPENSATION_NAMES.map(compName => {
-            return filteredPositions.reduce((sum: number, pos: any) => {
-                const compMatch = pos.compensations?.find((c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
+            return filteredPositions.reduce((sum: number, pos: StaffingPositionView) => {
+                const compMatch = pos.compensations?.find((c) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
                 return sum + (compMatch ? Number(compMatch.amount) : 0);
             }, 0);
         });
@@ -141,8 +172,8 @@ export default function StaffingView({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-300">
-                            {filteredPositions.map((pos: any) => {
-                                const relatedPap = paps.find((p: any) => p.id === pos.pap_id);
+                            {filteredPositions.map((pos: StaffingPositionView) => {
+                                const relatedPap = paps.find((p) => p.id === pos.pap_id);
                                 const rowBasic = Number(pos.total_salary) || 0;
                                 let rowCompensationsTotal = 0;
 
@@ -161,7 +192,7 @@ export default function StaffingView({
 
                                         {VALID_COMPENSATION_NAMES.map(compName => {
                                             const compMatch = pos.compensations?.find(
-                                                (c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase()
+                                                (c) => c.name.trim().toLowerCase() === compName.trim().toLowerCase()
                                             );
                                             const amount = compMatch ? Number(compMatch.amount) : 0;
                                             rowCompensationsTotal += amount;

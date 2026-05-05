@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useEffect } from 'react'
+import { useActionState, useEffect, useMemo, useState } from 'react'
 import { createCompensationRuleAction } from '@/src/actions/salary'
 import { VALID_COMPENSATION_NAMES, MAX_SG } from '@/src/lib/constants'
 import { Button } from '@/components/ui/button'
@@ -10,24 +10,18 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
     const [state, action, pending] = useActionState(createCompensationRuleAction, undefined)
     const [calcType, setCalcType] = useState<string>(state?.values?.calculation_type ?? 'fixed')
     const [frequency, setFrequency] = useState<string>(state?.values?.frequency ?? 'monthly')
-
-    const [todayDate, setTodayDate] = useState('')
-
-    useEffect(() => {
-        // Generate today's date in YYYY-MM-DD format based on the user's local timezone
+    const todayDate = useMemo(() => {
         const d = new Date()
         const year = d.getFullYear()
         const month = String(d.getMonth() + 1).padStart(2, '0')
         const day = String(d.getDate()).padStart(2, '0')
-        setTodayDate(`${year}-${month}-${day}`)
+        return `${year}-${month}-${day}`
+    }, [])
 
+    useEffect(() => {
         // close on success
         if (state?.success) onClose()
     }, [state?.success, onClose])
-
-    useEffect(() => {
-        if (state?.success) onClose()
-    }, [state?.success])
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">

@@ -6,6 +6,7 @@ import { createProposalRepository } from "@/src/db/factory";
 import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
+type PgError = Error & { code?: string; detail?: string }
 
 export const dynamic = "force-dynamic";
 
@@ -78,16 +79,17 @@ export async function POST(req: Request) {
         }
 
         return NextResponse.json(result);
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("POST PROJECT ERROR:", error);
+        const pgError = error as PgError
 
         // If it's a unique constraint violation, send a specific response
-        if (error.code === "23505") {
+        if (pgError.code === "23505") {
             return NextResponse.json(
                 {
                     code: "23505",
                     message: "Duplicate priority rank detected.",
-                    detail: error.detail,
+                    detail: pgError.detail,
                 },
                 { status: 409 }, // Conflict
             );

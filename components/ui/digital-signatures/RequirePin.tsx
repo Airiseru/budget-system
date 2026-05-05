@@ -85,8 +85,8 @@ export function RequirePin({
                 record_id: actionPayload.record_id
             })
 
-        } catch (err: any) {
-            setError(err.message ?? 'Failed to verify PIN. Please try again.')
+        } catch (err: unknown) {
+            setError(err instanceof Error ? err.message : 'Failed to verify PIN. Please try again.')
             setPin('')
             setIsVerifying(false)
         }

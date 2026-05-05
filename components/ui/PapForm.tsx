@@ -3,24 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from "next/navigation"
 import { Pap, NewPap } from "@/src/types/pap"
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select'
 
 interface PapFormProps {
     pap?: Pap
-    entityId: string;  
+    entityId: string;
     entityName: string; 
 }
-
-const tierOptions = [
-    { value: 1, label: 'Tier 1 (Ongoing PAPs)' },
-    { value: 2, label: 'Tier 2 (New Proposals)' },
-]
 
 export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
     const router = useRouter()
@@ -74,7 +62,7 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
             } else {
                 setError('Something went wrong')
             }
-        } catch (error) {
+        } catch {
             setError('An error occurred while creating PAP')
         } finally {
             setIsLoading(false)
