@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { sessionWithEntity } from "@/src/actions/auth";
 import ProposalClientWrapper from "@/components/ui/proposals/ProposalNew";
 import { createProposalRepository } from "@/src/db/factory";
+import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -32,6 +33,10 @@ export default async function EditProposalPage({
     // This will now pass type checking and logic
     if (project.auth_status !== "draft") {
         redirect(`/forms/proposals/${id}?error=locked`);
+    }
+
+    if (!(await isBudgetPrepActiveForYear(project.proposal_year))) {
+        redirect(`/forms/proposals/${id}?error=budget-cycle-closed`);
     }
 
     if (!session || session.user.access_level !== "encode") {

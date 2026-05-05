@@ -10,21 +10,13 @@ import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
 import { canSign, roleInWorkflow } from "@/src/lib/workflows";
 import { revalidatePath } from "next/cache";
 import ProposalView from "@/components/ui/proposals/ProposalView";
+import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const FormRepo = createFormRepository(process.env.DATABASE_TYPE || "postgres");
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || "postgres");
-
-const statusLabels: Record<string, string> = {
-    draft: "Draft",
-    pending_budget: "Pending Budget Officer",
-    pending_planning: "Pending Planning Officer",
-    pending_chief_accountant: "Pending Chief Accountant",
-    pending_agency_head: "Pending Agency Head",
-    approved: "Approved",
-};
 
 export default async function RetireeDetailsPage({
     params,
@@ -61,11 +53,16 @@ export default async function RetireeDetailsPage({
         session.user.id,
     );
     const allSignatures = await KeyRepo.getSignatoriesByFormId(data.id ?? "");
+    const isBudgetPrepOpenForProposalYear = await isBudgetPrepActiveForYear(
+        data.proposal_year,
+    );
+    const entityActionsLockedByBudgetCycle = !isBudgetPrepOpenForProposalYear;
 
     // Server Actions
     const updateAuthStatus = async () => {
         "use server";
         if (data.auth_status !== "draft") return;
+        if (entityActionsLockedByBudgetCycle) return;
         await FormRepo.updateFormAuthStatus(data.id ?? "", "pending_budget");
         revalidatePath(`/forms/proposals/${id}`);
     };
@@ -84,7 +81,8 @@ export default async function RetireeDetailsPage({
             data={data}
             session={session}
             userInWorkflow={userInWorkflow}
-            userCanSign={userCanSign}
+            userCanSign={entityActionsLockedByBudgetCycle ? false : userCanSign}
+            budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}
             allSignatures={allSignatures}

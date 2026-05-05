@@ -4,6 +4,7 @@ import { createRetireeRepository } from '@/src/db/factory';
 import { auth } from "@/src/lib/auth"; 
 import { headers } from "next/headers";
 import { logNewForm, logSubmitForm } from '@/src/actions/audit';
+import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle';
 
 const repo = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres');
 
@@ -22,6 +23,13 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         const { entityId, listData, retirees, auth_status } = body;
+
+        if (!(await isBudgetPrepActiveForYear(listData.fiscal_year))) {
+            return NextResponse.json(
+                { error: getBudgetPrepClosedError(listData.fiscal_year) },
+                { status: 403 }
+            );
+        }
 
         const result = await repo.createRetireeSubmission(
             entityId,

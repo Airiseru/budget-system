@@ -737,7 +737,7 @@ export default function StaffForm({
         <div key="staffing-form" className="max-w-5xl mx-auto mt-8 px-4 pb-20">
             <div className="mb-6 p-4 bg-muted/50 border-l-4 border-border rounded-r-lg">
                 <span className="text-sm font-bold text-muted-foreground uppercase">
-                    Agency
+                    Government Entity
                 </span>
                 <h2 className="text-lg font-semibold">{entityName}</h2>
             </div>

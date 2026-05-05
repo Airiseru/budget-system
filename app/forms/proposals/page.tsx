@@ -6,6 +6,8 @@ import Link from "next/link";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
+import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
+import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,8 @@ export default async function ProposalsPage() {
     if (!session) return redirect("/login");
 
     try {
+        const activeCycle = await getActiveBudgetPrepCycle();
+        const canCreate = session?.user.access_level === "encode" && !!activeCycle;
         // Fetching proposal summaries (assuming a similar method to staffing)
         const data = await ProposalRepo.getAllProposalSummaries(
             session.user.id ?? "",
@@ -44,7 +48,7 @@ export default async function ProposalsPage() {
                         <Button variant="outline">Go Back</Button>
                     </Link>
                 </ButtonGroup>
-                {session?.user.access_level === "encode" && (
+                {canCreate && (
                     <div className="flex gap-2 ml-2">
                         <Link href="/forms/proposals/new?type=202">
                             <Button variant="default">
@@ -70,6 +74,7 @@ export default async function ProposalsPage() {
             return (
                 <div className="m-4">
                     {renderHeader()}
+                    {!activeCycle && <BudgetPrepClosedBanner />}
                     <h1 className="text-xl opacity-50">
                         No Project Proposals found.
                     </h1>
@@ -80,6 +85,7 @@ export default async function ProposalsPage() {
         return (
             <div className="m-4">
                 {renderHeader()}
+                {!activeCycle && <BudgetPrepClosedBanner />}
 
                 <h1 className="text-2xl font-bold mb-6">
                     Budget Proposals (BP 202/203)

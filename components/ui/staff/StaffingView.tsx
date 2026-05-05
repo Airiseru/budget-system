@@ -9,6 +9,7 @@ import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
 import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants"
 import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
+import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
@@ -18,6 +19,8 @@ interface StaffingViewProps {
     session: any
     backUrl: string
     isDbmEvaluator?: boolean
+    budgetPrepClosedForEntityActions?: boolean
+    allowClosedCycleActions?: boolean
     originalFormId: string
     versionTabs: {
         id: string
@@ -58,7 +61,9 @@ export default function StaffingView({
     workflowData,
     updateAuthStatus,
     deleteFormAction,
-    isDbmEvaluator = false
+    isDbmEvaluator = false,
+    budgetPrepClosedForEntityActions = false,
+    allowClosedCycleActions = false
 }: StaffingViewProps) {
     const { userCanSign, currentSignatoryRole, existingSignature, allSignatures, pastSignatures, latestRejection } = workflowData;
     const formData = { id: summary.id, fiscal_year: summary.fiscal_year, form_id: summary.id };
@@ -66,12 +71,14 @@ export default function StaffingView({
     const canEditCurrentVersion =
         !familyHasApprovedVersion &&
         (
-            (summary.auth_status === 'draft' && session.user.access_level === 'encode') ||
+            (summary.auth_status === 'draft' && session.user.access_level === 'encode' && !budgetPrepClosedForEntityActions) ||
             (summary.auth_status === 'pending_dbm' && isDbmEvaluator)
         )
     const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign
     const signSectionStatusMessage =
-        familyHasApprovedVersion && summary.auth_status !== 'approved'
+        budgetPrepClosedForEntityActions
+            ? 'The budget preparation phase for this fiscal year is closed. Entity users can no longer edit, submit, or sign this form.'
+            : familyHasApprovedVersion && summary.auth_status !== 'approved'
             ? 'DBM has already approved a different version of this form. This version is locked and can no longer be signed.'
             : undefined
 
@@ -200,6 +207,9 @@ export default function StaffingView({
 
     return (
         <main className="m-6 max-w-none px-4 md:px-8 md:my-12 space-y-8">
+            {budgetPrepClosedForEntityActions && (
+                <BudgetPrepClosedBanner message="The budget preparation phase for this fiscal year is over. You can no longer edit, submit, or sign this form until DBM reopens the cycle for this fiscal year." />
+            )}
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back"></BackButton>
                 {canEditCurrentVersion && (
@@ -335,10 +345,11 @@ export default function StaffingView({
                 signatories={allSignatures}
                 pastSignatories={pastSignatures}
                 latestRejection={latestRejection}
+                allowClosedCycleAction={allowClosedCycleActions}
                 workflow={STAFFING_WORKFLOW}
             />
 
-            {summary.auth_status === 'draft' && (
+            {summary.auth_status === 'draft' && !budgetPrepClosedForEntityActions && (
                 <div className="pt-6 border-t mt-12 flex justify-between items-center">
                     <div>
                         <h3 className="text-sm font-bold text-gray-900">Danger Zone</h3>

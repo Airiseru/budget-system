@@ -25,6 +25,7 @@ type Props = {
     fromAuthStatus?: string;
     toAuthStatus?: string;
     onApproved?: () => void;
+    allowClosedCycleAction?: boolean;
 };
 
 type Step = "idle" | "pin" | "signing" | "signed";
@@ -39,6 +40,7 @@ export function SignButton({
     fromAuthStatus,
     toAuthStatus,
     onApproved,
+    allowClosedCycleAction = false,
 }: Props) {
     const [step, setStep] = useState<Step>("idle");
     const [pin, setPin] = useState("");
@@ -116,6 +118,7 @@ export function SignButton({
                 signatoryRole,
                 signature,
                 signaturePayload as string,
+                allowClosedCycleAction,
             );
 
             setStep("signed");

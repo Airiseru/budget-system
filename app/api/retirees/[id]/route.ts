@@ -8,6 +8,7 @@ import {
 import { BP205Schema } from '@/src/lib/validations/retiree.schema'; 
 import { logNewForm, logSaveFormEdits, logSubmitForm, logFormOverwrite } from '@/src/actions/audit';
 import { createFormRepository } from '@/src/db/factory'
+import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle';
 
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -59,6 +60,17 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
         if (!listData) {
             return NextResponse.json({ error: "Missing form metadata" }, { status: 400 });
+        }
+
+        const isSubmitting =
+            body.auth_status === 'pending_personnel' ||
+            body.auth_status === 'pending_dbm'
+
+        if (!isDbm && isSubmitting && !(await isBudgetPrepActiveForYear(listData.fiscal_year))) {
+            return NextResponse.json(
+                { error: getBudgetPrepClosedError(listData.fiscal_year) },
+                { status: 403 }
+            );
         }
 
         const retireesWithId = retirees.map(r => ({

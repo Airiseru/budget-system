@@ -40,6 +40,7 @@ interface RetireeFormInitialData {
 interface Props {
   schedule: AllSalaryRates
   highestSG: number
+  initialFiscalYear?: number;
   retireeData?: RetireeFormInitialData;
   userId: string
   entityId: string;
@@ -47,7 +48,7 @@ interface Props {
   isDBM?: boolean;
 }
 
-const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, entityName, isDBM = false }: Props) => {
+const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, userId, entityId, entityName, isDBM = false }: Props) => {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
   const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel' | 'pending_dbm'>('draft');
@@ -93,7 +94,9 @@ const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, en
     }];
   });
 
-  const [fiscalYear, setFiscalYear] = useState(new Date().getFullYear() + 1);
+  const [fiscalYear, setFiscalYear] = useState(
+    retireeData?.fiscal_year ?? initialFiscalYear ?? new Date().getFullYear() + 1
+  );
 
   const handleInputChange = (id: string, field: string, value: any) => {
     setRetirees((prev: any) => prev.map((r: any) => {
@@ -199,11 +202,11 @@ const BP205EntryGrid = ({ schedule, highestSG, retireeData, userId, entityId, en
   return (
     <div className="p-6 mx-auto space-y-6">
       <div className="mb-6 p-4 bg-muted/50 border-l-4 border-muted-400 rounded-r-lg shadow-sm">
-          <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">Logged-in Agency</span>
-          <h2 className="text-lg font-semibold text-muted-800">{entityName}</h2>
+            <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">Government Entity</span>
+            <h2 className="text-lg font-semibold text-muted-800">{entityName}</h2>
       </div>
       <h1 className="text-2xl font-bold mb-6 text-primary-800">
-          {isEditing ? 'Edit Form 205' : 'Create Form 205'}
+            {isEditing ? 'Edit Form 205' : 'Create Form 205'}
       </h1>
       <form onSubmit={handleSubmit} className="w-full space-y-4">
         {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}

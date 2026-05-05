@@ -8,12 +8,15 @@ import FormDeleteButton from "../FormDeleteButton";
 import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
+import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 
 interface RetireeViewProps {
     data: any;
     session: any;
     backUrl: string;
     isDbmEvaluator?: boolean;
+    budgetPrepClosedForEntityActions?: boolean;
+    allowClosedCycleActions?: boolean;
     originalFormId: string;
     versionTabs: {
         id: string;
@@ -47,6 +50,8 @@ export default function RetireeView({
     session,
     backUrl,
     isDbmEvaluator = false,
+    budgetPrepClosedForEntityActions = false,
+    allowClosedCycleActions = false,
     originalFormId,
     versionTabs,
     userInWorkflow,
@@ -70,16 +75,22 @@ export default function RetireeView({
     const canEditCurrentVersion =
         !familyHasApprovedVersion &&
         ((data.auth_status === "draft" &&
-            session.user.access_level === "encode") ||
+            session.user.access_level === "encode" &&
+            !budgetPrepClosedForEntityActions) ||
             (data.auth_status === "pending_dbm" && isDbmEvaluator));
     const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign;
     const signSectionStatusMessage =
-        familyHasApprovedVersion && data.auth_status !== "approved"
+        budgetPrepClosedForEntityActions
+            ? "The budget preparation phase for this fiscal year is closed. Entity users can no longer edit, submit, or sign this form."
+            : familyHasApprovedVersion && data.auth_status !== "approved"
             ? "DBM has already approved a different version of this form. This version is locked and can no longer be signed."
             : undefined;
 
     return (
         <main className="p-6 max-w-7xl mx-auto space-y-6">
+            {budgetPrepClosedForEntityActions && (
+                <BudgetPrepClosedBanner message="The budget preparation phase for this fiscal year is over. You can no longer edit, submit, or sign this form until DBM reopens the cycle for this fiscal year." />
+            )}
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
                 {canEditCurrentVersion && (
@@ -408,9 +419,12 @@ export default function RetireeView({
                 signatories={allSignatures}
                 pastSignatories={pastSignatures}
                 latestRejection={latestRejection}
+                allowClosedCycleAction={allowClosedCycleActions}
                 workflow={RETIREE_WORKFLOW}
             />
-            {data.auth_status === "draft" && !familyHasApprovedVersion && (
+            {data.auth_status === "draft" &&
+                !familyHasApprovedVersion &&
+                !budgetPrepClosedForEntityActions && (
                 <div className="pt-6 border-t mt-12 flex justify-between items-center">
                     <div>
                         <h3 className="text-sm font-bold text-gray-900">

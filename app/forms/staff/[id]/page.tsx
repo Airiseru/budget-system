@@ -6,6 +6,7 @@ import { sessionWithEntity } from "@/src/actions/auth"
 import { redirect, notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import StaffingView from "@/components/ui/staff/StaffingView"
+import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle"
 
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -57,10 +58,19 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
         }
     }
 
+    const allowClosedCycleActions =
+        session.user.role === 'dbm' &&
+        isActingAsEvaluator &&
+        backUrl === '/dbm/forms'
+    const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(summary.fiscal_year)
+    const entityActionsLockedByBudgetCycle =
+        !isBudgetPrepOpenForYear && !allowClosedCycleActions
+
     // Server Actions
     const updateAuthStatus = async () => {
         "use server"
         if (summary.auth_status !== 'draft') return
+        if (entityActionsLockedByBudgetCycle) return
         await submitForm(summary.id ?? "", summary, session.user.id, summary.entity_id, 'staffing_summaries', nextStatus)
         revalidatePath(`/forms/staff/${id}`)
     }
@@ -79,13 +89,15 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
             session={session}
             backUrl={backUrl}
             isDbmEvaluator={isActingAsEvaluator}
+            budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
+            allowClosedCycleActions={allowClosedCycleActions}
             versionTabs={versionFamily.forms}
             originalFormId={versionFamily.originalFormId}
             updateAuthStatus={updateAuthStatus}
             deleteFormAction={deleteFormAction}
             workflowData={{
                 userInWorkflow,
-                userCanSign,
+                userCanSign: entityActionsLockedByBudgetCycle ? false : userCanSign,
                 currentSignatoryRole,
                 existingSignature,
                 allSignatures,

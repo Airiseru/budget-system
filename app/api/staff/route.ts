@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server'
 import { auth } from "@/src/lib/auth"; 
 import { headers } from "next/headers";
 import { logNewForm, logSubmitForm } from '@/src/actions/audit';
+import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,6 +40,13 @@ export async function POST(req: Request) {
         
         // Destructure the payload sent by the form
         const { userId, entityId, summary, positions, auth_status } = body;
+
+        if (!(await isBudgetPrepActiveForYear(summary.fiscal_year))) {
+            return NextResponse.json(
+                { error: getBudgetPrepClosedError(summary.fiscal_year) },
+                { status: 403 }
+            );
+        }
 
         // Ensure you pass 'summary' (which contains fiscal_year) 
         // to your repository function, not the whole body.

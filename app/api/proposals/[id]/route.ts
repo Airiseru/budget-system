@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { auth } from "@/src/lib/auth"; 
 import { headers } from "next/headers";
 import { createProposalRepository } from '@/src/db/factory';
+import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle';
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || 'postgres');
 
@@ -19,6 +20,19 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
         // LOCKING LOGIC: Same as Retirees/Staffing
         if (existing.auth_status !== 'draft') {
             return NextResponse.json({ error: "Only drafts can be updated" }, { status: 403 });
+        }
+
+        const nextStatus = body.auth_status
+        const proposalYear =
+            body.summaryData?.proposal_year ??
+            body.payload?.proposal_year ??
+            existing.proposal_year
+
+        if (nextStatus === 'pending_budget' && !(await isBudgetPrepActiveForYear(proposalYear))) {
+            return NextResponse.json(
+                { error: getBudgetPrepClosedError(proposalYear) },
+                { status: 403 }
+            );
         }
 
         // updateProjectProposal should handle deleting and re-inserting child arrays
