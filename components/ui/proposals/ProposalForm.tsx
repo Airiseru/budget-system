@@ -345,6 +345,7 @@ interface WrapperProps {
     userId: string;
     entityName: string;
     entityId: string;
+    activeFiscalYear?: number;
 }
 
 export default function ProposalForm({
@@ -353,6 +354,7 @@ export default function ProposalForm({
     userId,
     entityName,
     entityId,
+    activeFiscalYear,
 }: WrapperProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
@@ -366,7 +368,10 @@ export default function ProposalForm({
 
     const [summaryData, setSummaryData] = useState({
         title: project?.title || "",
-        proposal_year: project?.proposal_year || 2026,
+        proposal_year:
+            project?.proposal_year ||
+            activeFiscalYear ||
+            new Date().getFullYear() + 1,
         priority_rank: project?.priority_rank || 1,
         type: type,
         org_outcome_id: project?.org_outcome_id || "",
@@ -377,7 +382,10 @@ export default function ProposalForm({
 
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         // Top-level fields from project or defaults
-        proposal_year: project?.proposal_year || 2026,
+        proposal_year:
+            project?.proposal_year ||
+            activeFiscalYear ||
+            new Date().getFullYear() + 1,
         // priority_rank: project?.priority_rank || 1,
         is_new: project?.is_new ?? false,
         myca_issuance: project?.myca_issuance ?? false,

@@ -8,7 +8,6 @@ export const compensationSchema = z.object({
 
 export const positionSchema = z.object({
     pap_id: z.string().min(1, "Please select a PAP"),
-    tier: z.number().min(1, "Tier is required").max(2),
     position_title: z.string().min(1, "Position title is required"),
     staff_type: z.string().min(1, "Staff type is required"),
     organizational_unit: z.string().min(1, "Org unit is required"),

@@ -5,6 +5,8 @@ import { redirect } from "next/navigation";
 import { ButtonGroup } from "@/components/ui/button-group"
 import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
+import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
+import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
 
 export default async function NewStaffingPage() {
     const session = await sessionWithEntity();
@@ -18,7 +20,12 @@ export default async function NewStaffingPage() {
         redirect('/forms/staff?error=unauthorized');
     }
 
-    let components = []
+    const activeCycle = await getActiveBudgetPrepCycle()
+    const components = []
+
+    if (!activeCycle) {
+        components.push(<BudgetPrepClosedBanner key="budget-cycle-closed" />)
+    }
 
     const PapRepository = createPapRepository('postgres');
     const paps = await PapRepository.getAllPaps();
@@ -28,7 +35,7 @@ export default async function NewStaffingPage() {
 
     if (!schedule) components.push(<p key="no-schedule">There is no salary schedule for this year.</p>)
     
-    else {
+    else if (activeCycle) {
         const compensationRules = await SalaryRepository.getLatestCompensationRules()
         const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
 
@@ -38,7 +45,8 @@ export default async function NewStaffingPage() {
                     schedule={schedule}
                     compensationRules={compensationRules}
                     highestSG={highestSG}
-                    availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))}
+                    fiscalYear={activeCycle.fiscal_year}
+                    availablePaps={paps.map(p => ({ id: p.id, title: p.title }))}
                     userId={session.user.id}
                     entityId={session.user.entity_id} 
                     entityName={session.user_entity.entity_name || "Unknown Agency"} 

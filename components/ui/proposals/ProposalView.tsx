@@ -3,6 +3,7 @@
 import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { SignSection } from "@/components/ui/digital-signatures/SignSection";
+import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
 import Link from "next/link";
 import {
@@ -32,6 +33,7 @@ interface ProposalViewProps {
     }[];
     userInWorkflow: boolean;
     userCanSign: boolean;
+    budgetPrepClosedForEntityActions?: boolean;
     currentSignatoryRole: string | null;
     existingSignature: any;
     allSignatures: any[];
@@ -109,6 +111,7 @@ export default function ProposalView({
     versionTabs,
     userInWorkflow,
     userCanSign,
+    budgetPrepClosedForEntityActions = false,
     currentSignatoryRole,
     existingSignature,
     allSignatures,
@@ -144,11 +147,15 @@ export default function ProposalView({
             : undefined;
 
     return (
-        <div className="p-6 max-w-7xl mx-auto space-y-6 pb-20">
+        <div className="m-6 max-w-5xl mx-auto space-y-10 pb-20">
+            {budgetPrepClosedForEntityActions &&
+                data.auth_status === "draft" && (
+                    <BudgetPrepClosedBanner message="The budget preparation phase for this fiscal year is over. You can no longer edit, submit, or sign this form until DBM reopens the cycle for this fiscal year." />
+                )}
             {/* NAVIGATION & ACTIONS */}
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
-                {canEditCurrentVersion && (
+                {canEditCurrentVersion && !budgetPrepClosedForEntityActions && (
                     <div className="flex flex-row gap-2">
                         <Link
                             href={`/forms/proposals/${data.id}/edit`}

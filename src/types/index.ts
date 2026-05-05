@@ -44,6 +44,11 @@ import {
     UacsLocationsTable,
     UacsObjectCodesTable,
 } from "./uacs"
+import {
+    ItemCatalogTable,
+    BudgetAllocationTable
+} from "./line_items"
+import { BudgetCycleTable } from "./budget_settings"
 
 export interface Database {
     // users
@@ -109,4 +114,11 @@ export interface Database {
     // bp form 203 foreign
     foreign_financial_targets: ForeignFinancialTargetTable
     foreign_physical_targets: ForeignPhysicalTargetTable
+
+    // line items
+    item_catalogs: ItemCatalogTable
+    budget_allocations: BudgetAllocationTable
+
+    // budget settings
+    budget_cycles: BudgetCycleTable
 }

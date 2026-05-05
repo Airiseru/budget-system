@@ -9,6 +9,7 @@ import {
     createRetireeRepository,
     createSalaryRepository,
 } from "@/src/db/factory";
+import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 import { notFound, redirect } from "next/navigation";
 
 const FormRepository = createFormRepository(
@@ -48,6 +49,15 @@ export default async function EditRetireePage({
 
     const isDbmEvaluator = session.user.workflow_role === "dbm";
     const isPendingDbm = retireeData.auth_status === "pending_dbm";
+    const allowClosedCycleActions =
+        session.user.role === "dbm" && isDbmEvaluator && isPendingDbm;
+    const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(
+        retireeData.fiscal_year,
+    );
+
+    if (!allowClosedCycleActions && !isBudgetPrepOpenForYear) {
+        redirect(`/forms/retirees/${formId}?error=budget-cycle-closed`);
+    }
 
     // This will now pass type checking and logic
     if (

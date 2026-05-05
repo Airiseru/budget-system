@@ -3,7 +3,15 @@
 import BackButton from '@/components/ui/BackButton'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { FORM_TYPES, FORM_NAMES, STATUS_LABELS, STATUS_COLOR_MAPPER } from '@/src/lib/constants';
+import { useState } from 'react'
+import { FORM_TYPES, FORM_NAMES, STATUS_LABELS, STATUS_COLOR_MAPPER } from '@/src/lib/constants'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select"
 import { Filter, ChevronRight, FileText, Building2 } from 'lucide-react'
 
 interface DBMFormViewProps {
@@ -38,16 +46,12 @@ export default function AllFormView({
     selectedType 
 }: DBMFormViewProps) {
     const router = useRouter();
+    const [year, setYear] = useState(selectedYear?.toString() ?? "")
+    const [status, setStatus] = useState(selectedStatus || "")
+    const [type, setType] = useState(selectedType || "")
 
-    // 1. Intercept the form submission to prevent a hard reload
-    // and cleanly build the URL parameters
     const handleFilter = (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-        
-        const formData = new FormData(e.currentTarget);
-        const year = formData.get('year') as string;
-        const status = formData.get('status') as string;
-        const type = formData.get('type') as string;
 
         const params = new URLSearchParams();
         
@@ -85,45 +89,61 @@ export default function AllFormView({
 
             {/* Filter Bar */}
             <div className="bg-accent p-4 rounded-xl border border-border/30 shadow-sm">
+                <h2 className="text-lg font-semibold mb-2 text-secondary-foreground">Filters</h2>
                 <form onSubmit={handleFilter} className="flex flex-wrap items-end gap-4">
                     <div className="space-y-1 flex-1 min-w-[150px]">
-                        <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Fiscal Year</label>
+                        <label htmlFor='year' className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Fiscal Year</label>
                         <input 
                             type="number" 
                             name="year" 
-                            defaultValue={selectedYear || ""}
+                            value={year}
+                            onChange={(e) => setYear(e.target.value)}
                             placeholder="e.g. 2026"
                             className="w-full p-2 text-sm border border-border/50 bg-accent text-secondary-foreground rounded-md focus:ring-2 focus:ring-ring outline-none" 
                         />
                     </div>
                     
                     <div className="space-y-1 flex-1 min-w-[200px]">
-                        <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Status</label>
-                        <select name="status" defaultValue={selectedStatus} className="w-full p-2 text-sm border border-border/50 bg-accent text-secondary-foreground rounded-md focus:ring-2 focus:ring-ring outline-none">
-                            {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                                <option key={key} value={key !== 'none' ? key : ''}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
+                        <label htmlFor='type' className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Status</label>
+                        <Select value={status || "none"} onValueChange={(value: string | null) => setStatus(value ? (value === "none" ? "" : value) : "")}>
+                            <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mb-0 height-[38px]">
+                                <SelectValue placeholder="Select a status">
+                                    {status ? STATUS_LABELS[status] : "All"}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                                    <SelectItem key={key} value={key !== 'none' ? key : 'none'}>
+                                        {label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <div className="space-y-1 flex-1 min-w-[150px]">
                         <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Form Type</label>
-                        <select name="type" defaultValue={selectedType} className="w-full p-2 text-sm border border-border/50 bg-accent text-secondary-foreground rounded-md focus:ring-2 focus:ring-ring outline-none">
-                            {Object.entries(FORM_TYPES).map(([key, label]) => (
-                                <option key={key} value={key !== 'all' ? key : ''}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
+                        <Select value={type || "all"} onValueChange={(value) => setType(value ? (value === "all" ? "" : value) : "")}>
+                            <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mb-0 height-[38px]">
+                                <SelectValue placeholder="Select a form type">
+                                    {type ? FORM_TYPES[type] : "All"}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {Object.entries(FORM_TYPES).map(([key, label]) => (
+                                    <SelectItem key={key} value={key}>
+                                        {label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     <button type="submit" className="flex items-center gap-2 bg-secondary-foreground text-accent px-5 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/90 transition-colors h-[38px]">
                         <Filter size={16} /> Filter
                     </button>
                     
-                    {(selectedYear || selectedStatus || selectedType) && (
+                    {(year || status || type) && (
                         <Link href="/dbm/forms" className="text-sm text-muted-foreground hover:text-secondary-foreground underline underline-offset-2 px-2 h-[38px] flex items-center">
                             Clear
                         </Link>

@@ -15,6 +15,8 @@ export default async function HomePage() {
     else if (session.user.role !== 'dbm') {
         return redirect('/home')
     }
+
+    const isApprover = session.user.role === 'dbm' && session.user.access_level === 'approve'
     
     return (
         <main className="m-4">
@@ -40,6 +42,12 @@ export default async function HomePage() {
                     url='/dbm/uacs'
                     label='Manage UACS Codes'
                 />
+                {isApprover && (
+                    <GeneralButton
+                        url='/dbm/settings/cycles'
+                        label='Budget Cycles'
+                    />
+                )}
                 <HomeButton url="/home"></HomeButton>
             </div>
         </main>

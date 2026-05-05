@@ -9,6 +9,7 @@ import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
 import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants"
 import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
+import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
@@ -18,6 +19,8 @@ interface StaffingViewProps {
     session: any
     backUrl: string
     isDbmEvaluator?: boolean
+    budgetPrepClosedForEntityActions?: boolean
+    allowClosedCycleActions?: boolean
     originalFormId: string
     versionTabs: {
         id: string
@@ -58,7 +61,9 @@ export default function StaffingView({
     workflowData,
     updateAuthStatus,
     deleteFormAction,
-    isDbmEvaluator = false
+    isDbmEvaluator = false,
+    budgetPrepClosedForEntityActions = false,
+    allowClosedCycleActions = false
 }: StaffingViewProps) {
     const { userCanSign, currentSignatoryRole, existingSignature, allSignatures, pastSignatures, latestRejection } = workflowData;
     const formData = { id: summary.id, fiscal_year: summary.fiscal_year, form_id: summary.id };
@@ -66,12 +71,14 @@ export default function StaffingView({
     const canEditCurrentVersion =
         !familyHasApprovedVersion &&
         (
-            (summary.auth_status === 'draft' && session.user.access_level === 'encode') ||
+            (summary.auth_status === 'draft' && session.user.access_level === 'encode' && !budgetPrepClosedForEntityActions) ||
             (summary.auth_status === 'pending_dbm' && isDbmEvaluator)
         )
     const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign
     const signSectionStatusMessage =
-        familyHasApprovedVersion && summary.auth_status !== 'approved'
+        budgetPrepClosedForEntityActions
+            ? 'The budget preparation phase for this fiscal year is closed. Entity users can no longer edit, submit, or sign this form.'
+            : familyHasApprovedVersion && summary.auth_status !== 'approved'
             ? 'DBM has already approved a different version of this form. This version is locked and can no longer be signed.'
             : undefined
 
@@ -88,10 +95,9 @@ export default function StaffingView({
 
     const overallGrandTotal = overallBasicSalary + overallCompensationTotals.reduce((a: number, b: number) => a + b, 0);
 
-    const renderStaffTypeGroup = (tier: number, type: string) => {
+    const renderStaffTypeGroup = (type: string) => {
         const filteredPositions = (summary?.positions || []).filter((pos: any) => {
-            const pap = paps.find((p: any) => p.id === pos.pap_id);
-            return pap?.tier === tier && pos.staff_type === type;
+            return pos.staff_type === type;
         });
 
         if (filteredPositions.length === 0) return null;
@@ -109,9 +115,9 @@ export default function StaffingView({
 
         return (
             <div key={type} className="space-y-2">
-                <h4 className="text-sm font-bold text-slate-500 uppercase tracking-tighter bg-slate-100 px-2 py-1 rounded w-fit border border-slate-200">
+                <h3 className="text-md font-black text-secondary-foreground border-l-4 border-secondary-foreground pl-3 py-1 bg-secondary-foreground/10">
                     {type} Positions
-                </h4>
+                </h3>
                 
                 <div className="border border-slate-300 rounded-lg overflow-x-auto bg-white shadow-sm">
                     <table className="w-full text-sm border-collapse">
@@ -201,6 +207,9 @@ export default function StaffingView({
 
     return (
         <main className="m-6 max-w-none px-4 md:px-8 md:my-12 space-y-8">
+            {budgetPrepClosedForEntityActions && (
+                <BudgetPrepClosedBanner message="The budget preparation phase for this fiscal year is over. You can no longer edit, submit, or sign this form until DBM reopens the cycle for this fiscal year." />
+            )}
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back"></BackButton>
                 {canEditCurrentVersion && (
@@ -271,19 +280,10 @@ export default function StaffingView({
                 </section>
             )}
 
-            {/* Staff Per Tier */}
+            {/* Staff Per Type */}
             <section className="space-y-10">
-                <div className="space-y-4">
-                    <h3 className="text-sm font-black text-accent-foreground border-l-4 border-accent-foreground pl-3 py-1 bg-accent-foreground/10">TIER 1: ONGOING PROGRAMS</h3>
-                    <div className="space-y-6">
-                        {staffTypes.map(type => renderStaffTypeGroup(1, type))}
-                    </div>
-                </div>
-                <div className="space-y-4">
-                    <h3 className="text-sm font-black text-secondary-foreground border-l-4 border-secondary-foreground pl-3 py-1 bg-secondary-foreground/10">TIER 2: NEW PROPOSALS</h3>
-                    <div className="space-y-6">
-                        {staffTypes.map(type => renderStaffTypeGroup(2, type))}
-                    </div>
+                <div className="space-y-6">
+                    {staffTypes.map(type => renderStaffTypeGroup(type))}
                 </div>
             </section>
 
@@ -345,10 +345,11 @@ export default function StaffingView({
                 signatories={allSignatures}
                 pastSignatories={pastSignatures}
                 latestRejection={latestRejection}
+                allowClosedCycleAction={allowClosedCycleActions}
                 workflow={STAFFING_WORKFLOW}
             />
 
-            {summary.auth_status === 'draft' && (
+            {summary.auth_status === 'draft' && !budgetPrepClosedForEntityActions && (
                 <div className="pt-6 border-t mt-12 flex justify-between items-center">
                     <div>
                         <h3 className="text-sm font-bold text-gray-900">Danger Zone</h3>

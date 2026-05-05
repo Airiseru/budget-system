@@ -11,6 +11,7 @@ interface WrapperProps {
     userId: string;
     entityName: string;
     entityId: string;
+    activeFiscalYear?: number;
 }
 
 export default function ProposalClientWrapper({
@@ -19,6 +20,7 @@ export default function ProposalClientWrapper({
     userId,
     entityName,
     entityId,
+    activeFiscalYear,
 }: WrapperProps) {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -62,6 +64,7 @@ export default function ProposalClientWrapper({
                     userId={userId}
                     entityName={entityName}
                     entityId={entityId}
+                    activeFiscalYear={activeFiscalYear}
                 />
             </div>
 

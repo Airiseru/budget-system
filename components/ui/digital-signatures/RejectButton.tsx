@@ -21,11 +21,12 @@ type Props = {
     signatoryRole: string
     fromAuthStatus?: string
     toAuthStatus?: string
+    allowClosedCycleAction?: boolean
 }
 
 type Step = 'idle' | 'pin' | 'rejecting' | 'rejected'
 
-export function RejectButton({ formId, tableName, formData, userId, entityId, signatoryRole, fromAuthStatus, toAuthStatus }: Props) {
+export function RejectButton({ formId, tableName, formData, userId, entityId, signatoryRole, fromAuthStatus, toAuthStatus, allowClosedCycleAction = false }: Props) {
     const router = useRouter()
     const [step, setStep] = useState<Step>('idle')
     const [pin, setPin] = useState('')
@@ -102,7 +103,8 @@ export function RejectButton({ formId, tableName, formData, userId, entityId, si
                 date,
                 signatoryRole,
                 output.signature,
-                signaturePayload as string
+                signaturePayload as string,
+                allowClosedCycleAction
             )
 
             setStep('rejected')

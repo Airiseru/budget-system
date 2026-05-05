@@ -1,6 +1,7 @@
 import { createStaffingRepository, createFormRepository } from '@/src/db/factory'
 import { NextResponse } from 'next/server'
 import { logNewForm, logSaveFormEdits, logSubmitForm, logFormOverwrite } from '@/src/actions/audit'
+import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle'
 export const dynamic = 'force-dynamic';
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -33,6 +34,17 @@ export async function PUT(
         summary: body.summary,
         positions: body.positions,
         auth_status: body.auth_status
+    }
+
+    const nextStatus = body.auth_status
+    const isSubmitting =
+        nextStatus === 'pending_personnel' || nextStatus === 'pending_dbm'
+
+    if (!isDbm && isSubmitting && !(await isBudgetPrepActiveForYear(staffingBody.summary.fiscal_year))) {
+        return NextResponse.json(
+            { error: getBudgetPrepClosedError(staffingBody.summary.fiscal_year) },
+            { status: 403 }
+        )
     }
 
     console.log(`PUT BODY: ${JSON.stringify(body)}`)

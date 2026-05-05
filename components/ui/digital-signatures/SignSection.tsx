@@ -37,6 +37,7 @@ type Props = {
         changed_at: Date;
         user_name: string | null;
     } | null;
+    allowClosedCycleAction?: boolean;
     workflow: Workflow;
 };
 
@@ -55,6 +56,7 @@ export function SignSection({
     signatories = [],
     pastSignatories = [],
     latestRejection,
+    allowClosedCycleAction = false,
     workflow,
 }: Props) {
     const shouldShowLatestRejection =
@@ -171,6 +173,7 @@ export function SignSection({
                                     "approve",
                                 ) ?? ""
                             }
+                            allowClosedCycleAction={allowClosedCycleAction}
                         />
                         {getNextStatus(authStatus, workflow, "reject") && (
                             <RejectButton
@@ -188,6 +191,7 @@ export function SignSection({
                                         "reject",
                                     ) ?? ""
                                 }
+                                allowClosedCycleAction={allowClosedCycleAction}
                             />
                         )}
                     </div>

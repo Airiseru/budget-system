@@ -5,6 +5,8 @@ import { createSalaryRepository } from "@/src/db/factory"
 import { redirect } from "next/navigation"
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ModeToggle } from "@/components/ui/system-toggle"
+import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner"
+import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle"
 
 export default async function NewRetireeFormPage() {
     const session = await sessionWithEntity();
@@ -14,20 +16,26 @@ export default async function NewRetireeFormPage() {
         redirect('/forms/retirees?error=unauthorized');
     }
 
+    const activeCycle = await getActiveBudgetPrepCycle()
     let components = []
+
+    if (!activeCycle) {
+        components.push(<BudgetPrepClosedBanner key="budget-cycle-closed" />)
+    }
 
     const SalaryRepository = createSalaryRepository('postgres')
     const schedule = await SalaryRepository.getLatestSalarySchedule()
 
     if (!schedule) components.push(<p key="no-schedule">There is no salary schedule for this year.</p>)
 
-    else {
+    else if (activeCycle) {
         const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
         components.push(
             <div key="retiree-form">
                 <BP205EntryGrid
                     schedule={schedule}
                     highestSG={highestSG}
+                    initialFiscalYear={activeCycle.fiscal_year}
                     userId={session.user.id}
                     entityId={session.user.entity_id}
                     entityName={session.user_entity.entity_name || "Unknown Agency"} 

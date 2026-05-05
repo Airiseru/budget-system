@@ -22,7 +22,7 @@ export default async function NewProposalPage() {
     );
 
     if (session.user.access_level !== "encode") {
-        redirect("/forms/staff?error=unauthorized");
+        redirect("/forms/proposals?error=unauthorized");
     }
     return (
         <RankManager

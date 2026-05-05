@@ -16,6 +16,7 @@ import { submitForm } from "@/src/actions/form";
 import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import { revalidatePath } from "next/cache";
 import RetireeView from "@/components/ui/retiree/RetireeView";
+import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const RetireeRepo = createRetireeRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -96,10 +97,21 @@ export default async function RetireeDetailsPage({
         }
     }
 
+    const allowClosedCycleActions =
+        session.user.role === "dbm" &&
+        isActingAsEvaluator &&
+        backUrl === "/dbm/forms";
+    const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(
+        data.fiscal_year,
+    );
+    const entityActionsLockedByBudgetCycle =
+        !isBudgetPrepOpenForYear && !allowClosedCycleActions;
+
     // Server Actions
     const updateAuthStatus = async () => {
         "use server";
         if (data.auth_status !== "draft") return;
+        if (entityActionsLockedByBudgetCycle) return;
         await submitForm(
             data.id ?? "",
             data,
@@ -126,8 +138,10 @@ export default async function RetireeDetailsPage({
             versionTabs={versionFamily.forms}
             originalFormId={versionFamily.originalFormId}
             isDbmEvaluator={isActingAsEvaluator}
+            budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
+            allowClosedCycleActions={allowClosedCycleActions}
             userInWorkflow={userInWorkflow}
-            userCanSign={userCanSign}
+            userCanSign={entityActionsLockedByBudgetCycle ? false : userCanSign}
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}
             allSignatures={allSignatures}

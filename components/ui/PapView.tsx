@@ -6,7 +6,6 @@ import { ArrowLeft, Pencil } from '@/components/ui/Icons'
 interface Pap {
     id: string;
     title: string;
-    tier: string | number;
     category: string;
     project_status: string;
     description: string | null;
@@ -46,7 +45,7 @@ export default function PapView({ pap, relatedForms }: { pap: Pap, relatedForms:
                 <div className="p-6 border-b bg-gray-50/50">
                     <h1 className="text-xl font-bold text-gray-900">{pap.title}</h1>
                     <p className="text-sm text-gray-500 mt-1 uppercase tracking-wider font-medium">
-                        Tier {pap.tier} • {pap.category}
+                        {pap.category}
                     </p>
                 </div>
 

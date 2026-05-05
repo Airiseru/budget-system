@@ -16,6 +16,7 @@ import { submitForm } from "@/src/actions/form";
 import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
 import { revalidatePath } from "next/cache";
 import ProposalView from "@/components/ui/proposals/ProposalView";
+import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -73,6 +74,10 @@ export default async function ProposalDetailsPage({
         session.user.id,
     );
     const allSignatures = await KeyRepo.getSignatoriesByFormId(data.id ?? "");
+    const isBudgetPrepOpenForProposalYear = await isBudgetPrepActiveForYear(
+        data.proposal_year,
+    );
+    const entityActionsLockedByBudgetCycle = !isBudgetPrepOpenForProposalYear;
     const pastSignatures = await KeyRepo.getPastSignatoriesByFormId(
         data.id ?? "",
     );
@@ -98,6 +103,9 @@ export default async function ProposalDetailsPage({
     // 5. Server Actions
     const updateAuthStatus = async () => {
         "use server";
+        if (data.auth_status !== "draft") return;
+        if (entityActionsLockedByBudgetCycle) return;
+        await FormRepo.updateFormAuthStatus(data.id ?? "", "pending_budget");
         // Logic check: only allow submission if in draft or in DBM-edit mode
         if (data.auth_status !== "draft" && data.auth_status !== "pending_dbm")
             return;
@@ -134,7 +142,8 @@ export default async function ProposalDetailsPage({
             userInWorkflow={userInWorkflow}
             originalFormId={versionFamily.originalFormId}
             isDbmEvaluator={isActingAsEvaluator}
-            userCanSign={userCanSign}
+            userCanSign={entityActionsLockedByBudgetCycle ? false : userCanSign}
+            budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}
             allSignatures={allSignatures}

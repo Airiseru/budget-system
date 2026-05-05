@@ -20,19 +20,6 @@ interface ProposalSummary {
     title: string;
 }
 
-//  "pp.id",
-//             "f.entity_id",
-//             "f.codename", // e.g., "BP Form 202"
-//             "pp.proposal_year",
-//             "pp.priority_rank",
-//             "pp.type",
-//             "pp.total_proposal_cost",
-//             "pp.total_proposal_currency",
-//             "f.auth_status",
-//             "pp.submission_date",
-//             "pp.is_infrastructure",
-//             "pp.title",
-
 interface ProposalPriorityProps {
     initialProposals: ProposalSummary[];
     entityId: string;

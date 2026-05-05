@@ -3,6 +3,7 @@ import { auth } from "@/src/lib/auth";
 import { headers } from "next/headers";
 import { logNewForm, logSubmitForm } from "@/src/actions/audit";
 import { createProposalRepository } from "@/src/db/factory";
+import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
 
@@ -26,6 +27,13 @@ export async function POST(req: Request) {
     try {
         const body = await req.json();
         const { userId, entityId, summaryData, payload, auth_status } = body;
+
+        if (!(await isBudgetPrepActiveForYear(payload.proposal_year))) {
+            return NextResponse.json(
+                { error: getBudgetPrepClosedError(payload.proposal_year) },
+                { status: 403 },
+            );
+        }
 
         // Combine summaryData and payload into one object for the repository
         const combinedProposalData = {

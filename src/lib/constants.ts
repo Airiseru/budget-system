@@ -112,3 +112,10 @@ export const VALID_COMPENSATION_NAMES = [
     'Pag-IBIG', 'ECiP', 'PHIC', 'Medical Allowance',
     "Compensation Related Magna Carta Benefits"
 ]
+
+export const EXPENSE_CLASSES: Record<string, string> = {
+    "PS": "Personnel Services",
+    "MOOE": "Maintenance and Other Operating Expenses",
+    "CO": "Contractual Obligations",
+    "FINEX": "Financial Expenses"
+}

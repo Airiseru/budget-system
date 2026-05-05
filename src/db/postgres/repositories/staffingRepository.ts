@@ -5,25 +5,6 @@ import { getOperatingUnitDescendantIds } from './entityRepository'
 
 // --- HELPERS ---
 
-async function injectTiers<T extends { pap_id: string }>(
-    trx: any, 
-    positions: T[]
-): Promise<(T & { tier: number; staffing_summary_id: string })[]> {
-    const paps = await trx
-        .selectFrom('paps')
-        .select(['id', 'tier'])
-        .execute();
-    
-    return positions.map((pos) => {
-        const parentPap = paps.find((p: { id: string; tier: number }) => p.id === pos.pap_id);
-        return {
-            ...pos,
-            tier: parentPap?.tier || 1,
-            staffing_summary_id: "" 
-        };
-    });
-}
-
 // Fixed the missing helper function that was causing 'this' errors
 async function getPositionsWithCompensations(summaryId: string) {
     const positions = await db
@@ -85,15 +66,14 @@ async function createStaffingSubmissionRecord(
         .executeTakeFirstOrThrow();
 
     if (positions.length > 0) {
-        const enrichedPositions = await injectTiers(trx, positions);
-
-        for (const pos of enrichedPositions) {
+        for (const pos of positions) {
             const currentPos = pos as PositionInput;
             const { compensations, ...positionData } = currentPos;
 
             const insertedPosition = await trx.insertInto('positions')
                 .values({
                     ...positionData,
+                    tier: currentPos.tier ?? 1,
                     staffing_summary_id: summary.id
                 })
                 .returning('id')
@@ -189,15 +169,13 @@ async function updateStaffingSubmissionRecord(
         .execute()
 
     if (payload.positions.length > 0) {
-        const enrichedPositions = await injectTiers(trx, payload.positions)
-        
-        for (const pos of enrichedPositions) {
-            const { compensations, tier, ...positionData } = pos as any
+        for (const pos of payload.positions) {
+            const { compensations, ...positionData } = pos as any
 
             const insertedPosition = await trx.insertInto('positions')
                 .values({
                     ...positionData,
-                    tier: tier,
+                    tier: pos.tier ?? 1,
                     staffing_summary_id: summaryId
                 })
                 .returning('id')

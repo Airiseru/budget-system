@@ -5,6 +5,7 @@ import { ButtonGroup } from "@/components/ui/button-group"
 import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
 import { notFound, redirect } from 'next/navigation'
+import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -39,6 +40,12 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
 
     const isDbmEvaluator = session.user.workflow_role === 'dbm'
     const isPendingDbm = staff.auth_status === 'pending_dbm'
+    const allowClosedCycleActions = session.user.role === 'dbm' && isDbmEvaluator && isPendingDbm
+    const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(staff.fiscal_year)
+
+    if (!allowClosedCycleActions && !isBudgetPrepOpenForYear) {
+        redirect(`/forms/staff/${formId}?error=budget-cycle-closed`)
+    }
 
     // This will now pass type checking and logic
     if (staff.auth_status !== 'draft' && !(isDbmEvaluator && isPendingDbm)) {
@@ -79,7 +86,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
                 highestSG={highestSG}
                 fiscalYear = {staff.fiscal_year}
                 staff={staff}
-                availablePaps={paps.map(p => ({ id: p.id, title: p.title, tier: p.tier }))} 
+                availablePaps={paps.map(p => ({ id: p.id, title: p.title }))} 
                 userId={session.user.id}
                 entityId={session.user.entity_id} 
                 entityName={session.user_entity.entity_name || "Unknown Agency"} 

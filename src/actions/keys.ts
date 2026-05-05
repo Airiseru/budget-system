@@ -11,11 +11,35 @@ import { FormSignaturePayload } from '../types/audit'
 import { sha256, buildSignaturePayload } from '../lib/audit-hash'
 import { canonicalStringify } from '../lib/canonical'
 import { cleanDataBasedOnTable } from '../lib/validations'
+import { createProposalRepository, createRetireeRepository, createStaffingRepository } from '../db/factory'
+import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '../lib/budget-cycle'
 
 const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 const keyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 const formRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const auditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
+const staffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
+const retireeRepository = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
+const proposalRepository = createProposalRepository(process.env.DATABASE_TYPE || 'postgres')
+
+async function getFormFiscalYear(tableName: string, formId: string): Promise<number | null> {
+    if (tableName === 'staffing_summaries') {
+        const form = await staffingRepository.getStaffingWithFormById(formId)
+        return form?.fiscal_year ?? null
+    }
+
+    if (tableName === 'retirees_list') {
+        const form = await retireeRepository.getRetireesFormById(formId)
+        return form?.fiscal_year ?? null
+    }
+
+    if (tableName === 'project_proposals') {
+        const form = await proposalRepository.getProjectProposalById(formId)
+        return form?.proposal_year ?? null
+    }
+
+    return null
+}
 
 export async function setSigningPin(pin: string) {
     const session = await sessionDetails()
@@ -107,7 +131,8 @@ export async function verifyAndSubmitSignature(
     changedAt: Date,
     signatoryRole: string,
     signature: string,
-    signaturePayload: Record<string, any> | string
+    signaturePayload: Record<string, any> | string,
+    allowClosedCycleAction: boolean = false
 ) {
     try {
         const session = await sessionWithEntity()
@@ -124,6 +149,19 @@ export async function verifyAndSubmitSignature(
     
         // Get form's current status
         const form = await formRepository.getFormAuthStatus(formId)
+        const fiscalYear = await getFormFiscalYear(tableName, formId)
+        const canBypassClosedCycle =
+            allowClosedCycleAction &&
+            session.user.role === 'dbm' &&
+            session.user.workflow_role === 'dbm'
+
+        if (
+            fiscalYear !== null &&
+            !canBypassClosedCycle &&
+            !(await isBudgetPrepActiveForYear(fiscalYear))
+        ) {
+            throw new Error(getBudgetPrepClosedError(fiscalYear))
+        }
     
         // Get correct workflow for form type
         const workflow = getWorkflow(form.type)
@@ -183,7 +221,8 @@ export async function verifyAndRejectSignature(
     changedAt: Date,
     signatoryRole: string,
     signature: string,
-    signaturePayload: Record<string, any> | string
+    signaturePayload: Record<string, any> | string,
+    allowClosedCycleAction: boolean = false
 ) {
     try {
         const session = await sessionWithEntity()
@@ -197,6 +236,19 @@ export async function verifyAndRejectSignature(
         if (key.expires_at && key.expires_at < new Date()) throw new Error('Key has expired')
 
         const form = await formRepository.getFormAuthStatus(formId)
+        const fiscalYear = await getFormFiscalYear(tableName, formId)
+        const canBypassClosedCycle =
+            allowClosedCycleAction &&
+            session.user.role === 'dbm' &&
+            session.user.workflow_role === 'dbm'
+
+        if (
+            fiscalYear !== null &&
+            !canBypassClosedCycle &&
+            !(await isBudgetPrepActiveForYear(fiscalYear))
+        ) {
+            throw new Error(getBudgetPrepClosedError(fiscalYear))
+        }
         const workflow = getWorkflow(form.type)
 
         if (!canSign(form.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? "", signatoryRole, workflow)) {

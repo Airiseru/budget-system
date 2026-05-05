@@ -188,7 +188,7 @@ export async function createProjectProposal(
                 project_status: "proposed",
                 auth_status: authStatus,
                 category: proposalData.type === "202" ? "local" : "foreign",
-                tier: 1, // Defaulting to Tier 1 for new proposals
+                identifier_code: proposalData.type === "202" ? '2' : '3',
             })
             .returning("id")
             .executeTakeFirstOrThrow();
