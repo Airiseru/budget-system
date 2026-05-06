@@ -11,7 +11,8 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { ChevronRight, FileText, Filter } from 'lucide-react'
+import { ChevronRight, FileText, Filter, Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
 type PapListItem = {
     id: string
@@ -83,7 +84,12 @@ export default function AllPapView({
                         Review PAP assignments and update UACS segments per PAP.
                     </p>
                 </div>
-                <div className="w-[73px]" />
+                <Link href="/dbm/paps/new">
+                    <Button className="gap-2 bg-accent-foreground text-white hover:bg-accent-foreground/90">
+                        <Plus className="h-4 w-4" />
+                        New PAP
+                    </Button>
+                </Link>
             </div>
 
             <div className="bg-accent p-4 rounded-xl border border-border/30 shadow-sm">
@@ -94,11 +100,11 @@ export default function AllPapView({
                         <Select value={entityId || 'all'} onValueChange={(value) => setEntityId(value ?? 'all')}>
                             <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mt-1 mb-0">
                                 <SelectValue placeholder="Filter by entity">
-                                    {entityId === 'all' ? 'All Entities' : entities.find((entity) => entity.id === entityId)?.name}
+                                    {entityId === 'all' ? 'All' : entities.find((entity) => entity.id === entityId)?.name}
                                 </SelectValue>
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Entities</SelectItem>
+                                <SelectItem value="all">All</SelectItem>
                                 {entities.map((entity) => (
                                     <SelectItem key={entity.id} value={entity.id}>
                                         {entity.abbr ? `${entity.abbr} • ${entity.name}` : entity.name}
@@ -126,7 +132,7 @@ export default function AllPapView({
                         <thead className="bg-secondary/30 border-b border-border/30 text-sm uppercase text-muted-foreground font-bold tracking-wider">
                             <tr>
                                 <th className="px-4 py-3">PAP</th>
-                                <th className="px-4 py-3">Implementing Entity</th>
+                                <th className="px-4 py-3">Applicable Entity</th>
                                 <th className="px-4 py-3">Type</th>
                                 <th className="px-4 py-3">Full Code</th>
                                 <th className="px-4 py-3">Last Updated</th>
@@ -148,18 +154,18 @@ export default function AllPapView({
                                     <tr key={pap.id} className="hover:bg-secondary/20 transition-colors group">
                                         <td className="px-4 py-3 max-w-md whitespace-normal break-words">
                                             <p className="font-bold text-secondary-foreground leading-tight">{pap.title}</p>
-                                            <p className="text-sm text-muted-foreground mt-1">{pap.category}</p>
+                                            <p className="text-sm text-muted-foreground mt-1">{pap.category.charAt(0).toUpperCase() + pap.category.slice(1)} Project</p>
                                         </td>
                                         <td className="px-4 py-3 max-w-md whitespace-normal break-words">
                                             <div className="flex items-center gap-4">
                                                 <div>
-                                                    <p className="font-bold text-secondary-foreground leading-tight">{pap.entity_name || 'Unassigned'}</p>
-                                                    <p className="text-sm text-muted-foreground line-clamp-1">{pap.department_name || 'No department'}</p>
+                                                    <p className="font-bold text-secondary-foreground leading-tight">{pap.entity_name || 'All Entities'}</p>
+                                                    <p className="text-sm text-muted-foreground break-words">{pap.department_name || 'No specific department'}</p>
                                                 </div>
                                             </div>
                                         </td>
-                                        <td className="px-4 py-3 text-secondary-foreground">
-                                            {pap.project_type?.toUpperCase() || 'Not set'}
+                                        <td className="px-4 py-3 text-secondary-foreground max-w-md whitespace-normal break-words">
+                                            {pap.project_type?.toUpperCase() || 'N/A'}
                                         </td>
                                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground break-all">
                                             {pap.full_pap_code || 'Not set'}

@@ -6,16 +6,29 @@ import { Pap, NewPap } from "@/src/types/pap"
 
 interface PapFormProps {
     pap?: Pap
-    entityId: string;
-    entityName: string; 
+    entityId?: string | null
+    entityName: string
+    successBasePath?: string
+    cancelHref?: string
+    defaultProjectStatus?: Pap['project_status']
+    defaultProjectType?: string
+    entityLockedLabel?: string
 }
 
-export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
+export default function PapForm({
+    pap,
+    entityId = null,
+    entityName,
+    successBasePath = '/paps',
+    cancelHref = '/paps',
+    defaultProjectStatus = 'draft',
+    defaultProjectType = '',
+    entityLockedLabel = 'Entity ID (Locked)',
+}: PapFormProps) {
     const router = useRouter()
     const isEditing = !!pap
 
     const [formData, setFormData] = useState<NewPap>({
-        // If editing, use existing. If new, use the session's entityId automatically.
         entity_id: pap?.entity_id || entityId,
         org_outcome_id: pap?.org_outcome_id || '',
         pip_code: pap?.pip_code || '',
@@ -27,7 +40,7 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
         project_type: pap?.project_type || '',
         identifier_code: pap?.identifier_code || '1',
         actual_start_date: pap?.actual_start_date || null,
-        project_status: pap?.project_status || 'draft',
+        project_status: pap?.project_status || defaultProjectStatus,
         auth_status: pap?.auth_status || '',
     })
 
@@ -58,7 +71,7 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
             if (response.ok) {
                 const data = await response.json()
                 router.refresh()
-                router.push(`/paps/${data.id}`)
+                router.push(`${successBasePath}/${data.id}`)
             } else {
                 setError('Something went wrong')
             }
@@ -72,7 +85,7 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
     return (
         <div className="max-w-lg mx-auto mt-8">
             <div className="mb-6 p-4 bg-gray-50 border rounded-lg shadow-sm">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Agency Context</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entity Context</span>
                 <p className="text-md font-semibold text-gray-700">{entityName}</p>
             </div>
             <h1 className="text-2xl font-bold mb-6">
@@ -87,10 +100,10 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
 
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-600">Entity ID (Locked)</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-600">{entityLockedLabel}</label>
                     <input
                         type="text"
-                        value={formData.entity_id ?? ''}
+                        value={formData.entity_id ?? 'null'}
                         disabled
                         className="bg-gray-100 border p-2 w-full rounded text-gray-500 cursor-not-allowed"
                     />
@@ -120,6 +133,19 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
                         placeholder="Title"
                         className="border p-2 w-full rounded"
                         required
+                        disabled={isLoading}
+                    />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Project Type</label>
+                    <input
+                        name="project_type"
+                        type="text"
+                        value={formData.project_type ?? ''}
+                        onChange={handleChange}
+                        placeholder={defaultProjectType || 'Project Type'}
+                        className="border p-2 w-full rounded"
                         disabled={isLoading}
                     />
                 </div>
@@ -174,7 +200,7 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
 
                     <button
                         type="button"
-                        onClick={() => router.push('/paps')}
+                        onClick={() => router.push(cancelHref)}
                         disabled={isLoading}
                         className="bg-gray-200 text-gray-700 px-4 py-2 rounded disabled:opacity-50"
                     >

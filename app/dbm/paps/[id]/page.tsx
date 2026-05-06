@@ -27,7 +27,7 @@ export default async function DBMPapPage({ params }: { params: Promise<{ id: str
             pap={pap}
             relatedForms={relatedForms || []}
             backHref="/dbm/paps"
-            editHref={null}
+            editHref={`/dbm/paps/${pap.id}/edit`}
             showDelete={false}
             uacsEditor={
                 <PapUacsEditor
