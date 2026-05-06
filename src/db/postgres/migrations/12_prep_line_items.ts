@@ -5,7 +5,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .createTable('budget_allocations')
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
         
-        // When & where of money
+        // What, when & where of money
+        .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').notNull())
         .addColumn('budget_cycle_year', 'integer', (col) => col.references('budget_cycles.fiscal_year').notNull())
         .addColumn('pap_code', 'uuid', (col) => col.references('paps.id')) // if applicable to all entities, points to which entity general PAP (e.g., GAS, STO)
         .addColumn('fund_code', 'varchar', (col) => col.references('uacs_funding_sources.code'))
@@ -36,7 +37,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     await db.schema
         .createIndex('budget_allocations_idx')
         .on('budget_allocations')
-        .columns(['pap_code', 'budget_cycle_year', 'fund_code', 'item_catalog_id', 'tier'])
+        .columns(['entity_id', 'budget_cycle_year', 'pap_code', 'fund_code', 'item_catalog_id', 'tier'])
         .execute()
 }
 

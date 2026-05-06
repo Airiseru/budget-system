@@ -6,18 +6,20 @@ import {
     Updateable
 } from 'kysely'
 
-import { EXPENSE_CLASSES } from '../lib/constants'
+export type ItemCatalogScope = 'global' | 'entity' | 'pap'
+export type ExpenseClassCode = '1' | '2' | '3' | '6'
+export type ExpenseClass = 'PS' | 'MOOE' | 'CO' | 'FINEX'
 
 export interface ItemCatalogTable {
     id: Generated<string>
-    expense_class: typeof EXPENSE_CLASSES[number]
     uacs_obj_code: string
-    prexc_fpap_id: string
-    scope: 'global' | 'entity' | 'pap'
+    scope: ItemCatalogScope
     entity_id: string | null
     pap_code: string | null
     name: string
     description: string | null
+    expense_class: ExpenseClass
+    expense_class_code: ExpenseClassCode
     unit_of_measure: string | null
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
@@ -29,6 +31,7 @@ export type ItemCatalogUpdate = Updateable<ItemCatalogTable>
 
 export interface BudgetAllocationTable {
     id: Generated<string>
+    entity_id: string
     budget_cycle_year: number
     pap_code: string | null
     fund_code: string | null

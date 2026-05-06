@@ -32,7 +32,7 @@ export default async function HomePage() {
                 />
                 <GeneralButton
                     url='/dbm/paps'
-                    label='Manage PAP UACS'
+                    label='Manage PAPs'
                 />
                 <GeneralButton
                     url='/dbm/entities'
@@ -45,6 +45,10 @@ export default async function HomePage() {
                 <GeneralButton
                     url='/dbm/uacs'
                     label='Manage UACS Codes'
+                />
+                <GeneralButton
+                    url='/dbm/items'
+                    label='Manage Line Items'
                 />
                 {isApprover && (
                     <GeneralButton

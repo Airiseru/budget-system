@@ -1,3 +1,5 @@
+import { ItemCatalogScope } from "../types/line_items"
+
 export const ENTITY_TYPE_LABELS: Record<string, string> = {
     department: 'Department',
     agency: 'Agency',
@@ -119,3 +121,28 @@ export const EXPENSE_CLASSES: Record<string, string> = {
     "CO": "Contractual Obligations",
     "FINEX": "Financial Expenses"
 }
+
+export const EXPENSE_CLASS_CODES: Record<string, string> = {
+    "PS": "1",
+    "MOOE": "2",
+    "CO": "6",
+    "FINEX": "3"
+}
+
+export const EXPENSE_CLASS_OPTIONS = Object.entries(EXPENSE_CLASSES).map(([value, label]) => ({
+    value,
+    label,
+    code: EXPENSE_CLASS_CODES[value],
+}))
+
+export const ITEM_SCOPE_OPTIONS: { value: ItemCatalogScope; label: string }[] = [
+    { value: 'global', label: 'Global' },
+    { value: 'entity', label: 'Entity' },
+    { value: 'pap', label: 'PAP' },
+]
+
+export const ITEM_EXPENSE_CLASS_OPTIONS = Object.entries(EXPENSE_CLASSES).map(([value, label]) => ({
+    value,
+    label,
+    code: EXPENSE_CLASS_CODES[value],
+}))

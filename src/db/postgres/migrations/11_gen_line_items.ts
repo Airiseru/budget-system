@@ -5,10 +5,9 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .createTable('item_catalog')
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
         .addColumn('uacs_obj_code', 'varchar', (col) => col.references('uacs_object_codes.code').notNull())
-        .addColumn('prexc_fpap_id', 'varchar(15)', (col) => col.defaultTo('000000000000000').notNull()) // initially set to 0 to indicate not set
         
         // Scope and ownership of item
-        // 'global' = DBM CSE, 'entity' = custom to entity, 'pap' = custom to specific project
+        // 'global' = all entities & any PAP, 'entity' = custom to entity, 'pap' = custom to specific PAP
         .addColumn('scope', 'varchar', (col) => col.notNull().defaultTo('global'))
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id')) // Null if global
         .addColumn('pap_code', 'uuid', (col) => col.references('paps.id')) // Null unless scope is 'pap'
@@ -16,6 +15,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('name', 'varchar', (col) => col.notNull())
         .addColumn('description', 'text')
         .addColumn('expense_class', 'varchar', (col) => col.notNull())
+        .addColumn('expense_class_code', 'varchar(1)', (col) => col.notNull())
         .addColumn('unit_of_measure', 'varchar') // for procurement projects
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))

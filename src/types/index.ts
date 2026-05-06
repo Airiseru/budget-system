@@ -116,7 +116,7 @@ export interface Database {
     foreign_physical_targets: ForeignPhysicalTargetTable
 
     // line items
-    item_catalogs: ItemCatalogTable
+    item_catalog: ItemCatalogTable
     budget_allocations: BudgetAllocationTable
 
     // budget settings
