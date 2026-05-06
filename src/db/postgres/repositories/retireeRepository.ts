@@ -329,10 +329,10 @@ export async function createDbmRetireeOverwrite(
             data.fiscal_year ?? new Date().getFullYear() + 1,
             { is_mandatory: data.is_mandatory ?? true },
             retirees.map((retiree) => {
-                const retireePayload = { ...retiree }
+                const retireePayload: Partial<NewRetireeRecord> = { ...retiree }
                 delete retireePayload.id
                 delete retireePayload.retirees_list_id
-                return retireePayload
+                return retireePayload as Omit<NewRetireeRecord, 'id' | 'retirees_list_id'>
             }),
             authStatus ?? sourceForm.auth_status ?? 'pending_dbm',
             parentFormId,

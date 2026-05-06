@@ -31,6 +31,10 @@ export default async function HomePage() {
                     label='View All Forms'
                 />
                 <GeneralButton
+                    url='/dbm/paps'
+                    label='Manage PAP UACS'
+                />
+                <GeneralButton
                     url='/dbm/entities'
                     label='Manage Entities'
                 />

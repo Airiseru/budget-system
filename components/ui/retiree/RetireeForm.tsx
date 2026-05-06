@@ -285,9 +285,9 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
                     <input 
                       required
                       className="w-full p-1.5 bg-transparent focus:ring-1 focus:ring-ring outline-none" 
-                      value={row.name} 
+                      value={row.name.toUpperCase()}
                       placeholder='DELA CRUZ, JUAN, R.'
-                      onChange={(e) => handleInputChange(row.id, 'name', e.target.value)}
+                      onChange={(e) => handleInputChange(row.id, 'name', e.target.value.toUpperCase())}
                     />
                   </td>
                   <td className="p-1 border-r text-center">

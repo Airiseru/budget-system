@@ -1,5 +1,81 @@
 import { db } from '../database'
 import { Pap, NewPap, PapUpdate } from '../../../types/pap'
+import { sql } from 'kysely'
+
+export type PapListFilters = {
+    entity_id?: string
+    limit?: number
+    offset?: number
+}
+
+export type PapListItem = Pap & {
+    entity_name: string | null
+    department_name: string | null
+    entity_abbr: string | null
+    entity_type: string | null
+    full_pap_code: string
+}
+
+export type PapEntityOption = {
+    id: string
+    name: string
+    abbr: string | null
+    entity_type: string
+}
+
+export type PapRelatedForm = {
+    id: string
+    type: string
+    codename: string | null
+    fiscal_year: number
+    created_at: Date
+    updated_at: Date
+    auth_status: string | null
+    entity_id: string
+    entity_name: string | null
+    entity_abbr: string | null
+}
+
+export type PapWithEntityDetails = Pap & {
+    entity_name: string | null
+    entity_abbr: string | null
+    entity_type: string | null
+    parent_agency_name: string | null
+    full_pap_code: string
+}
+
+function buildPapFullCode(pap: Pick<
+    Pap,
+    | 'cost_structure_code'
+    | 'organizational_outcome_code'
+    | 'program_code'
+    | 'subprogram_code'
+    | 'identifier_code'
+    | 'project_title_code'
+    | 'reserved_codes'
+>) {
+    return [
+        pap.cost_structure_code ?? '',
+        pap.organizational_outcome_code ?? '',
+        pap.program_code ?? '',
+        pap.subprogram_code ?? '',
+        pap.identifier_code ?? '',
+        pap.project_title_code ?? '',
+        pap.reserved_codes ?? '',
+    ].join('')
+}
+
+function createPapBaseQuery() {
+    return db
+        .selectFrom('paps')
+        .leftJoin('entities', 'entities.id', 'paps.entity_id')
+        .leftJoin('departments', 'departments.id', 'entities.id')
+        .leftJoin('agencies', 'agencies.id', 'entities.id')
+        .leftJoin('operating_units', 'operating_units.id', 'entities.id')
+        .leftJoin('agencies as parent_agencies', 'parent_agencies.id', 'operating_units.agency_id')
+        .leftJoin('departments as agency_departments', 'agency_departments.id', 'agencies.department_id')
+        .leftJoin('departments as parent_agency_departments', 'parent_agency_departments.id', 'parent_agencies.department_id')
+}
 
 // READ
 export async function getAllPaps(): Promise<Pap[]> {
@@ -10,8 +86,96 @@ export async function getPapById(id: string): Promise<Pap | null> {
     return await db.selectFrom('paps').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
 }
 
+export async function getPapWithEntityDetailsById(id: string): Promise<PapWithEntityDetails | null> {
+    const pap = await createPapBaseQuery()
+        .selectAll('paps')
+        .select([
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+            sql<string | null>`COALESCE(departments.abbr, agencies.abbr, operating_units.abbr)`.as('entity_abbr'),
+            sql<string | null>`COALESCE(entities.type, '')`.as('entity_type'),
+            'parent_agencies.name as parent_agency_name',
+        ])
+        .where('paps.id', '=', id)
+        .executeTakeFirst()
+
+    if (!pap) return null
+
+    return {
+        ...pap,
+        full_pap_code: buildPapFullCode(pap),
+    }
+}
+
 export async function getPapByEntityId(entityId: string): Promise<Pap[]> {
     return await db.selectFrom('paps').selectAll().where('entity_id', '=', entityId).execute()
+}
+
+export async function getPaginatedPaps(filters: PapListFilters = {}) {
+    let query = createPapBaseQuery()
+        .selectAll('paps')
+        .select([
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as('department_name'),
+            sql<string | null>`COALESCE(departments.abbr, agencies.abbr, operating_units.abbr)`.as('entity_abbr'),
+            sql<string | null>`COALESCE(entities.type, '')`.as('entity_type'),
+        ])
+
+    if (filters.entity_id) {
+        query = query.where('paps.entity_id', '=', filters.entity_id)
+    }
+
+    const allPaps = await query
+        .orderBy('paps.updated_at', 'desc')
+        .execute()
+
+    const totalCount = allPaps.length
+    const limit = filters.limit ?? 15
+    const offset = filters.offset ?? 0
+    const paps = allPaps
+        .slice(offset, offset + limit)
+        .map((pap) => ({
+            ...pap,
+            full_pap_code: buildPapFullCode(pap),
+        })) as PapListItem[]
+
+    return {
+        paps,
+        totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+    }
+}
+
+export async function getPapEntityOptions(): Promise<PapEntityOption[]> {
+    const rows = await createPapBaseQuery()
+        .select([
+            'entities.id as id',
+            sql<string>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('name'),
+            sql<string | null>`COALESCE(departments.abbr, agencies.abbr, operating_units.abbr)`.as('abbr'),
+            'entities.type as entity_type',
+        ])
+        .where('paps.entity_id', 'is not', null)
+        .where('entities.id', 'is not', null)
+        .groupBy([
+            'entities.id',
+            'entities.type',
+            'departments.name',
+            'departments.abbr',
+            'agencies.name',
+            'agencies.abbr',
+            'operating_units.name',
+            'operating_units.abbr',
+        ])
+        .orderBy('name', 'asc')
+        .execute()
+
+    return rows
+        .filter((row): row is typeof rows[number] & { id: string; entity_type: string } => !!row.id && !!row.entity_type)
+        .map((row) => ({
+            id: row.id,
+            name: row.name,
+            abbr: row.abbr,
+            entity_type: row.entity_type,
+        }))
 }
 
 export async function getPap(criteria: Partial<Pap>): Promise<Pap[]> {
@@ -40,14 +204,48 @@ export async function getFormsByPapId(papId: string) {
     return await db
         .selectFrom('forms')
         .innerJoin('form_paps', 'forms.id', 'form_paps.form_id')
+        .leftJoin('entities', 'entities.id', 'forms.entity_id')
+        .leftJoin('departments', 'departments.id', 'entities.id')
+        .leftJoin('agencies', 'agencies.id', 'entities.id')
+        .leftJoin('operating_units', 'operating_units.id', 'entities.id')
         .where('form_paps.pap_id', '=', papId)
         .select([
             'forms.id', 
             'forms.type', 
+            'forms.codename',
+            'forms.fiscal_year',
             'forms.auth_status', 
-            'forms.created_at'
+            'forms.created_at',
+            'forms.updated_at',
+            'forms.entity_id',
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+            sql<string | null>`COALESCE(departments.abbr, agencies.abbr, operating_units.abbr)`.as('entity_abbr'),
         ])
+        .orderBy('forms.updated_at', 'desc')
         .execute();
+}
+
+export async function getFullCodeByPapId(papId: string) {
+    const pap = await db
+        .selectFrom('paps')
+        .select([
+            'cost_structure_code',
+            'organizational_outcome_code',
+            'program_code',
+            'subprogram_code',
+            'identifier_code',
+            'project_title_code',
+            'reserved_codes',
+        ])
+        .where('id', '=', papId)
+        .executeTakeFirst()
+
+    if (!pap) return null
+
+    return buildPapFullCode({
+        ...pap,
+        identifier_code: pap.identifier_code ?? '1',
+    } as Pick<Pap, 'cost_structure_code' | 'organizational_outcome_code' | 'program_code' | 'subprogram_code' | 'identifier_code' | 'project_title_code' | 'reserved_codes'>)
 }
 
 // UPDATE
