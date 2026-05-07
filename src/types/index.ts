@@ -46,7 +46,8 @@ import {
 } from "./uacs"
 import {
     ItemCatalogTable,
-    BudgetAllocationTable
+    BudgetAllocationTable,
+    AllocationWorkflowLogTable,
 } from "./line_items"
 import { BudgetCycleTable } from "./budget_settings"
 
@@ -118,6 +119,7 @@ export interface Database {
     // line items
     item_catalog: ItemCatalogTable
     budget_allocations: BudgetAllocationTable
+    allocation_workflow_logs: AllocationWorkflowLogTable
 
     // budget settings
     budget_cycles: BudgetCycleTable

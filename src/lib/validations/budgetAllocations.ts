@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+const TierOneRemarkStageSchema = z.enum(['entity_proposal', 'dbm_review', 'dbm_appeal'])
+
 const optionalEmptyString = z.preprocess(
     (value) => {
         if (typeof value === 'string' && value.trim() === '') return undefined
@@ -33,6 +35,17 @@ export const TierOneAllocationSchema = z.object({
 })
 
 export type TierOneAllocationFormState = {
+    formErrors?: string[]
+    fieldErrors?: Record<string, string[] | undefined>
+    values?: Record<string, string | undefined>
+} | undefined
+
+export const AllocationRemarkSchema = z.object({
+    workflow_stage: TierOneRemarkStageSchema,
+    remarks: z.string().trim().min(1, 'Remarks are required.'),
+})
+
+export type AllocationRemarkFormState = {
     formErrors?: string[]
     fieldErrors?: Record<string, string[] | undefined>
     values?: Record<string, string | undefined>

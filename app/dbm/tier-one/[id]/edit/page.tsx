@@ -19,6 +19,9 @@ export default async function EditTierOneAllocationPage({
     return (
         <TierOneAllocationManager
             activeCycle={dashboard.activeCycle}
+            viewingYear={dashboard.viewingYear}
+            availableYears={dashboard.availableYears}
+            isViewingOnly={dashboard.isViewingOnly}
             entities={dashboard.entities}
             paps={dashboard.paps}
             items={dashboard.items}
@@ -26,6 +29,7 @@ export default async function EditTierOneAllocationPage({
             allocations={dashboard.allocations}
             mode="edit"
             initialValues={dashboard.allocation}
+            remarks={dashboard.remarks}
         />
     )
 }

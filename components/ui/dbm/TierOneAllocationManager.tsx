@@ -16,10 +16,11 @@ import {
     SelectValue,
 } from '@/components/ui/select'
 import { createTierOneAllocationAction, updateTierOneAllocationAction } from '@/src/actions/budgetAllocations'
+import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '@/src/lib/constants'
 import type { BudgetCycle } from '@/src/types/budget_settings'
 import type { ItemCatalogScope } from '@/src/types/line_items'
-import type { BudgetAllocationListItem } from '@/src/db/postgres/repositories/budgetAllocationRepository'
-import { Pencil } from 'lucide-react'
+import type { AllocationWorkflowLogEntry, BudgetAllocationListItem } from '@/src/db/postgres/repositories/budgetAllocationRepository'
+import { ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 
 type EntityOption = {
     id: string
@@ -52,6 +53,12 @@ type FundingSourceOption = {
     description: string
 }
 
+const REMARK_STAGE_OPTIONS: { value: BUDGET_PREP_WORKFLOW_STAGES_TYPE; label: string }[] = [
+    { value: 'entity_proposal', label: 'Entity' },
+    { value: 'dbm_review', label: 'DBM Review' },
+    { value: 'dbm_appeal', label: 'DBM Appeal' },
+]
+
 type Props = {
     activeCycle: BudgetCycle | null
     viewingYear: number | null
@@ -64,6 +71,7 @@ type Props = {
     allocations: BudgetAllocationListItem[]
     mode?: 'create' | 'edit'
     initialValues?: Partial<BudgetAllocationListItem>
+    remarks?: AllocationWorkflowLogEntry[]
 }
 
 export function TierOneAllocationManager({
@@ -78,6 +86,7 @@ export function TierOneAllocationManager({
     allocations,
     mode = 'create',
     initialValues,
+    remarks = [],
 }: Props) {
     const router = useRouter()
     const actionFn = mode === 'edit' ? updateTierOneAllocationAction : createTierOneAllocationAction
@@ -86,6 +95,10 @@ export function TierOneAllocationManager({
     const [papCode, setPapCode] = useState(state?.values?.pap_code ?? initialValues?.pap_code ?? '')
     const [itemCatalogId, setItemCatalogId] = useState(state?.values?.item_catalog_id ?? initialValues?.item_catalog_id ?? '')
     const [fundCode, setFundCode] = useState(state?.values?.fund_code ?? initialValues?.fund_code ?? '')
+    const [workflowStage, setWorkflowStage] = useState<BUDGET_PREP_WORKFLOW_STAGES_TYPE>(
+        ((state?.values?.workflow_stage ?? 'dbm_review') as BUDGET_PREP_WORKFLOW_STAGES_TYPE)
+    )
+    const [remarksOpen, setRemarksOpen] = useState(false)
 
     const departments = useMemo(
         () => entities
@@ -220,6 +233,7 @@ export function TierOneAllocationManager({
                         <input type="hidden" name="pap_code" value={papCode} />
                         <input type="hidden" name="item_catalog_id" value={itemCatalogId} />
                         <input type="hidden" name="fund_code" value={fundCode} />
+                        <input type="hidden" name="workflow_stage" value={workflowStage} />
 
                         <div className="space-y-2">
                             <label className="font-medium">Entity</label>
@@ -379,6 +393,37 @@ export function TierOneAllocationManager({
                             </div> */}
                         </div>
 
+                        <div className="space-y-2">
+                            <label className="font-medium">Remarks For</label>
+                            <Select value={workflowStage} onValueChange={(value) => setWorkflowStage((value ?? 'dbm_review') as BUDGET_PREP_WORKFLOW_STAGES_TYPE)}>
+                                <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
+                                    <SelectValue placeholder="Select remarks stage">
+                                        {workflowStage ? REMARK_STAGE_OPTIONS.find((option) => option.value === workflowStage)?.label : 'Select remarks stage'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {REMARK_STAGE_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {state?.fieldErrors?.workflow_stage?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.workflow_stage[0]}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium" htmlFor="remarks">Remarks</label>
+                            <textarea
+                                id="remarks"
+                                name="remarks"
+                                defaultValue={state?.values?.remarks ?? ''}
+                                className="min-h-24 w-full rounded border border-border bg-background px-3 py-2"
+                                placeholder={mode === 'edit' ? 'Required remarks for this edit.' : 'Optional context for this allocation.'}
+                            />
+                            {state?.fieldErrors?.remarks?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.remarks[0]}</p>}
+                        </div>
+
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="valid_from">Valid From</label>
@@ -390,13 +435,26 @@ export function TierOneAllocationManager({
                             </div>
                         </div>
 
-                        <Button type="submit" disabled={!activeCycle || pending} className="w-full bg-accent-foreground text-white hover:bg-accent-foreground/90 text-md py-5">
-                            {pending ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Allocation' : 'Create Tier One Allocation')}
-                        </Button>
+                        <div className={`flex gap-3 ${mode === 'edit' ? '' : 'flex-col'}`}>
+                            <Button
+                                type="submit"
+                                disabled={!activeCycle || pending}
+                                className={`${mode === 'edit' ? 'w-1/2' : 'w-full'} bg-accent-foreground py-5 text-md text-white hover:bg-accent-foreground/90`}
+                                >
+                                {pending ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Allocation' : 'Create Tier One Allocation')}
+                            </Button>
+                            {mode === 'edit' && (
+                                <Link href="/dbm/tier-one" className="w-1/2">
+                                    <Button type="button" variant="outline" className="w-full py-5 text-md">
+                                        Cancel
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
                     </form>
                     )}
 
-                    <div className="rounded-xl border border-border bg-background overflow-hidden">
+                    <div className="rounded-xl border border-border bg-background max-h-full overflow-auto-y">
                         <div className="border-b border-border px-6 py-4">
                             <h2 className="text-lg font-semibold text-secondary-foreground">
                                 {viewingYear ? `FY ${viewingYear} Allocations` : 'Tier One Allocations'}
@@ -407,6 +465,58 @@ export function TierOneAllocationManager({
                                     : 'Tier One allocations.'}
                             </p>
                         </div>
+
+                        {mode === 'edit' && initialValues?.id && (
+                            <div className="border-b border-border px-6 py-5 space-y-4">
+                                <div>
+                                    <h3 className="text-base font-semibold text-secondary-foreground">Previous Remarks</h3>
+                                    <p className="text-sm text-muted-foreground">
+                                        Remarks submitted from the edit form are stored under the workflow stage selected above.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-2 border border-border rounded-lg max-h-96 overflow-y-auto">
+                                    <button
+                                        type="button"
+                                        onClick={() => setRemarksOpen((open) => !open)}
+                                        className={`flex w-full items-center justify-between bg-background px-4 py-3 text-left mb-0 ${remarksOpen ? 'border-b' : ''}`}
+                                    >
+                                        <span className="text-sm font-semibold text-secondary-foreground">
+                                            All Remarks ({remarks.length})
+                                        </span>
+                                        {remarksOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                    </button>
+
+                                    {remarksOpen && (
+                                        <div>
+                                            {remarks.length === 0 ? (
+                                                <p className="text-sm text-muted-foreground">No remarks logged yet.</p>
+                                            ) : remarks.map((remark, index) => (
+                                                <div
+                                                    key={remark.id}
+                                                    className={`${index === remarks.length - 1 ? '' : 'border-b'} bg-accent/20 p-4`}
+                                                >
+                                                    <div className="flex items-center justify-between gap-4">
+                                                        <div className="text-sm font-semibold text-secondary-foreground">
+                                                            {remark.performed_by_name || remark.performed_by}
+                                                        </div>
+                                                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                            {REMARK_STAGE_OPTIONS.find((option) => option.value === remark.workflow_stage)?.label}
+                                                        </div>
+                                                    </div>
+                                                    <p className="mt-2 whitespace-pre-wrap text-sm text-secondary-foreground">{remark.remarks}</p>
+                                                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                                        <span>{new Date(remark.created_at).toLocaleString()}</span>
+                                                        <span>Before: {remark.amt_before == null ? '—' : Number(remark.amt_before).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                        <span>After: {remark.amt_after == null ? '—' : Number(remark.amt_after).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        )}
 
                         <div className="overflow-x-auto">
                             <table className="w-full text-sm text-left border-collapse">

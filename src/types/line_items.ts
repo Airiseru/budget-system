@@ -5,6 +5,7 @@ import {
     Selectable,
     Updateable
 } from 'kysely'
+import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '../lib/constants'
 
 export type ItemCatalogScope = 'global' | 'entity' | 'pap'
 export type ExpenseClassCode = '1' | '2' | '3' | '6'
@@ -54,3 +55,18 @@ export interface BudgetAllocationTable {
 export type BudgetAllocation = Selectable<BudgetAllocationTable>
 export type NewBudgetAllocation = Insertable<BudgetAllocationTable>
 export type BudgetAllocationUpdate = Updateable<BudgetAllocationTable>
+
+export interface AllocationWorkflowLogTable {
+    id: Generated<string>
+    allocation_id: string
+    workflow_stage: BUDGET_PREP_WORKFLOW_STAGES_TYPE
+    remarks: string
+    amt_before: number | null
+    amt_after: number | null
+    performed_by: string
+    created_at: Generated<Date>
+}
+
+export type AllocationWorkflowLog = Selectable<AllocationWorkflowLogTable>
+export type NewAllocationWorkflowLog = Insertable<AllocationWorkflowLogTable>
+export type AllocationWorkflowLogUpdate = Updateable<AllocationWorkflowLogTable>

@@ -1,5 +1,5 @@
 import { db } from '../database'
-import { NewBudgetAllocation, BudgetAllocation, BudgetAllocationUpdate } from '@/src/types/line_items'
+import { NewAllocationWorkflowLog, NewBudgetAllocation, BudgetAllocation, BudgetAllocationUpdate } from '@/src/types/line_items'
 import { sql } from 'kysely'
 
 export type BudgetAllocationListItem = BudgetAllocation & {
@@ -10,6 +10,18 @@ export type BudgetAllocationListItem = BudgetAllocation & {
 }
 
 export type BudgetAllocationRecord = BudgetAllocationListItem
+
+export type AllocationWorkflowLogEntry = {
+    id: string
+    allocation_id: string
+    workflow_stage: string
+    remarks: string
+    amt_before: number | null
+    amt_after: number | null
+    performed_by: string
+    performed_by_name: string | null
+    created_at: Date
+}
 
 export async function createBudgetAllocation(values: NewBudgetAllocation) {
     return await db
@@ -73,4 +85,32 @@ export async function listBudgetAllocationsByYear(year: number, tier: 1 | 2 = 1)
         .where('budget_allocations.tier', '=', tier)
         .orderBy('budget_allocations.updated_at', 'desc')
         .execute() as BudgetAllocationListItem[]
+}
+
+export async function listAllocationWorkflowLogs(allocationId: string) {
+    return await db
+        .selectFrom('allocation_workflow_logs')
+        .leftJoin('users', 'users.id', 'allocation_workflow_logs.performed_by')
+        .select([
+            'allocation_workflow_logs.id',
+            'allocation_workflow_logs.allocation_id',
+            'allocation_workflow_logs.workflow_stage',
+            'allocation_workflow_logs.remarks',
+            'allocation_workflow_logs.amt_before',
+            'allocation_workflow_logs.amt_after',
+            'allocation_workflow_logs.performed_by',
+            'allocation_workflow_logs.created_at',
+            'users.name as performed_by_name',
+        ])
+        .where('allocation_workflow_logs.allocation_id', '=', allocationId)
+        .orderBy('allocation_workflow_logs.created_at', 'desc')
+        .execute() as AllocationWorkflowLogEntry[]
+}
+
+export async function createAllocationWorkflowLog(values: NewAllocationWorkflowLog) {
+    return await db
+        .insertInto('allocation_workflow_logs')
+        .values(values)
+        .returningAll()
+        .executeTakeFirstOrThrow()
 }

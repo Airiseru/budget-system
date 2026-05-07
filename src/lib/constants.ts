@@ -146,3 +146,5 @@ export const ITEM_EXPENSE_CLASS_OPTIONS = Object.entries(EXPENSE_CLASSES).map(([
     label,
     code: EXPENSE_CLASS_CODES[value],
 }))
+
+export type BUDGET_PREP_WORKFLOW_STAGES_TYPE = 'entity_proposal' | 'dbm_review' | 'dbm_appeal' | 'presidential_review' | 'congressional_bicam'
