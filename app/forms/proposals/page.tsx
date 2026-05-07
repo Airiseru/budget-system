@@ -8,7 +8,7 @@ import { redirect } from "next/navigation";
 import { Badge } from "@/components/ui/badge";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
-import { STATUS_LABELS } from "@/src/lib/constants"
+import { STATUS_LABELS } from "@/src/lib/constants";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +33,8 @@ export default async function ProposalsPage() {
 
     try {
         const activeCycle = await getActiveBudgetPrepCycle();
-        const canCreate = session?.user.access_level === "encode" && !!activeCycle;
+        const canCreate =
+            session?.user.access_level === "encode" && !!activeCycle;
         // Fetching proposal summaries (assuming a similar method to staffing)
         const data = await ProposalRepo.getAllProposalSummaries(
             session.user.id ?? "",
@@ -112,8 +113,7 @@ export default async function ProposalsPage() {
                                                 BP {proposal.type}
                                             </Badge>
                                             <h2 className="font-bold text-lg">
-                                                FY {proposal.proposal_year} -
-                                                Rank #{proposal.priority_rank}
+                                                {proposal.title}
                                             </h2>
                                             <Badge
                                                 variant={
@@ -123,12 +123,13 @@ export default async function ProposalsPage() {
                                                     ]
                                                 }
                                             >
-                                                {STATUS_LABELS[proposal.auth_status] ??
-                                                    "Draft"}
+                                                {STATUS_LABELS[
+                                                    proposal.auth_status
+                                                ] ?? "Draft"}
                                             </Badge>
                                         </div>
                                         <p className="text-md text-primary-500 font-bold">
-                                            Project Title: {proposal.title}
+                                            FY {proposal.proposal_year}
                                         </p>
                                         <p className="text-sm text-muted-foreground">
                                             Cost:{" "}
@@ -143,18 +144,27 @@ export default async function ProposalsPage() {
                                             )}
                                         </p>
                                     </div>
-
-                                    <div className="text-right shrink-0">
-                                        <p className="text-xs text-muted-foreground uppercase font-semibold">
-                                            Submitted On
-                                        </p>
-                                        <span className="text-sm">
-                                            {proposal.submission_date
-                                                ? new Date(
-                                                      proposal.submission_date,
-                                                  ).toLocaleDateString()
-                                                : "N/A"}
-                                        </span>
+                                    <div className="flex items-center gap-10">
+                                        <div className="text-right shrink-0">
+                                            <p className="text-xs text-muted-foreground uppercase font-semibold">
+                                                Submitted On
+                                            </p>
+                                            <span className="text-sm">
+                                                {proposal.submission_date
+                                                    ? new Date(
+                                                          proposal.submission_date,
+                                                      ).toLocaleDateString()
+                                                    : "N/A"}
+                                            </span>
+                                        </div>
+                                        <div className="font-bold flex flex-col items-center gap-1">
+                                            <p className="text-secondary-foreground">
+                                                Rank
+                                            </p>
+                                            <p className="text-secondary-foreground">
+                                                #{proposal.priority_rank}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

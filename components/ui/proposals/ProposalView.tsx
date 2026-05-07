@@ -13,6 +13,9 @@ import {
     Landmark,
     FileText,
     Gavel,
+    Building,
+    Component,
+    Banknote,
 } from "lucide-react";
 import BackButton from "../BackButton";
 import FormDeleteButton from "../FormDeleteButton";
@@ -52,12 +55,12 @@ interface ProposalViewProps {
     deleteFormAction: (id: string) => Promise<void>;
 }
 
-const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FE"];
+const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FINEX"];
 
 const CostBreakdownColumns = ({ item }: { item: any }) => {
     if (!item.costs || item.costs.length === 0) {
         return (
-            <td className="p-4 text-center col-span-4 text-muted-400 italic text-[10px]">
+            <td className="p-4 text-center col-span-4 text-muted-400 italic text-sm">
                 No financial data recorded
             </td>
         );
@@ -72,7 +75,7 @@ const CostBreakdownColumns = ({ item }: { item: any }) => {
                 return (
                     <td
                         key={cls}
-                        className="p-4 text-right border-l font-mono text-xs"
+                        className="p-4 text-right border-l font-mono text-sm"
                     >
                         {costEntry
                             ? Number(costEntry.amount).toLocaleString(
@@ -92,15 +95,21 @@ const CostBreakdownColumns = ({ item }: { item: any }) => {
 const getStatusStyles = (status: string) => {
     switch (status) {
         case "True":
-            return "bg-green-100 text-green-700 hover:bg-green-100 border-green-200";
+            return "text-green-700 hover:bg-green-100 border-green-200";
         case "False":
-            return "bg-red-100 text-red-700 hover:bg-red-100 border-red-200";
+            return "text-red-700 hover:bg-red-100 border-red-200";
         case "Not Applicable":
-            return "bg-slate-100 text-slate-500 hover:bg-slate-100 border-slate-200";
+            return "text-muted-500 hover:text-foreground/50 hover:bg-muted-foreground/20 border-muted-200";
         default:
-            return "bg-slate-100 text-slate-500 hover:bg-slate-100";
+            return "text-muted-500 hover:bg-black";
     }
 };
+
+const FUND_SOURCES = [
+    { label: "LP - Cash", category: "LP", method: "cash" },
+    { label: "LP - Non-Cash", category: "LP", method: "non_cash" },
+    { label: "GOP", category: "GOP", method: null },
+];
 
 export default function ProposalView({
     data,
@@ -128,6 +137,10 @@ export default function ProposalView({
 
     console.log("PROPOSAL VIEW");
     console.log(data);
+
+    const budgetYear = Number(data.proposal_year);
+    const forwardYear1 = budgetYear + 1;
+    const forwardYear2 = budgetYear + 2;
 
     // --- NEW VERSIONING LOGIC ---
     const familyHasApprovedVersion = versionTabs.some(
@@ -184,7 +197,7 @@ export default function ProposalView({
             <div className="text-center space-y-2 mb-8">
                 <Badge
                     variant="outline"
-                    className="uppercase tracking-widest text-[10px]"
+                    className="uppercase tracking-widest text-sm"
                 >
                     BP Form {data.type}
                 </Badge>
@@ -232,7 +245,7 @@ export default function ProposalView({
                                                 ? `Original (v${tab.version})`
                                                 : `DBM (v${tab.version})`}
                                         </span>
-                                        <span className="text-xs font-medium">
+                                        <span className="text-sm font-medium">
                                             {
                                                 STATUS_LABELS[
                                                     tab.auth_status ?? "draft"
@@ -240,7 +253,7 @@ export default function ProposalView({
                                             }
                                         </span>
                                     </div>
-                                    <p className="mt-1 text-xs text-muted-foreground">
+                                    <p className="mt-1 text-sm text-muted-foreground">
                                         Updated{" "}
                                         {new Date(
                                             tab.updated_at,
@@ -255,8 +268,8 @@ export default function ProposalView({
 
             {/* CORE STATS GRID */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-white p-4 border rounded-lg shadow-sm">
-                    <label className="text-[10px] uppercase font-bold text-slate-400">
+                <div className="bg-white p-4 border rounded-lg shadow-sm flex flex-col justify-between">
+                    <label className="text-sm uppercase font-bold text-muted-foreground">
                         Total Proposal Cost
                     </label>
                     <p className="text-lg font-semibold font-mono">
@@ -264,19 +277,19 @@ export default function ProposalView({
                         {Number(data.total_proposal_cost).toLocaleString()}
                     </p>
                 </div>
-                <div className="bg-white p-4 border rounded-lg shadow-sm">
-                    <label className="text-[10px] uppercase font-bold text-slate-400">
+                <div className="bg-white p-4 border rounded-lg shadow-sm flex flex-col justify-between">
+                    <label className="text-sm uppercase font-bold text-muted-foreground">
                         Priority Rank
                     </label>
                     <p className="text-lg font-semibold">
                         #{data.priority_rank}
                     </p>
                 </div>
-                <div className="p-4 bg-muted-50 rounded-xl border border-muted-100">
-                    <p className="text-[10px] font-bold text-muted-400 uppercase">
+                <div className="p-4 bg-muted-50 rounded-xl border border-muted-100 flex flex-col justify-between">
+                    <label className="text-sm font-bold text-muted-foreground uppercase">
                         Sector Classification
-                    </p>
-                    <p className="text-sm font-bold text-muted-800">
+                    </label>
+                    <p className="text-lg font-bold text-muted-800">
                         {data.is_infrastructure
                             ? "Infrastructure"
                             : "Non-Infrastructure"}
@@ -289,11 +302,11 @@ export default function ProposalView({
             <div className="flex flex-col gap-10">
                 {/* Prerequisites */}
                 <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase text-muted-400 tracking-widest flex items-center gap-2">
+                    <h3 className="text-md font-black uppercase text-muted-400 tracking-widest flex items-center gap-2">
                         <Landmark size={14} /> Prerequisites
                     </h3>
                     <section className="space-y-3">
-                        <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                        <h3 className="text-sm font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2">
                             <Gavel size={14} /> Approving Authorities
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
@@ -305,7 +318,7 @@ export default function ProposalView({
                                             className={`p-3 bg-white border rounded-lg shadow-sm ${getStatusStyles(pre.status)}`}
                                         >
                                             <div className="flex justify-between items-start">
-                                                <p className="text-xs font-bold text-muted-700">
+                                                <p className="text-sm font-bold text-muted-700">
                                                     {pre.name}
                                                 </p>
                                                 <Badge
@@ -319,7 +332,7 @@ export default function ProposalView({
                                                           : "Not Applicable"}
                                                 </Badge>
                                             </div>
-                                            <p className="text-[10px] text-muted-500 mt-1 italic">
+                                            <p className="text-sm text-muted-500 mt-1 italic">
                                                 Remarks: {pre.remarks}
                                             </p>
                                         </div>
@@ -328,7 +341,7 @@ export default function ProposalView({
                         </div>
                     </section>
                     <section className="space-y-3">
-                        <h3 className="text-[10px] font-black uppercase text-slate-400 tracking-widest flex items-center gap-2">
+                        <h3 className="text-sm font-black uppercase text-muted-foreground tracking-widest flex items-center gap-2">
                             <FileText size={14} /> Supporting Documents
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
@@ -340,7 +353,7 @@ export default function ProposalView({
                                             className={`p-3 bg-white border rounded-lg shadow-sm ${getStatusStyles(pre.status)}`}
                                         >
                                             <div className="flex justify-between items-start">
-                                                <p className="text-xs font-bold text-muted-700">
+                                                <p className="text-sm font-bold text-muted-700">
                                                     {pre.name}
                                                 </p>
                                                 <Badge
@@ -354,7 +367,7 @@ export default function ProposalView({
                                                           : "Not Applicable"}
                                                 </Badge>
                                             </div>
-                                            <p className="text-[10px] text-muted-500 mt-1 italic">
+                                            <p className="text-sm text-muted-500 mt-1 italic">
                                                 Remarks: {pre.remarks}
                                             </p>
                                         </div>
@@ -363,64 +376,61 @@ export default function ProposalView({
                         </div>
                     </section>
                 </div>
-
-                {/* Core Components */}
-                <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase text-muted-400 tracking-widest">
-                        Cost by Components
-                    </h3>
-                    <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="bg-muted-50/50 border-b border-muted-100">
-                                    <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
-                                        Component Name
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        PS
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        MOOE
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        CO
-                                    </th>
-                                    <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
-                                        FINEX
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y">
-                                {data.cost_by_components?.map(
-                                    (comp: any, i: number) => (
-                                        <tr key={i}>
-                                            <td className="p-4 font-medium text-muted-700">
-                                                {comp.component_name}
-                                            </td>
-
-                                            <CostBreakdownColumns item={comp} />
-                                        </tr>
-                                    ),
-                                )}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
 
             {/* FORM 202 SPECIFIC: LOCAL DETAILS */}
             {data.type === "202" && (
                 <div className="space-y-8">
-                    <div className="flex items-center gap-4">
-                        <h2 className="text-xl font-black text-muted-800 uppercase italic">
-                            Local Details
-                        </h2>
-                        <div className="h-px bg-muted-200 flex-grow" />
+                    {/* Core Components */}
+                    <div className="space-y-4">
+                        <h3 className="text-md font-black uppercase text-secondary-foreground tracking-widest flex items-center gap-2">
+                            <Component size={12} />
+                            Cost by Components
+                        </h3>
+                        <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                            <table className="w-full text-sm">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b border-muted-100">
+                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                            Component Name
+                                        </th>
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                            PS
+                                        </th>
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                            MOOE
+                                        </th>
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                            CO
+                                        </th>
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                            FINEX
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y">
+                                    {data.cost_by_components?.map(
+                                        (comp: any, i: number) => (
+                                            <tr key={i}>
+                                                <td className="p-4 font-medium text-muted-700">
+                                                    {comp.component_name}
+                                                </td>
+
+                                                <CostBreakdownColumns
+                                                    item={comp}
+                                                />
+                                            </tr>
+                                        ),
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
 
                     {/* PAP Attribution Section */}
                     <div className="space-y-4 mt-8">
-                        <h3 className="text-xs font-black uppercase text-muted-400 tracking-widest">
+                        <h3 className="text-md font-black uppercase text-secondary-foreground tracking-widest flex items-center gap-2">
+                            <Banknote size={12} />
                             PAP Attribution by Expense Class
                         </h3>
                         <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
@@ -429,27 +439,27 @@ export default function ProposalView({
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
                                         <th
                                             rowSpan={2}
-                                            className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase text-left border-r border-muted-100"
+                                            className="py-3 px-4 text-sm font-black text-muted-400 uppercase text-left border-r border-muted-100"
                                         >
                                             PAP Description / Expense Class
                                         </th>
                                         <th
                                             colSpan={3}
-                                            className="py-2 px-2 text-[10px] font-black text-muted-400 uppercase text-center border-muted-100 border-r border-muted-100"
+                                            className="py-2 px-2 text-sm font-black text-muted-400 uppercase text-center border-muted-100 border-r border-muted-100"
                                         >
-                                            FY 2027
+                                            FY {budgetYear}
                                         </th>
                                         <th
                                             rowSpan={2}
-                                            className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center border-r border-muted-100"
+                                            className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center border-r border-muted-100"
                                         >
-                                            FY 2028 T1
+                                            FY {forwardYear1} T1
                                         </th>
                                         <th
                                             rowSpan={2}
-                                            className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center"
+                                            className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center"
                                         >
-                                            FY 2029 T1
+                                            FY {forwardYear2} T1
                                         </th>
                                     </tr>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
@@ -474,15 +484,18 @@ export default function ProposalView({
                                             "FINEX",
                                         ];
 
-                                        // 1. Extract and sort unique expense classes based on the preferred order
                                         const uniqueClasses = Array.from(
                                             new Set(
                                                 attr.attribution_costs?.flatMap(
                                                     (c: any) =>
-                                                        c.expense_classes?.map(
-                                                            (ec: any) =>
-                                                                ec.expense_class,
-                                                        ),
+                                                        // Add a check for c?.costs to handle the null in your FY 2028 data
+                                                        c?.costs
+                                                            ?.map(
+                                                                (cost: any) =>
+                                                                    cost?.expense_class,
+                                                            )
+                                                            .filter(Boolean) ||
+                                                        [],
                                                 ),
                                             ),
                                         ).sort(
@@ -491,7 +504,12 @@ export default function ProposalView({
                                                 order.indexOf(b),
                                         ) as string[];
 
-                                        // 2. Helper to get values for a specific class OR the entire PAP (if cls is null)
+                                        console.log(
+                                            "Unique Classes for ",
+                                            attr.description,
+                                            uniqueClasses,
+                                        );
+
                                         const getVal = (
                                             year: number,
                                             tier: number | null,
@@ -500,29 +518,33 @@ export default function ProposalView({
                                             const yData =
                                                 attr.attribution_costs?.find(
                                                     (c: any) =>
-                                                        c.year === year &&
+                                                        c && // Ensure c is not null (fixes the FY 2028 issue)
+                                                        Number(c.year) ===
+                                                            year &&
                                                         (tier === null ||
-                                                            c.tier === tier),
+                                                            Number(c.tier) ===
+                                                                tier),
                                                 );
-                                            if (!yData) return 0;
+
+                                            if (!yData || !yData.costs)
+                                                return 0;
 
                                             if (cls) {
                                                 return Number(
-                                                    yData.expense_classes?.find(
-                                                        (ec: any) =>
-                                                            ec.expense_class ===
+                                                    yData.costs.find(
+                                                        (cost: any) =>
+                                                            cost?.expense_class ===
                                                             cls,
                                                     )?.amount || 0,
                                                 );
                                             }
-                                            // If no class specified, sum all classes for that year/tier (The PAP Total)
-                                            return (
-                                                yData.expense_classes?.reduce(
-                                                    (sum: number, ec: any) =>
-                                                        sum +
-                                                        Number(ec.amount || 0),
-                                                    0,
-                                                ) || 0
+
+                                            // Sum all costs for that year/tier
+                                            return yData.costs.reduce(
+                                                (sum: number, cost: any) =>
+                                                    sum +
+                                                    Number(cost?.amount || 0),
+                                                0,
                                             );
                                         };
 
@@ -531,62 +553,66 @@ export default function ProposalView({
                                                 key={pIdx}
                                                 className="border-b-2 border-chart-5/50"
                                             >
-                                                {/* Header Row: PAP Description + Aggregated Totals */}
                                                 <tr className="bg-muted-50/20 font-bold divide-x border-b border-chart-5/20">
-                                                    <td className="p-4 text-muted-900 border-muted-100">
+                                                    <td className="p-4 text-muted-900">
                                                         {attr.description}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono border-muted-50">
+                                                    <td className="p-4 text-right font-mono">
                                                         {getVal(
-                                                            2027,
-                                                            1,
-                                                        ).toLocaleString()}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono border-r border-muted-100">
-                                                        {getVal(
-                                                            2027,
-                                                            2,
-                                                        ).toLocaleString()}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono bg-muted-100/20 border-r border-muted-100">
-                                                        {(
-                                                            getVal(2027, 1) +
-                                                            getVal(2027, 2)
-                                                        ).toLocaleString()}
-                                                    </td>
-                                                    <td className="p-4 text-right font-mono border-r border-muted-100">
-                                                        {getVal(
-                                                            2028,
+                                                            budgetYear,
                                                             1,
                                                         ).toLocaleString()}
                                                     </td>
                                                     <td className="p-4 text-right font-mono">
                                                         {getVal(
-                                                            2029,
+                                                            budgetYear,
+                                                            2,
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono bg-muted-100/20">
+                                                        {(
+                                                            getVal(
+                                                                budgetYear,
+                                                                1,
+                                                            ) +
+                                                            getVal(
+                                                                budgetYear,
+                                                                2,
+                                                            )
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono">
+                                                        {getVal(
+                                                            forwardYear1,
+                                                            1,
+                                                        ).toLocaleString()}
+                                                    </td>
+                                                    <td className="p-4 text-right font-mono">
+                                                        {getVal(
+                                                            forwardYear2,
                                                             1,
                                                         ).toLocaleString()}
                                                     </td>
                                                 </tr>
-
                                                 {/* Child Rows: Individual Expense Classes */}
                                                 {uniqueClasses.map((cls) => {
                                                     const v27t1 = getVal(
-                                                        2027,
+                                                        budgetYear,
                                                         1,
                                                         cls,
                                                     );
                                                     const v27t2 = getVal(
-                                                        2027,
+                                                        budgetYear,
                                                         2,
                                                         cls,
                                                     );
                                                     const v28t1 = getVal(
-                                                        2028,
+                                                        forwardYear1,
                                                         1,
                                                         cls,
                                                     );
                                                     const v29t1 = getVal(
-                                                        2029,
+                                                        forwardYear2,
                                                         1,
                                                         cls,
                                                     );
@@ -596,31 +622,31 @@ export default function ProposalView({
                                                             key={cls}
                                                             className="hover:bg-muted-50/30 transition-colors"
                                                         >
-                                                            <td className="p-3 pl-8 text-xs font-medium text-muted-500 border-r border-muted-100 italic">
+                                                            <td className="p-3 pl-8 text-sm font-medium text-muted-500 border-r border-muted-100 italic">
                                                                 {cls}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-xs text-muted-500 border-r border-muted-50">
+                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-50">
                                                                 {v27t1 > 0
                                                                     ? v27t1.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-xs text-muted-500 border-r border-muted-100">
+                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
                                                                 {v27t2 > 0
                                                                     ? v27t2.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-xs text-muted-600 bg-muted-50/10 border-r border-muted-100">
+                                                            <td className="p-3 text-right font-mono text-sm text-muted-600 bg-muted-50/10 border-r border-muted-100">
                                                                 {(
                                                                     v27t1 +
                                                                     v27t2
                                                                 ).toLocaleString()}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-xs text-muted-500 border-r border-muted-100">
+                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
                                                                 {v28t1 > 0
                                                                     ? v28t1.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-xs text-muted-500">
+                                                            <td className="p-3 text-right font-mono text-sm text-muted-500">
                                                                 {v29t1 > 0
                                                                     ? v29t1.toLocaleString()
                                                                     : "—"}
@@ -638,26 +664,26 @@ export default function ProposalView({
 
                     {/* Locations */}
                     <div className="space-y-3">
-                        <h3 className="text-xs font-black text-purple-600 uppercase flex items-center gap-2">
+                        <h3 className="text-md font-black text-secondary-foreground uppercase flex items-center tracking-widest gap-2">
                             <MapPin size={12} /> Target Locations
                         </h3>
                         <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
                             <table className="border rounded-xl w-full bg-white overflow-hidden divide-y">
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
+                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
                                             Locations
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             PS
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             MOOE
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             CO
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             FINEX
                                         </th>
                                     </tr>
@@ -682,7 +708,7 @@ export default function ProposalView({
 
                     {/* Physical Targets */}
                     <div className="space-y-3">
-                        <h4 className="text-xs font-black text-green-600 uppercase flex items-center gap-2">
+                        <h4 className="text-md font-black text-secondary-foreground uppercase flex items-center tracking-widest gap-2">
                             <Target size={12} /> Physical Targets
                         </h4>
                         <div className="border rounded-xl bg-white overflow-hidden divide-y">
@@ -695,7 +721,7 @@ export default function ProposalView({
                                         <span className="text-sm text-muted-600">
                                             {pt.target_description}
                                         </span>
-                                        <span className="text-xs font-mono font-bold text-muted-400">
+                                        <span className="text-sm font-mono font-bold text-muted-400">
                                             FY {pt.year}
                                         </span>
                                     </div>
@@ -706,26 +732,27 @@ export default function ProposalView({
 
                     {/* Infrastructure Requirements */}
                     <div className="space-y-3">
-                        <h4 className="text-xs font-black text-blue-600 uppercase">
+                        <h4 className="text-md font-black text-secondary-foreground uppercase flex items-center tracking-widest gap-2">
+                            <Building size={12} />
                             Infrastructure Requirements
                         </h4>
                         <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
                             <table className="w-full text-sm">
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
+                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
                                             Infrastructure Requirement
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             PS
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             MOOE
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             CO
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             FINEX
                                         </th>
                                     </tr>
@@ -740,6 +767,355 @@ export default function ProposalView({
                                                 <CostBreakdownColumns
                                                     item={infra}
                                                 />
+                                            </tr>
+                                        ),
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* FORM 203 SPECIFIC: FOREIGN DETAILS */}
+            {data.type === "203" && (
+                <div className="space-y-8">
+                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
+                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                Cost by Components
+                            </h3>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b text-sm divide-x font-black text-muted-400 uppercase">
+                                        <th className="py-4 px-4 w-64">
+                                            Components
+                                        </th>
+                                        {["PS", "MOOE", "CO", "FINEX"].map(
+                                            (ec) => (
+                                                <th
+                                                    key={ec}
+                                                    className="px-2 text-center  min-w-[180px]"
+                                                >
+                                                    {ec}
+                                                </th>
+                                            ),
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-muted-50">
+                                    {data.cost_by_components.map(
+                                        (comp: any, i: any) => (
+                                            <tr
+                                                key={i}
+                                                className="hover:bg-muted-50/30 divide-x transition-colors group"
+                                            >
+                                                <td className="py-3 px-4 align-top">
+                                                    {comp.component_name}
+                                                </td>
+                                                {[
+                                                    "PS",
+                                                    "MOOE",
+                                                    "CO",
+                                                    "FINEX",
+                                                ].map((ec) => {
+                                                    const getCost = (
+                                                        cat: "LP" | "GOP",
+                                                        method?:
+                                                            | "cash"
+                                                            | "non_cash",
+                                                    ) =>
+                                                        comp.costs?.find(
+                                                            (c: any) =>
+                                                                c.expense_class ===
+                                                                    ec &&
+                                                                c.fund_category ===
+                                                                    cat &&
+                                                                (cat !== "LP" ||
+                                                                    c.fund_method ===
+                                                                        method),
+                                                        )?.amount || "";
+
+                                                    const lpCash = Number(
+                                                        getCost("LP", "cash") ||
+                                                            0,
+                                                    );
+                                                    const lpNonCash = Number(
+                                                        getCost(
+                                                            "LP",
+                                                            "non_cash",
+                                                        ) || 0,
+                                                    );
+                                                    const gop = Number(
+                                                        getCost("GOP") || 0,
+                                                    );
+                                                    const cellTotal =
+                                                        lpCash +
+                                                        lpNonCash +
+                                                        gop;
+                                                    return (
+                                                        <td
+                                                            key={ec}
+                                                            className="p-3  align-top min-w-[160px]"
+                                                        >
+                                                            <div className="flex flex-col gap-2">
+                                                                {/* LP Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP CASH
+                                                                    </span>
+                                                                    <div
+                                                                        key={`${ec}-LP-CASH`}
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                    >
+                                                                        {getCost(
+                                                                            "LP",
+                                                                            "cash",
+                                                                        )
+                                                                            ? getCost(
+                                                                                  "LP",
+                                                                                  "cash",
+                                                                              ).toLocaleString()
+                                                                            : "-"}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* LP Non-Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP
+                                                                        NON-CASH
+                                                                    </span>
+                                                                    <div
+                                                                        key={`${ec}-LP-NON-CASH`}
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                    >
+                                                                        {getCost(
+                                                                            "LP",
+                                                                            "non_cash",
+                                                                        )
+                                                                            ? getCost(
+                                                                                  "LP",
+                                                                                  "non_cash",
+                                                                              ).toLocaleString()
+                                                                            : "-"}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* GOP Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        GOP
+                                                                    </span>
+                                                                    <div
+                                                                        key={`${ec}-GOP`}
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                    >
+                                                                        {getCost(
+                                                                            "GOP",
+                                                                            "cash",
+                                                                        )
+                                                                            ? getCost(
+                                                                                  "GOP",
+                                                                                  "cash",
+                                                                              ).toLocaleString()
+                                                                            : "-"}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Sub-total for this Expense Class */}
+                                                                <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
+                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
+                                                                        Total
+                                                                    </span>
+                                                                    <span className="text-sm font-mono font-bold text-blue-600">
+                                                                        {cellTotal.toLocaleString(
+                                                                            undefined,
+                                                                            {
+                                                                                minimumFractionDigits: 2,
+                                                                            },
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                            </tr>
+                                        ),
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
+                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                Foreign Physical Targets
+                            </h3>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b text-sm divide-x font-black text-muted-400 uppercase">
+                                        <th className="py-4 px-4 w-64">
+                                            Components
+                                        </th>
+                                        {["PS", "MOOE", "CO", "FINEX"].map(
+                                            (ec) => (
+                                                <th
+                                                    key={ec}
+                                                    className="px-2 text-center  min-w-[180px]"
+                                                >
+                                                    {ec}
+                                                </th>
+                                            ),
+                                        )}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-muted-50">
+                                    {data.foreign_physical_targets.map(
+                                        (phys: any, i: any) => (
+                                            <tr
+                                                key={i}
+                                                className="hover:bg-muted-50/30 divide-x transition-colors group"
+                                            >
+                                                <td className="py-3 px-4 align-top">
+                                                    {phys.name}
+                                                </td>
+                                                {[
+                                                    "PS",
+                                                    "MOOE",
+                                                    "CO",
+                                                    "FINEX",
+                                                ].map((ec) => {
+                                                    const getCost = (
+                                                        cat: "LP" | "GOP",
+                                                        method?:
+                                                            | "cash"
+                                                            | "non_cash",
+                                                    ) =>
+                                                        phys.costs?.find(
+                                                            (c: any) =>
+                                                                c.expense_class ===
+                                                                    ec &&
+                                                                c.fund_category ===
+                                                                    cat &&
+                                                                (cat !== "LP" ||
+                                                                    c.fund_method ===
+                                                                        method),
+                                                        )?.amount || "";
+
+                                                    const lpCash = Number(
+                                                        getCost("LP", "cash") ||
+                                                            0,
+                                                    );
+                                                    const lpNonCash = Number(
+                                                        getCost(
+                                                            "LP",
+                                                            "non_cash",
+                                                        ) || 0,
+                                                    );
+                                                    const gop = Number(
+                                                        getCost("GOP") || 0,
+                                                    );
+                                                    const cellTotal =
+                                                        lpCash +
+                                                        lpNonCash +
+                                                        gop;
+                                                    return (
+                                                        <td
+                                                            key={ec}
+                                                            className="p-3  align-top min-w-[160px]"
+                                                        >
+                                                            <div className="flex flex-col gap-2">
+                                                                {/* LP Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP CASH
+                                                                    </span>
+                                                                    <div
+                                                                        key={`${ec}-LP-CASH`}
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                    >
+                                                                        {getCost(
+                                                                            "LP",
+                                                                            "cash",
+                                                                        )
+                                                                            ? getCost(
+                                                                                  "LP",
+                                                                                  "cash",
+                                                                              ).toLocaleString()
+                                                                            : "-"}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* LP Non-Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP
+                                                                        NON-CASH
+                                                                    </span>
+                                                                    <div
+                                                                        key={`${ec}-LP-NON-CASH`}
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                    >
+                                                                        {getCost(
+                                                                            "LP",
+                                                                            "non_cash",
+                                                                        )
+                                                                            ? getCost(
+                                                                                  "LP",
+                                                                                  "non_cash",
+                                                                              ).toLocaleString()
+                                                                            : "-"}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* GOP Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        GOP
+                                                                    </span>
+                                                                    <div
+                                                                        key={`${ec}-GOP`}
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                    >
+                                                                        {getCost(
+                                                                            "GOP",
+                                                                            "cash",
+                                                                        )
+                                                                            ? getCost(
+                                                                                  "GOP",
+                                                                                  "cash",
+                                                                              ).toLocaleString()
+                                                                            : "-"}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Sub-total for this Expense Class */}
+                                                                <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
+                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
+                                                                        Total
+                                                                    </span>
+                                                                    <span className="text-sm font-mono font-bold text-blue-600">
+                                                                        {cellTotal.toLocaleString(
+                                                                            undefined,
+                                                                            {
+                                                                                minimumFractionDigits: 2,
+                                                                            },
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
                                             </tr>
                                         ),
                                     )}
@@ -780,7 +1156,7 @@ export default function ProposalView({
                         <h3 className="text-sm font-bold text-gray-900">
                             Danger Zone
                         </h3>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-sm text-gray-500">
                             Irreversible actions for this record.
                         </p>
                     </div>

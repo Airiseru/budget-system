@@ -3,7 +3,10 @@ import { auth } from "@/src/lib/auth";
 import { headers } from "next/headers";
 import { logNewForm, logSubmitForm } from "@/src/actions/audit";
 import { createProposalRepository } from "@/src/db/factory";
-import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import {
+    getBudgetPrepClosedError,
+    isBudgetPrepActiveForYear,
+} from "@/src/lib/budget-cycle";
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
 
@@ -26,7 +29,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { userId, entityId, summaryData, payload, auth_status } = body;
+        const { userId, entityId, payload, auth_status } = body;
 
         if (!(await isBudgetPrepActiveForYear(payload.proposal_year))) {
             return NextResponse.json(
@@ -35,15 +38,9 @@ export async function POST(req: Request) {
             );
         }
 
-        // Combine summaryData and payload into one object for the repository
-        const combinedProposalData = {
-            ...summaryData,
-            ...payload,
-        };
-
         const result = await repo.createProjectProposal(
             entityId,
-            combinedProposalData, // Pass the flattened object here
+            payload, // Pass the flattened object here
             payload, // Keep this if your repo needs the raw arrays for child tables
             auth_status ?? "draft",
             payload.proposal_year, // this is practically the fiscal year
@@ -55,7 +52,7 @@ export async function POST(req: Request) {
             entityId,
             "project_proposals",
             result.formId,
-            { ...summaryData, ...payload },
+            payload,
             result.createdAt,
         );
 
@@ -70,7 +67,7 @@ export async function POST(req: Request) {
                 entityId,
                 "project_proposals",
                 result.formId,
-                { ...summaryData, ...payload },
+                payload,
                 result.createdAt,
             );
             if (!submitResult.success)

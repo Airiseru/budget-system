@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalSchema } from "@/src/lib/validations/proposal.schema";
+import { ForeignFinancialTarget } from "@/src/types/project_proposals";
 
 interface AttributionYearTier {
     year: number;
@@ -99,50 +100,47 @@ const DEFAULT_PREREQUISITES = [
     },
 ];
 
-type FinancialTableKey =
+type ProjectProposalField =
     | "cost_by_components"
     | "local_locations"
     | "local_financial_attributions"
     | "local_infrastructure_requirements"
-    | "foreign_financial_targets";
+    | "foreign_financial_targets"
+    | "foreign_physical_targets";
+
+type MatrixField = "cost_by_components" | "foreign_physical_targets";
 
 interface ExpenseRow {
     expense_class: "PS" | "MOOE" | "CO" | "FINEX";
-    amount: number | string;
+    fund_category?: "LP" | "Grant" | "GOP"; // for BP 203
+    fund_method?: "cash" | "non_cash" | "imprest" | "direct_payment"; // for BP 203
     currency: string;
-    year?: number;
-    tier?: number | null;
+    amount: number;
 }
 
-// bp form 203
-
-interface ForeignExpenseRow {
-    lp_imprest: number | string; // Loan Proceeds - Imprest/Special Account
-    lp_direct: number | string; // Loan Proceeds - Direct Payment
-    grant: number | string;
-    gop_counterpart: number | string;
-}
-
-interface ForeignFinancialTarget {
+interface ForeignFinTarget {
     year: number;
-    costs: ForeignExpenseRow;
+    lp_imprest: number;
+    lp_direct: number;
+    grant: number;
+    gop: number;
 }
 
-interface ForeignExpenseBreakdown {
-    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
-    lp_cash: number | string;
-    lp_non_cash: number | string;
-    gop: number | string;
-}
-
-interface ProjectComponent203 {
+interface CostingComponent {
     component_name: string;
-    costs: ForeignExpenseBreakdown[];
+    costs: ExpenseRow[];
 }
 
 interface ProjectProposalPayload {
+    title: string;
+
     proposal_year: number;
-    // priority_rank: number;
+    priority_rank: number;
+    org_outcome_id: string;
+    description: string;
+    purpose: string;
+    beneficiaries: string;
+
     is_new: boolean;
     myca_issuance?: boolean | null;
     is_infrastructure: boolean;
@@ -158,9 +156,7 @@ interface ProjectProposalPayload {
         remarks?: string | null;
     }[];
 
-    cost_by_components:
-        | { component_name: string; costs: ExpenseRow[] }[]
-        | ProjectComponent203[];
+    cost_by_components: CostingComponent[];
     local_locations: { location: string; costs: ExpenseRow[] }[];
 
     local_financial_attributions: LocalFinancialAttribution[];
@@ -172,12 +168,8 @@ interface ProjectProposalPayload {
         costs: ExpenseRow[];
     }[];
 
-    foreign_financial_targets: {
-        year: number;
-        total_amt: number | string;
-        costs: ExpenseRow[];
-    }[];
-    foreign_physical_targets: { name: string }[];
+    foreign_financial_targets: ForeignFinTarget[];
+    foreign_physical_targets: { name: string; costs: ExpenseRow[] }[];
 }
 
 const PrerequisiteRow = ({ pre, index, updateRow, removeRow }: any) => (
@@ -363,30 +355,20 @@ export default function ProposalForm({
     >("draft");
 
     if (project) {
-        console.log(project);
+        console.log("THIS IS THE PROJECT PROP: ", project);
     }
 
-    const [summaryData, setSummaryData] = useState({
+    const [payload, setPayload] = useState<ProjectProposalPayload>({
         title: project?.title || "",
         proposal_year:
             project?.proposal_year ||
             activeFiscalYear ||
             new Date().getFullYear() + 1,
         priority_rank: project?.priority_rank || 1,
-        type: type,
         org_outcome_id: project?.org_outcome_id || "",
         description: project?.description || "",
         purpose: project?.purpose || "",
         beneficiaries: project?.beneficiaries || "",
-    });
-
-    const [payload, setPayload] = useState<ProjectProposalPayload>({
-        // Top-level fields from project or defaults
-        proposal_year:
-            project?.proposal_year ||
-            activeFiscalYear ||
-            new Date().getFullYear() + 1,
-        // priority_rank: project?.priority_rank || 1,
         is_new: project?.is_new ?? false,
         myca_issuance: project?.myca_issuance ?? false,
         is_infrastructure: project?.is_infrastructure ?? false,
@@ -411,9 +393,6 @@ export default function ProposalForm({
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
-
-    console.log(summaryData);
-    console.log(payload);
 
     const addRow = <K extends keyof ProjectProposalPayload>(
         field: K,
@@ -468,7 +447,7 @@ export default function ProposalForm({
     };
 
     const updateExpense = (
-        field: FinancialTableKey,
+        field: ProjectProposalField,
         parentIdx: number,
         expIdx: number,
         value: Partial<ExpenseRow>,
@@ -487,53 +466,21 @@ export default function ProposalForm({
         });
     };
 
-    const handleForeignChange = (
-        index: number,
-        field: string,
-        value: string,
-    ) => {
-        const updatedTargets = [...payload.foreign_financial_targets];
-        const currentCosts = (updatedTargets[index] as any).costs || {};
-
-        updatedTargets[index] = {
-            ...updatedTargets[index],
-            costs: {
-                ...currentCosts,
-                [field]: value,
-            },
-        };
-
-        setPayload((prev) => ({
-            ...prev,
-            foreign_financial_targets: updatedTargets,
-        }));
-    };
-
     async function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
         setErrors({});
 
         // 1. Map the components to ensure they always have an 'amount'
         // for the Zod validator to stay happy.
-        const normalizedComponents = payload.cost_by_components.map(
-            (comp: any) => ({
-                ...comp,
-                costs: comp.costs.map((c: any) => {
-                    if (payload.type === "203") {
-                        // Sum the fields into 'amount' so the schema doesn't fail
-                        return {
-                            ...c,
-                            amount:
-                                Number(c.lp_cash || 0) +
-                                Number(c.lp_non_cash || 0) +
-                                Number(c.gop || 0),
-                            currency: "PHP",
-                        };
-                    }
-                    return c;
-                }),
-            }),
-        );
+        const normalizedComponents = payload.cost_by_components.map((comp) => ({
+            ...comp,
+            costs: comp.costs.map((c) => ({
+                ...c,
+                // Ensure amount is a number for the schema
+                amount: Number(c.amount || 0),
+                currency: "PHP",
+            })),
+        }));
 
         const finalPayload = {
             ...payload,
@@ -544,8 +491,8 @@ export default function ProposalForm({
             }),
         };
 
-        const combinedData = { ...summaryData, ...finalPayload };
-        const result = ProposalSchema.safeParse(combinedData);
+        const result = ProposalSchema.safeParse(finalPayload);
+        console.log("FINAL PAYLOAD SENT TO VALIDATION:");
         console.log(finalPayload);
 
         if (!result.success) {
@@ -574,7 +521,6 @@ export default function ProposalForm({
                     body: JSON.stringify({
                         userId,
                         entityId: entityId,
-                        summaryData,
                         payload: finalPayload, // Send the version with the calculated total
                         auth_status: submitAction,
                     }),
@@ -612,10 +558,10 @@ export default function ProposalForm({
     }
 
     const handleMatrixChange = (
-        field: FinancialTableKey,
+        field: ProjectProposalField,
         parentIdx: number,
         targetClass: "PS" | "MOOE" | "CO" | "FINEX",
-        value: string,
+        value: number,
     ) => {
         // Treat the array specifically as ExpenseRow-based for this function
         const parentArray = payload[field] as { costs: ExpenseRow[] }[];
@@ -640,62 +586,54 @@ export default function ProposalForm({
     const handleMatrixChange203 = (
         componentIdx: number,
         expenseClass: string,
-        field: string,
-        value: string,
+        category: "LP" | "Grant" | "GOP",
+        value: number,
+        field: MatrixField,
+        method?: "cash" | "non_cash",
     ) => {
         setPayload((prev) => {
-            // 1. Cast the array as 203 components specifically to allow internal mutations
-            const updatedComponents = [
-                ...(prev.cost_by_components as ProjectComponent203[]),
-            ];
+            const updatedComponents = [...prev[field]];
+            const currentComp = { ...updatedComponents[componentIdx] };
+            const currentCosts = [...(currentComp.costs || [])];
 
-            const component = { ...updatedComponents[componentIdx] };
-            const costs = [...(component.costs || [])];
-
-            const costIdx = costs.findIndex(
-                (c) => c.expense_class === expenseClass,
+            // Unique identifier: Match by class AND category AND method
+            const costIdx = currentCosts.findIndex(
+                (c) =>
+                    c.expense_class === expenseClass &&
+                    c.fund_category === category &&
+                    (category !== "LP" || c.fund_method === method),
             );
 
             if (costIdx > -1) {
-                costs[costIdx] = { ...costs[costIdx], [field]: value };
+                currentCosts[costIdx] = {
+                    ...currentCosts[costIdx],
+                    amount: value,
+                };
             } else {
-                costs.push({
+                currentCosts.push({
                     expense_class: expenseClass as any,
-                    lp_cash: field === "lp_cash" ? value : "0",
-                    lp_non_cash: field === "lp_non_cash" ? value : "0",
-                    gop: field === "gop" ? value : "0",
+                    fund_category: category,
+                    fund_method: method,
+                    currency: "PHP",
+                    amount: value,
                 });
             }
 
-            component.costs = costs;
-            updatedComponents[componentIdx] = component;
+            currentComp.costs = currentCosts;
+            updatedComponents[componentIdx] = currentComp;
 
-            // 2. Return the whole state, casting updatedComponents back to its union type
-            return {
-                ...prev,
-                cost_by_components:
-                    updatedComponents as ProjectProposalPayload["cost_by_components"],
-            };
+            console.log("Updated Components after change:", updatedComponents);
+
+            return { ...prev, [field]: updatedComponents };
         });
     };
 
     const calculateTotal = (payload: ProjectProposalPayload) => {
         return payload.cost_by_components.reduce((sum, comp) => {
-            // We check if the first cost item has the 'amount' property
-            // to distinguish between 202 and 203
+            // Since BP 202 and BP 203 are unified,
+            // every item in comp.costs has an 'amount' property.
             const rowTotal = comp.costs.reduce((cSum, c) => {
-                if ("amount" in c) {
-                    // Logic for ExpenseRow (BP 202)
-                    return cSum + Number(c.amount || 0);
-                } else {
-                    // Logic for ForeignExpenseBreakdown (BP 203)
-                    return (
-                        cSum +
-                        (Number(c.lp_cash || 0) +
-                            Number(c.lp_non_cash || 0) +
-                            Number(c.gop || 0))
-                    );
-                }
+                return cSum + Number(c.amount || 0);
             }, 0);
 
             return sum + rowTotal;
@@ -717,7 +655,7 @@ export default function ProposalForm({
             <div className="grid grid-cols-2 gap-6 bg-background p-6 rounded-xl border shadow-sm">
                 <div className="flex flex-col gap-2">
                     <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-muted-400">
+                        <label className="text-sm font-black uppercase text-muted-400">
                             Project Title
                         </label>
                         <input
@@ -726,23 +664,23 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={summaryData.title}
+                            value={payload.title}
                             onChange={(e) =>
-                                setSummaryData({
-                                    ...summaryData,
+                                setPayload({
+                                    ...payload,
                                     title: e.target.value,
                                 })
                             }
                             placeholder="Enter Project Title..."
                         />
                         {errors.title && (
-                            <p className="text-red-500 text-[10px] mt-1">
+                            <p className="text-red-500 text-sm mt-1">
                                 {errors.title}
                             </p>
                         )}
                     </div>
                     <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-muted-400">
+                        <label className="text-sm font-black uppercase text-muted-400">
                             Description
                         </label>
                         <textarea
@@ -751,22 +689,22 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={summaryData.description}
+                            value={payload.description}
                             onChange={(e) =>
-                                setSummaryData({
-                                    ...summaryData,
+                                setPayload({
+                                    ...payload,
                                     description: e.target.value,
                                 })
                             }
                         />
                         {errors.description && (
-                            <p className="text-red-500 text-[10px]">
+                            <p className="text-red-500 text-sm">
                                 {errors.description}
                             </p>
                         )}
                     </div>
                     <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-muted-400">
+                        <label className="text-sm font-black uppercase text-muted-400">
                             Organizational Outcome
                         </label>
                         <textarea
@@ -775,22 +713,22 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={summaryData.org_outcome_id}
+                            value={payload.org_outcome_id}
                             onChange={(e) =>
-                                setSummaryData({
-                                    ...summaryData,
+                                setPayload({
+                                    ...payload,
                                     org_outcome_id: e.target.value,
                                 })
                             }
                         />
                         {errors.org_outcome_id && (
-                            <p className="text-red-500 text-[10px]">
+                            <p className="text-red-500 text-sm">
                                 {errors.org_outcome_id}
                             </p>
                         )}
                     </div>
                     <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-muted-400">
+                        <label className="text-sm font-black uppercase text-muted-400">
                             Purpose
                         </label>
                         <textarea
@@ -799,22 +737,22 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={summaryData.purpose}
+                            value={payload.purpose}
                             onChange={(e) =>
-                                setSummaryData({
-                                    ...summaryData,
+                                setPayload({
+                                    ...payload,
                                     purpose: e.target.value,
                                 })
                             }
                         />
                         {errors.purpose && (
-                            <p className="text-red-500 text-[10px]">
+                            <p className="text-red-500 text-sm">
                                 {errors.purpose}
                             </p>
                         )}
                     </div>
                     <div className="md:col-span-2">
-                        <label className="text-[10px] font-black uppercase text-muted-400">
+                        <label className="text-sm font-black uppercase text-muted-400">
                             Beneficiaries
                         </label>
                         <textarea
@@ -823,16 +761,16 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={summaryData.beneficiaries}
+                            value={payload.beneficiaries}
                             onChange={(e) =>
-                                setSummaryData({
-                                    ...summaryData,
+                                setPayload({
+                                    ...payload,
                                     beneficiaries: e.target.value,
                                 })
                             }
                         />
                         {errors.beneficiaries && (
-                            <p className="text-red-500 text-[10px]">
+                            <p className="text-red-500 text-sm">
                                 {errors.beneficiaries}
                             </p>
                         )}
@@ -840,7 +778,7 @@ export default function ProposalForm({
                 </div>
                 <div className="flex flex-col gap-4">
                     <div>
-                        <label className="text-[10px] font-black uppercase text-muted-400">
+                        <label className="text-sm font-black uppercase text-muted-400">
                             Priority Rank
                         </label>
                         <input
@@ -850,22 +788,22 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={summaryData.priority_rank}
+                            value={payload.priority_rank}
                             onChange={(e) =>
-                                setSummaryData({
-                                    ...summaryData,
+                                setPayload({
+                                    ...payload,
                                     priority_rank: parseInt(e.target.value),
                                 })
                             }
                         />
                         {errors.priority_rank && (
-                            <p className="text-red-500 text-[10px]">
+                            <p className="text-red-500 text-sm">
                                 {errors.priority_rank}
                             </p>
                         )}
                     </div>
                     <div className="mb-6 p-4 bg-muted/50 border-l-4 border-muted-400 rounded-r-lg shadow-sm w-full col-span-full">
-                        <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">
+                        <span className="text-sm font-bold text-muted-500 uppercase tracking-widest">
                             Implementing Agency
                         </span>
                         <h2 className="text-lg font-semibold text-muted-800">
@@ -873,7 +811,7 @@ export default function ProposalForm({
                         </h2>
                     </div>
                     <div className="space-y-4">
-                        <h3 className="text-xs font-black text-muted-400 uppercase tracking-widest mb-4">
+                        <h3 className="text-sm font-black text-muted-400 uppercase tracking-widest mb-4">
                             Project Classification
                         </h3>
 
@@ -962,19 +900,19 @@ export default function ProposalForm({
                             <tr className="bg-background border-b">
                                 <th
                                     rowSpan={2}
-                                    className="py-4 px-4 text-[10px] font-bold text-muted-700 uppercase border-r w-1/3 text-center"
+                                    className="py-4 px-4 text-sm font-bold text-muted-700 uppercase border-r w-1/3 text-center"
                                 >
                                     Approving Authorities / Supporting Documents
                                 </th>
                                 <th
                                     colSpan={3}
-                                    className="py-2 text-[10px] font-bold text-muted-700 uppercase border-b text-center"
+                                    className="py-2 text-sm font-bold text-muted-700 uppercase border-b text-center"
                                 >
                                     Reviewed/Approved
                                 </th>
                                 <th
                                     rowSpan={2}
-                                    className="py-4 px-4 text-[10px] font-bold text-muted-700 uppercase border-l text-center"
+                                    className="py-4 px-4 text-sm font-bold text-muted-700 uppercase border-l text-center"
                                 >
                                     Remarks
                                 </th>
@@ -998,7 +936,7 @@ export default function ProposalForm({
                             <tr className="bg-muted-50/50 border-b">
                                 <td
                                     colSpan={4}
-                                    className="py-2 px-4 text-[10px] font-black text-muted-600 uppercase italic"
+                                    className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic"
                                 >
                                     Approving Authorities
                                 </td>
@@ -1013,7 +951,7 @@ export default function ProposalForm({
                                                 remarks: "",
                                             })
                                         }
-                                        className="text-secondary-foreground-600 text-xs font-bold hover:underline py-2 px-4 text-right"
+                                        className="text-secondary-foreground-600 text-sm font-bold hover:underline py-2 px-4 text-right"
                                     >
                                         + ADD APPROVING AUTHORITY
                                     </button>
@@ -1038,7 +976,7 @@ export default function ProposalForm({
                             <tr className="bg-muted-50/50 border-b border-t">
                                 <td
                                     colSpan={4}
-                                    className="py-2 px-4 text-[10px] font-black text-muted-600 uppercase italic border-b border-t"
+                                    className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic border-b border-t"
                                 >
                                     Supporting Documents
                                 </td>
@@ -1053,7 +991,7 @@ export default function ProposalForm({
                                                 remarks: "",
                                             })
                                         }
-                                        className="text-secondary-foreground-600 text-xs font-bold hover:underline py-2 px-4"
+                                        className="text-secondary-foreground-600 text-sm font-bold hover:underline py-2 px-4"
                                     >
                                         + ADD SUPPORTING DOCUMENT
                                     </button>
@@ -1087,7 +1025,7 @@ export default function ProposalForm({
                             }`}
                         >
                             <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                     COSTING BY COMPONENT(S)
                                 </h3>
                                 <button
@@ -1098,7 +1036,7 @@ export default function ProposalForm({
                                             costs: [],
                                         })
                                     }
-                                    className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                                 >
                                     + ADD COMPONENT
                                 </button>
@@ -1108,19 +1046,19 @@ export default function ProposalForm({
                                 <table className="w-full text-left border-collapse">
                                     <thead>
                                         <tr className="bg-muted-50/50 border-b border-muted-100">
-                                            <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
+                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
                                                 Component Name
                                             </th>
-                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                                 PS
                                             </th>
-                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                                 MOOE
                                             </th>
-                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                                 CO
                                             </th>
-                                            <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                                 FINEX
                                             </th>
                                         </tr>
@@ -1199,7 +1137,8 @@ export default function ProposalForm({
                                                                             itemClass,
                                                                             e
                                                                                 .target
-                                                                                .value,
+                                                                                .valueAsNumber ||
+                                                                                0,
                                                                         )
                                                                     }
                                                                 />
@@ -1228,7 +1167,7 @@ export default function ProposalForm({
                                 </table>
 
                                 {payload.cost_by_components.length === 0 && (
-                                    <div className="p-8 text-center text-muted-400 text-xs italic">
+                                    <div className="p-8 text-center text-muted-400 text-sm italic">
                                         No components added. Click "+ ADD
                                         COMPONENT" to begin.
                                     </div>
@@ -1236,14 +1175,14 @@ export default function ProposalForm({
                             </div>
                         </div>
                         {errors.cost_by_components && (
-                            <p className="text-red-500 text-[10px] mt-1">
+                            <p className="text-red-500 text-sm mt-1">
                                 {errors.cost_by_components}
                             </p>
                         )}
                     </div>
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 LOCATION OF IMPLEMENTATION
                             </h3>
                             <button
@@ -1254,7 +1193,7 @@ export default function ProposalForm({
                                         costs: [],
                                     })
                                 }
-                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                             >
                                 + ADD LOCATION
                             </button>
@@ -1263,19 +1202,19 @@ export default function ProposalForm({
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
+                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
                                             Location
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center w-1/6 text-secondary-foreground-500 bg-secondary-foreground-50/30">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 text-secondary-foreground-500 bg-secondary-foreground-50/30">
                                             PS
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
                                             MOOE
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
                                             CO
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
                                             FINEX
                                         </th>
                                     </tr>
@@ -1329,7 +1268,9 @@ export default function ProposalForm({
                                                                 "local_locations",
                                                                 i,
                                                                 itemClass,
-                                                                e.target.value,
+                                                                e.target
+                                                                    .valueAsNumber ||
+                                                                    0,
                                                             )
                                                         }
                                                     />
@@ -1355,7 +1296,7 @@ export default function ProposalForm({
                             </table>
 
                             {payload.local_locations.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-xs italic">
+                                <div className="p-8 text-center text-muted-400 text-sm italic">
                                     No components added. Click "+ ADD LOCATION"
                                     to begin.
                                 </div>
@@ -1365,7 +1306,7 @@ export default function ProposalForm({
                     <div>
                         <div className="bg-white rounded-xl border shadow-sm overflow-hidden mb-6">
                             <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                     PAP Attribution by Expense Class
                                 </h3>
                                 <button
@@ -1397,7 +1338,7 @@ export default function ProposalForm({
                                             ],
                                         })
                                     }
-                                    className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                                 >
                                     + ADD PAP DESCRIPTION
                                 </button>
@@ -1409,26 +1350,26 @@ export default function ProposalForm({
                                         <tr className="bg-white border-b">
                                             <th
                                                 rowSpan={2}
-                                                className="py-4 px-4 text-[10px] font-bold text-slate-700 uppercase border-r w-1/4 text-center"
+                                                className="py-4 px-4 text-sm font-bold text-slate-700 uppercase border-r w-1/4 text-center"
                                             >
                                                 PAP (A)
                                             </th>
                                             <th
                                                 colSpan={3}
-                                                className="py-2 text-[10px] font-bold text-slate-700 uppercase border-b border-r text-center"
+                                                className="py-2 text-sm font-bold text-slate-700 uppercase border-b border-r text-center"
                                             >
                                                 FY {payload.proposal_year} (B)
                                             </th>
                                             <th
                                                 rowSpan={2}
-                                                className="py-4 px-2 text-[10px] font-bold text-slate-700 uppercase border-r text-center"
+                                                className="py-4 px-2 text-sm font-bold text-slate-700 uppercase border-r text-center"
                                             >
                                                 FY {payload.proposal_year + 1}{" "}
                                                 Tier 1 (C)
                                             </th>
                                             <th
                                                 rowSpan={2}
-                                                className="py-4 px-2 text-[10px] font-bold text-slate-700 uppercase text-center"
+                                                className="py-4 px-2 text-sm font-bold text-slate-700 uppercase text-center"
                                             >
                                                 FY {payload.proposal_year + 2}{" "}
                                                 Tier 1 (D)
@@ -1466,7 +1407,7 @@ export default function ProposalForm({
                                                     <tr className="border-chart-5/20 font-bold border-b divide-x">
                                                         <td className="py-3 px-4 flex flex-row gap-4">
                                                             <input
-                                                                className="w-full font-bold text-xs text-slate-800 outline-none bg-transparent placeholder:font-normal"
+                                                                className="w-full font-bold text-sm text-slate-800 outline-none bg-transparent placeholder:font-normal"
                                                                 placeholder="Enter PAP Description..."
                                                                 value={
                                                                     attr.description
@@ -1528,13 +1469,13 @@ export default function ProposalForm({
                                                                                                     c.tier ===
                                                                                                         1,
                                                                                             )
-                                                                                            ?.costs.find(
+                                                                                            ?.costs?.find(
                                                                                                 (
                                                                                                     e,
                                                                                                 ) =>
                                                                                                     e.expense_class ===
                                                                                                     ec,
-                                                                                            )
+                                                                                            ) // Added ?. here
                                                                                             ?.amount ||
                                                                                             0,
                                                                                     );
@@ -1550,13 +1491,13 @@ export default function ProposalForm({
                                                                                                     c.tier ===
                                                                                                         2,
                                                                                             )
-                                                                                            ?.costs.find(
+                                                                                            ?.costs?.find(
                                                                                                 (
                                                                                                     e,
                                                                                                 ) =>
                                                                                                     e.expense_class ===
                                                                                                     ec,
-                                                                                            )
+                                                                                            ) // Added ?. here
                                                                                             ?.amount ||
                                                                                             0,
                                                                                     );
@@ -1599,7 +1540,7 @@ export default function ProposalForm({
                                                                         key={
                                                                             colIdx
                                                                         }
-                                                                        className={`px-2 text-right text-xs ${col.isTotal ? "bg-slate-100/50" : ""}`}
+                                                                        className={`px-2 text-right text-sm ${col.isTotal ? "bg-slate-100/50" : ""}`}
                                                                     >
                                                                         {colTotal >
                                                                         0
@@ -1624,7 +1565,7 @@ export default function ProposalForm({
                                                             key={expClass}
                                                             className="hover:bg-slate-50/30 divide-x"
                                                         >
-                                                            <td className="py-2 px-8 text-[10px] text-slate-500 font-medium">
+                                                            <td className="py-2 px-8 text-sm text-slate-500 font-medium">
                                                                 {expClass}
                                                             </td>
                                                             {cols.map(
@@ -1647,13 +1588,13 @@ export default function ProposalForm({
                                                                                             c.tier ===
                                                                                                 1,
                                                                                     )
-                                                                                    ?.costs.find(
+                                                                                    ?.costs?.find(
                                                                                         (
                                                                                             e,
                                                                                         ) =>
                                                                                             e.expense_class ===
                                                                                             expClass,
-                                                                                    )
+                                                                                    ) // Added ?. here
                                                                                     ?.amount ||
                                                                                     0,
                                                                             );
@@ -1669,13 +1610,13 @@ export default function ProposalForm({
                                                                                             c.tier ===
                                                                                                 2,
                                                                                     )
-                                                                                    ?.costs.find(
+                                                                                    ?.costs?.find(
                                                                                         (
                                                                                             e,
                                                                                         ) =>
                                                                                             e.expense_class ===
                                                                                             expClass,
-                                                                                    )
+                                                                                    ) // Added ?. here
                                                                                     ?.amount ||
                                                                                     0,
                                                                             );
@@ -1684,7 +1625,7 @@ export default function ProposalForm({
                                                                                 key={
                                                                                     colIdx
                                                                                 }
-                                                                                className="bg-slate-50/50 text-right px-2 text-[10px] font-bold text-slate-400"
+                                                                                className="bg-slate-50/50 text-right px-2 text-sm font-bold text-slate-400"
                                                                             >
                                                                                 {(
                                                                                     t1 +
@@ -1716,15 +1657,15 @@ export default function ProposalForm({
                                                                                                 c.tier ===
                                                                                                     col.tier,
                                                                                         )
-                                                                                        ?.costs.find(
+                                                                                        ?.costs?.find(
                                                                                             (
                                                                                                 e,
                                                                                             ) =>
                                                                                                 e.expense_class ===
                                                                                                 expClass,
-                                                                                        )
-                                                                                        ?.amount ??
-                                                                                    ""
+                                                                                        ) // Added ?. here
+                                                                                        ?.amount ||
+                                                                                    0
                                                                                 }
                                                                                 onChange={(
                                                                                     e,
@@ -1775,15 +1716,20 @@ export default function ProposalForm({
                                                                                         currentCosts[
                                                                                             costIdx
                                                                                         ].amount =
-                                                                                            e.target.value;
+                                                                                            e
+                                                                                                .target
+                                                                                                .valueAsNumber ||
+                                                                                            0;
                                                                                     else
                                                                                         currentCosts.push(
                                                                                             {
                                                                                                 expense_class:
                                                                                                     expClass,
-                                                                                                amount: e
-                                                                                                    .target
-                                                                                                    .value,
+                                                                                                amount:
+                                                                                                    e
+                                                                                                        .target
+                                                                                                        .valueAsNumber ||
+                                                                                                    0,
                                                                                                 currency:
                                                                                                     "PHP",
                                                                                             },
@@ -1813,7 +1759,7 @@ export default function ProposalForm({
                                 </table>
                                 {payload.local_financial_attributions.length ===
                                     0 && (
-                                    <div className="p-8 text-center text-muted-400 text-xs italic">
+                                    <div className="p-8 text-center text-muted-400 text-sm italic">
                                         No Local Financial Attributions added.
                                         Click "+ ADD ATTRIBUTION" to begin.
                                     </div>
@@ -1821,14 +1767,14 @@ export default function ProposalForm({
                             </div>
                         </div>
                         {errors.local_financial_attributions && (
-                            <p className="text-red-500 text-[10px] mt-1">
+                            <p className="text-red-500 text-sm mt-1">
                                 {errors.local_financial_attributions}
                             </p>
                         )}
                     </div>
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 Requirements for Operating Cost of
                                 Infrastructure Project
                             </h3>
@@ -1845,7 +1791,7 @@ export default function ProposalForm({
                                         },
                                     )
                                 }
-                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                             >
                                 + ADD REQUIREMENT
                             </button>
@@ -1854,19 +1800,19 @@ export default function ProposalForm({
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-[10px] font-black text-muted-400 uppercase w-1/3">
+                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
                                             Description
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             PS
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             MOOE
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             CO
                                         </th>
-                                        <th className="py-3 px-2 text-[10px] font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
                                             FINEX
                                         </th>
                                     </tr>
@@ -1922,7 +1868,8 @@ export default function ProposalForm({
                                                                     i,
                                                                     itemClass,
                                                                     e.target
-                                                                        .value,
+                                                                        .valueAsNumber ||
+                                                                        0,
                                                                 )
                                                             }
                                                         />
@@ -1951,14 +1898,14 @@ export default function ProposalForm({
 
                             {payload.local_infrastructure_requirements
                                 .length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-xs italic">
+                                <div className="p-8 text-center text-muted-400 text-sm italic">
                                     No locations added. Click "+ ADD
                                     REQUIREMENT" to begin.
                                 </div>
                             )}
                         </div>
                         {errors.local_infrastructure_requirements && (
-                            <p className="text-red-500 text-[10px]">
+                            <p className="text-red-500 text-sm">
                                 {errors.local_infrastructure_requirements}
                             </p>
                         )}
@@ -1966,7 +1913,7 @@ export default function ProposalForm({
 
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 Local Physical Targets
                             </h3>
                             <button
@@ -1977,7 +1924,7 @@ export default function ProposalForm({
                                         target_description: "",
                                     })
                                 }
-                                className="text-xs text-secondary-foreground-600 font-bold"
+                                className="text-sm text-secondary-foreground-600 font-bold"
                             >
                                 + ADD TARGET
                             </button>
@@ -2018,7 +1965,7 @@ export default function ProposalForm({
                             </div>
                         ))}
                         {payload.local_physical_targets.length === 0 && (
-                            <div className="p-8 text-center text-muted-400 text-xs italic">
+                            <div className="p-8 text-center text-muted-400 text-sm italic">
                                 No Local Physical Targets added. Click "+ ADD
                                 TARGET" to begin.
                             </div>
@@ -2032,7 +1979,7 @@ export default function ProposalForm({
                 <div className="space-y-6">
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 12.2 Costing by Components (BP 203)
                             </h3>
                             <button
@@ -2043,7 +1990,7 @@ export default function ProposalForm({
                                         costs: [],
                                     })
                                 }
-                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                             >
                                 + ADD COMPONENT
                             </button>
@@ -2052,7 +1999,7 @@ export default function ProposalForm({
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-muted-50/50 border-b text-[10px] font-black text-muted-400 uppercase">
+                                    <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
                                         <th className="py-4 px-4 border-r w-64">
                                             Components
                                         </th>
@@ -2062,14 +2009,7 @@ export default function ProposalForm({
                                                     key={ec}
                                                     className="px-2 text-center border-r min-w-[180px]"
                                                 >
-                                                    <div className="mb-2 border-b pb-1">
-                                                        {ec}
-                                                    </div>
-                                                    <div className="grid grid-cols-3 text-[8px] gap-1 pb-1">
-                                                        <span>LP Cash</span>
-                                                        <span>LP Non-Cash</span>
-                                                        <span>GOP</span>
-                                                    </div>
+                                                    {ec}
                                                 </th>
                                             ),
                                         )}
@@ -2109,95 +2049,151 @@ export default function ProposalForm({
                                                     "CO",
                                                     "FINEX",
                                                 ].map((ec) => {
-                                                    const expense =
-                                                        (comp.costs.find(
+                                                    // HELPER: Find specific cost objects by class, category, and method
+                                                    const getCost = (
+                                                        cat: "LP" | "GOP",
+                                                        method?:
+                                                            | "cash"
+                                                            | "non_cash",
+                                                    ) =>
+                                                        comp.costs.find(
                                                             (c) =>
                                                                 c.expense_class ===
-                                                                ec,
-                                                        ) as any) || {};
+                                                                    ec &&
+                                                                c.fund_category ===
+                                                                    cat &&
+                                                                (cat !== "LP" ||
+                                                                    c.fund_method ===
+                                                                        method),
+                                                        )?.amount || "";
+
+                                                    const lpCash = Number(
+                                                        getCost("LP", "cash") ||
+                                                            0,
+                                                    );
+                                                    const lpNonCash = Number(
+                                                        getCost(
+                                                            "LP",
+                                                            "non_cash",
+                                                        ) || 0,
+                                                    );
+                                                    const gop = Number(
+                                                        getCost("GOP") || 0,
+                                                    );
                                                     const cellTotal =
-                                                        Number(
-                                                            expense.lp_cash ||
-                                                                0,
-                                                        ) +
-                                                        Number(
-                                                            expense.lp_non_cash ||
-                                                                0,
-                                                        ) +
-                                                        Number(
-                                                            expense.gop || 0,
-                                                        );
+                                                        lpCash +
+                                                        lpNonCash +
+                                                        gop;
 
                                                     return (
                                                         <td
                                                             key={ec}
-                                                            className="p-2 border-r align-top"
+                                                            className="p-3 border-r align-top min-w-[160px]"
                                                         >
-                                                            <div className="grid grid-cols-3 gap-1 mb-2">
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full text-right bg-white border border-muted-200 rounded text-[10px] p-1 outline-none focus:border-blue-400"
-                                                                    value={
-                                                                        expense.lp_cash ||
-                                                                        ""
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixChange203(
-                                                                            i,
-                                                                            ec,
-                                                                            "lp_cash",
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                />
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full text-right bg-white border border-muted-200 rounded text-[10px] p-1 outline-none focus:border-blue-400"
-                                                                    value={
-                                                                        expense.lp_non_cash ||
-                                                                        ""
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixChange203(
-                                                                            i,
-                                                                            ec,
-                                                                            "lp_non_cash",
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                />
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full text-right bg-white border border-muted-200 rounded text-[10px] p-1 outline-none focus:border-blue-400"
-                                                                    value={
-                                                                        expense.gop ||
-                                                                        ""
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixChange203(
-                                                                            i,
-                                                                            ec,
-                                                                            "gop",
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </div>
-                                                            <div className="text-[9px] text-right text-muted-400 font-bold border-t pt-1">
-                                                                Total:{" "}
-                                                                {cellTotal.toLocaleString()}
+                                                            <div className="flex flex-col gap-2">
+                                                                {/* LP Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP CASH
+                                                                    </span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        value={getCost(
+                                                                            "LP",
+                                                                            "cash",
+                                                                        )}
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                ec,
+                                                                                "LP",
+                                                                                e
+                                                                                    .target
+                                                                                    .valueAsNumber ||
+                                                                                    0,
+                                                                                "cost_by_components",
+                                                                                "cash",
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+
+                                                                {/* LP Non-Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP
+                                                                        NON-CASH
+                                                                    </span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        value={getCost(
+                                                                            "LP",
+                                                                            "non_cash",
+                                                                        )}
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                ec,
+                                                                                "LP",
+                                                                                e
+                                                                                    .target
+                                                                                    .valueAsNumber ||
+                                                                                    0,
+                                                                                "cost_by_components",
+                                                                                "non_cash",
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+
+                                                                {/* GOP Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        GOP
+                                                                    </span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        value={getCost(
+                                                                            "GOP",
+                                                                        )}
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                ec,
+                                                                                "GOP",
+                                                                                e
+                                                                                    .target
+                                                                                    .valueAsNumber ||
+                                                                                    0,
+                                                                                "cost_by_components",
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+
+                                                                {/* Sub-total for this Expense Class */}
+                                                                <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
+                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
+                                                                        Total
+                                                                    </span>
+                                                                    <span className="text-sm font-mono font-bold text-blue-600">
+                                                                        {cellTotal.toLocaleString(
+                                                                            undefined,
+                                                                            {
+                                                                                minimumFractionDigits: 2,
+                                                                            },
+                                                                        )}
+                                                                    </span>
+                                                                </div>
                                                             </div>
                                                         </td>
                                                     );
@@ -2227,7 +2223,7 @@ export default function ProposalForm({
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         {/* Header with Add Button */}
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 Foreign Financial Targets (Loan/Grant)
                             </h3>
                             <button
@@ -2246,16 +2242,13 @@ export default function ProposalForm({
 
                                     addRow("foreign_financial_targets", {
                                         year: lastYear + 1, // Auto-increment the year
-                                        total_amt: 0,
-                                        costs: {
-                                            lp_imprest: 0,
-                                            lp_direct: 0,
-                                            grant: 0,
-                                            gop_counterpart: 0,
-                                        } as any,
+                                        lp_imprest: 0,
+                                        lp_direct: 0,
+                                        grant: 0,
+                                        gop: 0,
                                     });
                                 }}
-                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                             >
                                 + ADD FINANCIAL TARGET
                             </button>
@@ -2264,7 +2257,7 @@ export default function ProposalForm({
                         <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-[10px] font-black text-muted-400 uppercase">
+                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
                                         <th
                                             rowSpan={2}
                                             className="py-4 px-4 border-r w-24"
@@ -2309,15 +2302,11 @@ export default function ProposalForm({
                                 <tbody className="divide-y divide-muted-50">
                                     {payload.foreign_financial_targets.map(
                                         (target, i) => {
-                                            const costs =
-                                                (target as any).costs || {};
                                             const rowTotal =
-                                                Number(costs.lp_imprest || 0) +
-                                                Number(costs.lp_direct || 0) +
-                                                Number(costs.grant || 0) +
-                                                Number(
-                                                    costs.gop_counterpart || 0,
-                                                );
+                                                Number(target.lp_imprest || 0) +
+                                                Number(target.lp_direct || 0) +
+                                                Number(target.grant || 0) +
+                                                Number(target.gop || 0);
 
                                             return (
                                                 <tr
@@ -2350,15 +2339,21 @@ export default function ProposalForm({
                                                             className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                             placeholder="0"
                                                             value={
-                                                                costs.lp_imprest ||
+                                                                target.lp_imprest ||
                                                                 ""
                                                             }
                                                             onChange={(e) =>
-                                                                handleForeignChange(
+                                                                updateRow(
+                                                                    "foreign_financial_targets",
                                                                     i,
-                                                                    "lp_imprest",
-                                                                    e.target
-                                                                        .value,
+                                                                    {
+                                                                        lp_imprest:
+                                                                            parseInt(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            ),
+                                                                    } as any,
                                                                 )
                                                             }
                                                         />
@@ -2369,15 +2364,21 @@ export default function ProposalForm({
                                                             className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                             placeholder="0"
                                                             value={
-                                                                costs.lp_direct ||
+                                                                target.lp_direct ||
                                                                 ""
                                                             }
                                                             onChange={(e) =>
-                                                                handleForeignChange(
+                                                                updateRow(
+                                                                    "foreign_financial_targets",
                                                                     i,
-                                                                    "lp_direct",
-                                                                    e.target
-                                                                        .value,
+                                                                    {
+                                                                        lp_direct:
+                                                                            parseInt(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            ),
+                                                                    } as any,
                                                                 )
                                                             }
                                                         />
@@ -2388,15 +2389,20 @@ export default function ProposalForm({
                                                             className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                             placeholder="0"
                                                             value={
-                                                                costs.grant ||
+                                                                target.grant ||
                                                                 ""
                                                             }
                                                             onChange={(e) =>
-                                                                handleForeignChange(
+                                                                updateRow(
+                                                                    "foreign_financial_targets",
                                                                     i,
-                                                                    "grant",
-                                                                    e.target
-                                                                        .value,
+                                                                    {
+                                                                        grant: parseInt(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        ),
+                                                                    } as any,
                                                                 )
                                                             }
                                                         />
@@ -2407,15 +2413,19 @@ export default function ProposalForm({
                                                             className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                             placeholder="0"
                                                             value={
-                                                                costs.gop_counterpart ||
-                                                                ""
+                                                                target.gop || ""
                                                             }
                                                             onChange={(e) =>
-                                                                handleForeignChange(
+                                                                updateRow(
+                                                                    "foreign_financial_targets",
                                                                     i,
-                                                                    "gop_counterpart",
-                                                                    e.target
-                                                                        .value,
+                                                                    {
+                                                                        gop: parseInt(
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                        ),
+                                                                    } as any,
                                                                 )
                                                             }
                                                         />
@@ -2444,7 +2454,7 @@ export default function ProposalForm({
                                 </tbody>
                             </table>
                             {payload.foreign_financial_targets.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-xs italic">
+                                <div className="p-8 text-center text-muted-400 text-sm italic">
                                     No foreign financial targets added. Click "+
                                     ADD FINANCIAL TARGET" to begin.
                                 </div>
@@ -2452,10 +2462,9 @@ export default function ProposalForm({
                         </div>
                     </div>
 
-                    {/* Physical Targets Section Styled similarly */}
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden">
+                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-xs font-black text-muted-500 uppercase tracking-widest">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 Foreign Physical Targets
                             </h3>
                             <button
@@ -2463,13 +2472,257 @@ export default function ProposalForm({
                                 onClick={() =>
                                     addRow("foreign_physical_targets", {
                                         name: "",
+                                        costs: [],
                                     })
                                 }
-                                className="text-secondary-foreground-600 text-xs font-bold hover:underline"
+                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                            >
+                                + ADD PHYSICAL TARGET
+                            </button>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
+                                        <th className="py-4 px-4 border-r w-64">
+                                            Components
+                                        </th>
+                                        {["PS", "MOOE", "CO", "FINEX"].map(
+                                            (ec) => (
+                                                <th
+                                                    key={ec}
+                                                    className="px-2 text-center border-r min-w-[180px]"
+                                                >
+                                                    {ec}
+                                                </th>
+                                            ),
+                                        )}
+                                        <th className="w-10"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-muted-50">
+                                    {payload.foreign_physical_targets.map(
+                                        (phys, i) => (
+                                            <tr
+                                                key={i}
+                                                className="hover:bg-muted-50/30 transition-colors group"
+                                            >
+                                                <td className="py-3 px-4 border-r align-top">
+                                                    <input
+                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                        placeholder="Enter Component Name..."
+                                                        value={phys.name}
+                                                        onChange={(e) =>
+                                                            updateRow(
+                                                                "foreign_physical_targets",
+                                                                i,
+                                                                {
+                                                                    name: e
+                                                                        .target
+                                                                        .value,
+                                                                } as any,
+                                                            )
+                                                        }
+                                                    />
+                                                </td>
+                                                {[
+                                                    "PS",
+                                                    "MOOE",
+                                                    "CO",
+                                                    "FINEX",
+                                                ].map((ec) => {
+                                                    // HELPER: Find specific cost objects by class, category, and method
+                                                    const getCost = (
+                                                        cat: "LP" | "GOP",
+                                                        method?:
+                                                            | "cash"
+                                                            | "non_cash",
+                                                    ) =>
+                                                        phys.costs.find(
+                                                            (c) =>
+                                                                c.expense_class ===
+                                                                    ec &&
+                                                                c.fund_category ===
+                                                                    cat &&
+                                                                (cat !== "LP" ||
+                                                                    c.fund_method ===
+                                                                        method),
+                                                        )?.amount || "";
+
+                                                    const lpCash = Number(
+                                                        getCost("LP", "cash") ||
+                                                            0,
+                                                    );
+                                                    const lpNonCash = Number(
+                                                        getCost(
+                                                            "LP",
+                                                            "non_cash",
+                                                        ) || 0,
+                                                    );
+                                                    const gop = Number(
+                                                        getCost("GOP") || 0,
+                                                    );
+                                                    const cellTotal =
+                                                        lpCash +
+                                                        lpNonCash +
+                                                        gop;
+
+                                                    return (
+                                                        <td
+                                                            key={ec}
+                                                            className="p-3 border-r align-top min-w-[160px]"
+                                                        >
+                                                            <div className="flex flex-col gap-2">
+                                                                {/* LP Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP CASH
+                                                                    </span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        value={getCost(
+                                                                            "LP",
+                                                                            "cash",
+                                                                        )}
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                ec,
+                                                                                "LP",
+                                                                                e
+                                                                                    .target
+                                                                                    .valueAsNumber ||
+                                                                                    0,
+                                                                                "foreign_physical_targets",
+                                                                                "cash",
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+
+                                                                {/* LP Non-Cash Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        LP
+                                                                        NON-CASH
+                                                                    </span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        value={getCost(
+                                                                            "LP",
+                                                                            "non_cash",
+                                                                        )}
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                ec,
+                                                                                "LP",
+                                                                                e
+                                                                                    .target
+                                                                                    .valueAsNumber ||
+                                                                                    0,
+                                                                                "foreign_physical_targets",
+                                                                                "non_cash",
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+
+                                                                {/* GOP Input */}
+                                                                <div className="flex items-center justify-between gap-2">
+                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
+                                                                        GOP
+                                                                    </span>
+                                                                    <input
+                                                                        type="number"
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                        value={getCost(
+                                                                            "GOP",
+                                                                        )}
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                ec,
+                                                                                "GOP",
+                                                                                e
+                                                                                    .target
+                                                                                    .valueAsNumber ||
+                                                                                    0,
+                                                                                "foreign_physical_targets",
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </div>
+
+                                                                {/* Sub-total for this Expense Class */}
+                                                                <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
+                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
+                                                                        Total
+                                                                    </span>
+                                                                    <span className="text-sm font-mono font-bold text-blue-600">
+                                                                        {cellTotal.toLocaleString(
+                                                                            undefined,
+                                                                            {
+                                                                                minimumFractionDigits: 2,
+                                                                            },
+                                                                        )}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                    );
+                                                })}
+                                                <td className="py-3 px-2 text-center align-top">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            removeRow(
+                                                                "foreign_physical_targets",
+                                                                i,
+                                                            )
+                                                        }
+                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        ✕
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ),
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Physical Targets Section Styled similarly */}
+                    {/* <div className="bg-background rounded-xl border shadow-sm overflow-hidden">
+                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                Foreign Physical Targets
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    addRow("foreign_physical_targets", {
+                                        name: "",
+                                        costs: [],
+                                    })
+                                }
+                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                             >
                                 + ADD TARGET
                             </button>
                         </div>
+                        
                         <div className="p-4 space-y-2">
                             {payload.foreign_physical_targets.map(
                                 (target, i) => (
@@ -2507,12 +2760,12 @@ export default function ProposalForm({
                                 ),
                             )}
                             {payload.foreign_physical_targets.length === 0 && (
-                                <div className="py-4 text-center text-muted-400 text-xs italic">
+                                <div className="py-4 text-center text-muted-400 text-sm italic">
                                     No physical targets added.
                                 </div>
                             )}
                         </div>
-                    </div>
+                    </div> */}
                 </div>
             )}
 

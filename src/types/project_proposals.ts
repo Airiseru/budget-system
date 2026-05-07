@@ -12,6 +12,10 @@ export interface ProjectProposalTable {
     title: string;
     proposal_year: number;
     priority_rank: number;
+    description: string;
+    org_outcome_id: string;
+    purpose: string;
+    beneficiaries: string;
     is_new: boolean;
     myca_issuance: boolean;
     is_infrastructure: boolean;
@@ -96,8 +100,10 @@ export interface ForeignFinancialTargetTable {
     id: Generated<string>;
     proposal_id: string;
     year: number;
-    total_amt: number;
-    cost_source_id: string;
+    lp_imprest: number;
+    lp_direct: number;
+    grant: number;
+    gop: number;
 }
 export type ForeignFinancialTarget = Selectable<ForeignFinancialTargetTable>;
 
@@ -131,8 +137,7 @@ export interface CostByExpenseClassTable {
     cost_source_id: string;
     expense_class: "PS" | "MOOE" | "CO" | "FE";
     fund_category: "LP" | "Grant" | "GOP" | null;
-    fund_component: "cash" | "non-cash" | null;
-    fund_method: string | null;
+    fund_method: "cash" | "non-cash" | null;
     currency: string;
     amount: number;
 }
