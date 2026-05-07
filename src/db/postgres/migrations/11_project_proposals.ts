@@ -19,7 +19,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         )
         .addColumn("expense_class", "text", (col) => col.notNull()) // PS, MOOE, CO, FINEX
         .addColumn("fund_category", "text") // LP, Grant, GOP
-        .addColumn("fund_component", "text") // cash, non-cash
         .addColumn("fund_method", "text") // direct payment, etc.
         .addColumn("currency", "text", (col) => col.notNull())
         .addColumn("amount", "decimal", (col) => col.notNull())
@@ -34,6 +33,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn("title", "text", (col) => col.notNull())
         .addColumn("proposal_year", "integer", (col) => col.notNull())
         .addColumn("priority_rank", "integer", (col) => col.notNull())
+        .addColumn("description", "text", (col) => col.notNull())
+        .addColumn("org_outcome_id", "text", (col) => col.notNull())
+        .addColumn("purpose", "text", (col) => col.notNull())
+        .addColumn("beneficiaries", "text", (col) => col.notNull())
         .addColumn("is_new", "boolean", (col) => col.notNull())
         .addColumn("myca_issuance", "boolean")
         .addColumn("is_infrastructure", "boolean", (col) => col.notNull())
@@ -193,11 +196,10 @@ export async function up(db: Kysely<unknown>): Promise<void> {
                 .notNull(),
         )
         .addColumn("year", "integer", (col) => col.notNull())
-        .addColumn("lp_imprest", "decimal", (col) => col.defaultTo(0))
-        .addColumn("lp_direct", "decimal", (col) => col.defaultTo(0))
-        .addColumn("grant_amt", "decimal", (col) => col.defaultTo(0))
-        .addColumn("gop_counterpart", "decimal", (col) => col.defaultTo(0))
-        .addColumn("total_amt", "numeric(20, 2)", (col) => col.notNull())
+        .addColumn("lp_imprest", "decimal", (col) => col.notNull())
+        .addColumn("lp_direct", "decimal", (col) => col.notNull())
+        .addColumn("grant", "decimal", (col) => col.notNull())
+        .addColumn("gop", "decimal", (col) => col.notNull())
         .execute();
 
     // Foreign Physical Targets

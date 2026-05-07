@@ -112,6 +112,8 @@ async function insertWithCostSource(
                         expense_class: c.expense_class,
                         currency: c.currency || "PHP",
                         cost_source_id: source.id,
+                        fund_category: c.fund_category || null,
+                        fund_method: c.fund_method || null,
                     })),
                 )
                 .execute();
@@ -194,11 +196,11 @@ export async function createProjectProposal(
                 type:
                     proposalData.type === "202"
                         ? proposalData.is_new
-                            ? "BP Form 202 (New)"
-                            : "BP Form 202 (Expanded)"
+                            ? "bp_local_proposal_new"
+                            : "bp_local_proposal_expanded"
                         : proposalData.is_new
-                          ? "BP Form 203 (New)"
-                          : "BP Form 203 (Expanded)",
+                          ? "bp_foreign_proposal_new"
+                          : "bp_foreign_proposal_expanded",
                 codename: `BP Form ${proposalData.type}`,
                 auth_status: authStatus,
                 fiscal_year: fiscal_year,
@@ -217,6 +219,10 @@ export async function createProjectProposal(
                 title: proposalData.title,
                 proposal_year: proposalData.proposal_year,
                 priority_rank: proposalData.priority_rank,
+                description: proposalData.description,
+                org_outcome_id: proposalData.org_outcome_id,
+                purpose: proposalData.purpose,
+                beneficiaries: proposalData.beneficiaries,
                 is_new: proposalData.is_new ?? true,
                 is_infrastructure: proposalData.is_infrastructure ?? false,
                 for_ict: proposalData.for_ict ?? false,
@@ -249,7 +255,7 @@ export async function createProjectProposal(
                 project_status: "proposed",
                 auth_status: authStatus,
                 category: proposalData.type === "202" ? "local" : "foreign",
-                identifier_code: proposalData.type === "202" ? '2' : '3',
+                identifier_code: proposalData.type === "202" ? "2" : "3",
             })
             .returning("id")
             .executeTakeFirstOrThrow();
@@ -318,14 +324,26 @@ export async function createProjectProposal(
                     .execute();
             }
         } else {
-            await insertWithCostSource(
-                trx,
-                "foreign_financial_targets",
-                form.id,
-                payload.foreign_financial_targets,
-                "for_fin",
-            );
-            // ... and other foreign tables
+            if (payload.foreign_financial_targets?.length) {
+                await trx
+                    .insertInto("foreign_financial_targets")
+                    .values(
+                        payload.foreign_financial_targets.map((p: any) => ({
+                            ...p,
+                            proposal_id: form.id,
+                        })),
+                    )
+                    .execute();
+            }
+            if (payload.foreign_physical_targets?.length) {
+                await insertWithCostSource(
+                    trx,
+                    "foreign_physical_targets",
+                    form.id,
+                    payload.foreign_physical_targets,
+                    "foreign_physical_targets",
+                );
+            }
         }
 
         return {
@@ -376,25 +394,36 @@ export async function getProjectProposalById(
 
         return await Promise.all(
             attributions.map(async (attr) => {
-                // Get all year/tier cost groups for this attribution
+                // 1. Get all year/tier cost groups for this attribution
                 const costGroups = await db
                     .selectFrom("attribution_costs")
                     .where("attribution_id", "=", attr.id)
                     .selectAll()
                     .execute();
 
-                const costsWithDetails = await Promise.all(
+                const attributionCosts = await Promise.all(
                     costGroups.map(async (group) => {
+                        // 2. Fetch the actual PS, MOOE, etc. for this specific group
                         const details = await db
                             .selectFrom("cost_by_expense_class")
                             .where("cost_source_id", "=", group.cost_source_id)
                             .selectAll()
                             .execute();
-                        return { ...group, expense_classes: details };
+
+                        // Return the group with the 'costs' key inside it
+                        return {
+                            year: group.year,
+                            tier: group.tier,
+                            costs: details,
+                        };
                     }),
                 );
 
-                return { ...attr, costs: costsWithDetails };
+                // 3. Map back to the parent object using the correct key: attribution_costs
+                return {
+                    ...attr,
+                    attribution_costs: attributionCosts,
+                };
             }),
         );
     };
@@ -417,15 +446,15 @@ export async function getProjectProposalById(
             "local_infrastructure_requirements",
         ),
         local_locations: await fetchWithCosts("local_locations"),
-        foreign_financial_targets: await fetchWithCosts(
-            "foreign_financial_targets",
-        ),
-        foreign_physical_targets: await db
-            .selectFrom("foreign_physical_targets")
+        foreign_financial_targets: await db
+            .selectFrom("foreign_financial_targets")
             .where("proposal_id", "=", id)
             .selectAll()
             .execute(),
-    } as unknown as FullProjectProposal;
+        foreign_physical_targets: await fetchWithCosts(
+            "foreign_physical_targets",
+        ),
+    } as any;
 }
 
 export async function getAllProposalSummaries(
@@ -472,7 +501,13 @@ export async function updateProjectProposal(
     payload: { payload: ProposalWritePayload; auth_status?: string },
 ) {
     return await db.transaction().execute(async (trx) => {
-        const { payload: p, auth_status } = payload;
+        const p = payload.payload;
+        const auth_status = payload.auth_status;
+
+        console.log(
+            "This is the payload received in the repository update function: ",
+            p,
+        );
 
         // 1. Update form status
         if (auth_status) {
@@ -484,16 +519,17 @@ export async function updateProjectProposal(
         }
 
         // 2. Wipe existing related data (Cascading Cleanup)
-        // We delete from cost_sources which cascades (if set in DB) or we manually delete relations
         await sql`
-            DELETE FROM cost_sources 
-            WHERE id IN (
-                SELECT cost_source_id FROM cost_by_components WHERE proposal_id = ${proposalId}
-                UNION SELECT cost_source_id FROM attribution_costs 
-                    WHERE attribution_id IN (SELECT id FROM local_financial_attributions WHERE proposal_id = ${proposalId})
-                UNION SELECT cost_source_id FROM local_infrastructure_requirements WHERE proposal_id = ${proposalId}
-                UNION SELECT cost_source_id FROM local_locations WHERE proposal_id = ${proposalId}
-                UNION SELECT cost_source_id FROM foreign_financial_targets WHERE proposal_id = ${proposalId}
+        DELETE FROM cost_sources 
+        WHERE id IN (
+            SELECT cbc.cost_source_id FROM cost_by_components AS cbc WHERE cbc.proposal_id = ${proposalId}
+                UNION 
+                SELECT ac.cost_source_id FROM attribution_costs AS ac
+                    WHERE ac.attribution_id IN (SELECT lfa.id FROM local_financial_attributions AS lfa WHERE lfa.proposal_id = ${proposalId})
+                UNION 
+                SELECT lir.cost_source_id FROM local_infrastructure_requirements AS lir WHERE lir.proposal_id = ${proposalId}
+                UNION 
+                SELECT ll.cost_source_id FROM local_locations AS ll WHERE ll.proposal_id = ${proposalId}
             )
         `.execute(trx);
 
@@ -507,6 +543,7 @@ export async function updateProjectProposal(
             "pap_prerequisites",
             "local_physical_targets",
             "foreign_physical_targets",
+            "foreign_financial_targets",
         ] as const;
         for (const table of nonCostTables) {
             await trx
@@ -521,6 +558,12 @@ export async function updateProjectProposal(
             .set({
                 proposal_year: p.proposal_year,
                 priority_rank: p.priority_rank,
+                description: p.description,
+                org_outcome_id: p.org_outcome_id,
+                purpose: p.purpose,
+                beneficiaries: p.beneficiaries,
+                myca_issuance: p.myca_issuance,
+                total_proposal_currency: p.total_proposal_currency,
                 is_new: p.is_new,
                 is_infrastructure: p.is_infrastructure,
                 for_ict: p.for_ict,
@@ -584,23 +627,26 @@ export async function updateProjectProposal(
                     .execute();
             }
         } else {
-            await insertWithCostSource(
-                trx,
-                "foreign_financial_targets",
-                proposalId,
-                p.foreign_financial_targets,
-                "for_fin",
-            );
-            if (p.foreign_physical_targets?.length) {
+            if (p.foreign_financial_targets?.length) {
                 await trx
-                    .insertInto("foreign_physical_targets")
+                    .insertInto("foreign_financial_targets")
                     .values(
-                        p.foreign_physical_targets.map((i) => ({
+                        p.foreign_financial_targets.map((i: any) => ({
                             ...i,
                             proposal_id: proposalId,
                         })),
                     )
                     .execute();
+            }
+
+            if (p.foreign_physical_targets?.length) {
+                await insertWithCostSource(
+                    trx,
+                    "foreign_physical_targets",
+                    proposalId,
+                    p.foreign_physical_targets,
+                    "foreign_physical_targets",
+                );
             }
         }
 
