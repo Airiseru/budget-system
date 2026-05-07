@@ -20,7 +20,8 @@ import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '@/src/lib/constants'
 import type { BudgetCycle } from '@/src/types/budget_settings'
 import type { ItemCatalogScope } from '@/src/types/line_items'
 import type { AllocationWorkflowLogEntry, BudgetAllocationListItem } from '@/src/db/postgres/repositories/budgetAllocationRepository'
-import { ChevronDown, ChevronUp, Pencil } from 'lucide-react'
+import { Pencil } from 'lucide-react'
+import CollapsibleRemarksSection from '@/components/ui/remarks/CollapsibleRemarksSection'
 
 type EntityOption = {
     id: string
@@ -98,7 +99,6 @@ export function TierOneAllocationManager({
     const [workflowStage, setWorkflowStage] = useState<BUDGET_PREP_WORKFLOW_STAGES_TYPE>(
         ((state?.values?.workflow_stage ?? 'dbm_review') as BUDGET_PREP_WORKFLOW_STAGES_TYPE)
     )
-    const [remarksOpen, setRemarksOpen] = useState(false)
 
     const departments = useMemo(
         () => entities
@@ -468,53 +468,33 @@ export function TierOneAllocationManager({
 
                         {mode === 'edit' && initialValues?.id && (
                             <div className="border-b border-border px-6 py-5 space-y-4">
-                                <div>
-                                    <h3 className="text-base font-semibold text-secondary-foreground">Previous Remarks</h3>
-                                    <p className="text-sm text-muted-foreground">
-                                        Remarks submitted from the edit form are stored under the workflow stage selected above.
-                                    </p>
-                                </div>
-
-                                <div className="space-y-2 border border-border rounded-lg max-h-96 overflow-y-auto">
-                                    <button
-                                        type="button"
-                                        onClick={() => setRemarksOpen((open) => !open)}
-                                        className={`flex w-full items-center justify-between bg-background px-4 py-3 text-left mb-0 ${remarksOpen ? 'border-b' : ''}`}
-                                    >
-                                        <span className="text-sm font-semibold text-secondary-foreground">
-                                            All Remarks ({remarks.length})
-                                        </span>
-                                        {remarksOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                    </button>
-
-                                    {remarksOpen && (
-                                        <div>
-                                            {remarks.length === 0 ? (
-                                                <p className="text-sm text-muted-foreground">No remarks logged yet.</p>
-                                            ) : remarks.map((remark, index) => (
-                                                <div
-                                                    key={remark.id}
-                                                    className={`${index === remarks.length - 1 ? '' : 'border-b'} bg-accent/20 p-4`}
-                                                >
-                                                    <div className="flex items-center justify-between gap-4">
-                                                        <div className="text-sm font-semibold text-secondary-foreground">
-                                                            {remark.performed_by_name || remark.performed_by}
-                                                        </div>
-                                                        <div className="text-xs uppercase tracking-wide text-muted-foreground">
-                                                            {REMARK_STAGE_OPTIONS.find((option) => option.value === remark.workflow_stage)?.label}
-                                                        </div>
-                                                    </div>
-                                                    <p className="mt-2 whitespace-pre-wrap text-sm text-secondary-foreground">{remark.remarks}</p>
-                                                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
-                                                        <span>{new Date(remark.created_at).toLocaleString()}</span>
-                                                        <span>Before: {remark.amt_before == null ? '—' : Number(remark.amt_before).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                        <span>After: {remark.amt_after == null ? '—' : Number(remark.amt_after).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                                    </div>
+                                <CollapsibleRemarksSection
+                                    title="Previous Remarks"
+                                    description="Remarks submitted from the edit form are stored under the workflow stage selected above."
+                                    items={remarks}
+                                    maxHeightClassName="max-h-96 overflow-y-auto"
+                                    renderItem={(remark, index) => (
+                                        <div
+                                            key={remark.id}
+                                            className={`${index === remarks.length - 1 ? '' : 'border-b'} bg-accent/20 p-4`}
+                                        >
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="text-sm font-semibold text-secondary-foreground">
+                                                    {remark.performed_by_name || remark.performed_by}
                                                 </div>
-                                            ))}
+                                                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                    {REMARK_STAGE_OPTIONS.find((option) => option.value === remark.workflow_stage)?.label}
+                                                </div>
+                                            </div>
+                                            <p className="mt-2 whitespace-pre-wrap text-sm text-secondary-foreground">{remark.remarks}</p>
+                                            <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                                <span>{new Date(remark.created_at).toLocaleString()}</span>
+                                                <span>Before: {remark.amt_before == null ? '—' : Number(remark.amt_before).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                <span>After: {remark.amt_after == null ? '—' : Number(remark.amt_after).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </div>
                                         </div>
                                     )}
-                                </div>
+                                />
                             </div>
                         )}
 

@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { SignSection } from "@/components/ui/digital-signatures/SignSection";
 import Link from "next/link";
-import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
+import { Pencil } from "lucide-react";
 import FormDeleteButton from "../FormDeleteButton";
 import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
+import CollapsibleRemarksSection from "@/components/ui/remarks/CollapsibleRemarksSection";
 
 type RetireeRowView = {
     id: string
@@ -123,7 +123,6 @@ export default function RetireeView({
     updateAuthStatus,
     deleteFormAction,
 }: RetireeViewProps) {
-    const [overrideHistoryOpen, setOverrideHistoryOpen] = useState(false)
     const formData = {
         id: data.id,
         fiscal_year: data.fiscal_year,
@@ -248,51 +247,34 @@ export default function RetireeView({
             )}
 
             {overrideHistory.length > 0 && (
-                <section className="rounded-xl border border-border bg-background overflow-hidden">
-                    <button
-                        type="button"
-                        onClick={() => setOverrideHistoryOpen((open) => !open)}
-                        className={`flex w-full items-center justify-between px-5 py-4 text-left ${overrideHistoryOpen ? "border-b border-border" : ""}`}
-                    >
-                        <div>
-                            <h3 className="text-base font-semibold text-secondary-foreground">
-                                DBM Override Remarks
-                            </h3>
-                            <p className="text-sm text-muted-foreground">
-                                Review the reasons recorded for each DBM overwrite on this form family.
-                            </p>
-                        </div>
-                        {overrideHistoryOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                    </button>
-
-                    {overrideHistoryOpen && (
-                        <div>
-                            {overrideHistory.map((entry, index) => (
-                                <div
-                                    key={entry.id}
-                                    className={`bg-card px-5 py-4 ${index === overrideHistory.length - 1 ? "" : "border-b border-border"}`}
-                                >
-                                    <div className="flex flex-wrap items-center justify-between gap-3">
-                                        <div className="text-sm font-semibold text-secondary-foreground">
-                                            {entry.overridden_by_name || "DBM"}
-                                        </div>
-                                        <div className="text-xs text-muted-foreground">
-                                            {new Date(entry.created_at).toLocaleString()}
-                                        </div>
-                                    </div>
-                                    <p className="mt-2 whitespace-pre-wrap text-sm">
-                                        {entry.justification_remark}
-                                    </p>
-                                    {entry.legal_directive_ref && (
-                                        <p className="mt-2 text-xs text-muted-foreground">
-                                            Reference: {entry.legal_directive_ref}
-                                        </p>
-                                    )}
+                <CollapsibleRemarksSection
+                    title="DBM Override Remarks"
+                    description="Review the reasons recorded for each DBM overwrite on this form family."
+                    items={overrideHistory}
+                    renderItem={(entry, index) => (
+                        <div
+                            key={entry.id}
+                            className={`bg-card px-5 py-4 ${index === overrideHistory.length - 1 ? "" : "border-b border-border"}`}
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-sm font-semibold text-secondary-foreground">
+                                    {entry.overridden_by_name || "DBM"}
                                 </div>
-                            ))}
+                                <div className="text-xs text-muted-foreground">
+                                    {new Date(entry.created_at).toLocaleString()}
+                                </div>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm">
+                                {entry.justification_remark}
+                            </p>
+                            {entry.legal_directive_ref && (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    Reference: {entry.legal_directive_ref}
+                                </p>
+                            )}
                         </div>
                     )}
-                </section>
+                />
             )}
 
             {/* Metadata Grid */}
