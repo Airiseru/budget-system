@@ -46,6 +46,8 @@ export default async function RetireesPage() {
                 const versionFamily = await FormRepo.getFormVersionFamily(list.id)
                 const displayStatus = versionFamily.forms.some((form) => form.auth_status === 'approved')
                     ? 'approved'
+                    : versionFamily.forms.some((form) => form.auth_status === 'rejected')
+                    ? 'rejected'
                     : list.auth_status
 
                 return {

@@ -7,6 +7,7 @@ import {
     createFormRepository,
     createRetireeRepository,
     createSalaryRepository,
+    createEntityRepository,
 } from "@/src/db/factory";
 import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 import { notFound, redirect } from "next/navigation";
@@ -18,6 +19,7 @@ const RetireeRepo = createRetireeRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const SalaryRepository = createSalaryRepository("postgres");
+const EntityRepository = createEntityRepository("postgres");
 
 export default async function EditRetireePage({
     params,
@@ -78,6 +80,9 @@ export default async function EditRetireePage({
     if (!schedule) return <p>There is no salary schedule for this year.</p>;
 
     const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade;
+    const ownerEntityName = await EntityRepository.getFullEntityNameById(
+        retireeData.entity_id,
+    );
 
     return (
         <main className="m-4">
@@ -95,8 +100,8 @@ export default async function EditRetireePage({
                 highestSG={highestSG}
                 retireeData={retireeData}
                 userId={session.user.id}
-                entityId={session.user.entity_id}
-                entityName={session.user_entity.entity_name || "Unknown Agency"}
+                entityId={retireeData.entity_id}
+                entityName={ownerEntityName || "Unknown Agency"}
                 isDBM={isDbmEvaluator && isPendingDbm}
             />
         </main>

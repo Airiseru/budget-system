@@ -53,6 +53,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
   const [isLoading, setIsLoading] = useState(false);
   const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel' | 'pending_dbm'>('draft');
   const [error, setError] = useState<string | null>(null);
+  const [overrideRemarks, setOverrideRemarks] = useState('');
 
   const isEditing = !!retireeData
 
@@ -141,7 +142,8 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
       },
       retirees: validation.data.retirees,
       auth_status: submitAction,
-      isDBM
+      isDBM,
+      overrideRemarks: isDBM ? overrideRemarks : undefined,
     };
 
     const endpoint = isEditing ? `/api/retirees/${retireeData.id}` : '/api/retirees';
@@ -210,6 +212,24 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
       </h1>
       <form onSubmit={handleSubmit} className="w-full space-y-4">
         {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
+
+        {isDBM && (
+          <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+            <label htmlFor="override-remarks" className="text-sm font-bold text-secondary-foreground">
+              DBM Override Remarks
+            </label>
+            <textarea
+              id="override-remarks"
+              value={overrideRemarks}
+              onChange={(event) => setOverrideRemarks(event.target.value)}
+              className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+              placeholder="State why this DBM overwrite or change is being made."
+            />
+            <p className="text-xs text-muted-foreground">
+              Required for DBM overrides and recorded in the administrative override history.
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-between items-center bg-muted/50 p-3 border rounded-t-lg">
           <div className="flex gap-2">

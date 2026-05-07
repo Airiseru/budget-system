@@ -50,6 +50,7 @@ import {
     AllocationWorkflowLogTable,
 } from "./line_items"
 import { BudgetCycleTable } from "./budget_settings"
+import { AdministrativeOverrideTable } from "./administrative_overrides"
 
 export interface Database {
     // users
@@ -70,6 +71,7 @@ export interface Database {
     // audit
     audit_logs: AuditLogTable
     merkle_roots: MerkleRootTable
+    administrative_overrides: AdministrativeOverrideTable
 
     // paps
     paps: PapTable

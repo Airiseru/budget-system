@@ -163,6 +163,7 @@ export default function StaffForm({
     const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const [overrideRemarks, setOverrideRemarks] = useState("");
     const [submitAction, setSubmitAction] = useState<
         "draft" | "pending_personnel" | "pending_dbm"
     >("draft");
@@ -321,6 +322,7 @@ export default function StaffForm({
             positions: result.data.positions,
             auth_status: submitAction,
             isDBM,
+            overrideRemarks: isDBM ? overrideRemarks : undefined,
         };
 
         const endpoint = isEditing ? `/api/staff/${staff.id}` : "/api/staff";
@@ -794,6 +796,24 @@ export default function StaffForm({
                     {renderCategorizedGroups()}
                 </div>
 
+                {isDBM && (
+                    <div className="bg-card p-6 rounded-xl border shadow-sm space-y-2">
+                        <label htmlFor="override-remarks" className="block text-sm font-semibold">
+                            DBM Override Remarks
+                        </label>
+                        <textarea
+                            id="override-remarks"
+                            value={overrideRemarks}
+                            onChange={(e) => setOverrideRemarks(e.target.value)}
+                            className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                            placeholder="State why this DBM overwrite or change is being made."
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Required for DBM overrides and recorded in the administrative override history.
+                        </p>
+                    </div>
+                )}
+
                 {/* footer actions */}
                 <div className="flex justify-between items-center bg-muted/50 p-4 rounded-lg border">
                     <button
@@ -812,7 +832,7 @@ export default function StaffForm({
                             className="px-6 py-2 border bg-white text-secondary-foreground rounded-md hover:text-white hover:bg-secondary-foreground transition-all font-medium text-sm"
                             disabled={isLoading}
                         >
-                            Save Draft
+                            {isDBM ? "Overwrite Form" : "Save Draft"}
                         </button>
                         <button
                             type="submit"
@@ -824,7 +844,11 @@ export default function StaffForm({
                             className="px-6 py-2 bg-accent-foreground text-white rounded-md hover:bg-accent-foreground/50 hover:text-black transition-all font-medium text-sm"
                             disabled={isLoading}
                         >
-                            {isLoading ? "Submitting..." : "Submit Form"}
+                            {isLoading
+                                ? "Submitting..."
+                                : isDBM
+                                  ? "Finalize Overwrite"
+                                  : "Submit Form"}
                         </button>
                     </div>
                 </div>

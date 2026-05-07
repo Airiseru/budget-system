@@ -1,10 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { SignSection } from "@/components/ui/digital-signatures/SignSection";
 import { Badge } from "@/components/ui/badge";
 import FormDeleteButton from "@/components/ui/FormDeleteButton";
 import Link from "next/link";
-import { Pencil } from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow";
 import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants"
@@ -80,6 +81,15 @@ interface StaffingViewProps {
     };
     updateAuthStatus: () => Promise<void>
     deleteFormAction: (id: string) => Promise<void>
+    ownerEntityName: string
+    overrideHistory: {
+        id: string
+        target_record_id: string
+        overridden_by_name: string | null
+        justification_remark: string
+        legal_directive_ref: string | null
+        created_at: Date
+    }[]
 }
 
 export default function StaffingView({
@@ -92,11 +102,14 @@ export default function StaffingView({
     workflowData,
     updateAuthStatus,
     deleteFormAction,
+    ownerEntityName,
+    overrideHistory,
     isDbmEvaluator = false,
     budgetPrepClosedForEntityActions = false,
     allowClosedCycleActions = false
 }: StaffingViewProps) {
     const { userCanSign, currentSignatoryRole, existingSignature, allSignatures, pastSignatures, latestRejection } = workflowData;
+    const [overrideHistoryOpen, setOverrideHistoryOpen] = useState(false)
     const formData = { id: summary.id, fiscal_year: summary.fiscal_year, form_id: summary.id };
     const familyHasApprovedVersion = versionTabs.some(version => version.auth_status === 'approved')
     const canEditCurrentVersion =
@@ -273,6 +286,9 @@ export default function StaffingView({
                     >
                         {STATUS_LABELS[summary.auth_status ?? ""] ?? summary.auth_status}
                     </Badge>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                        Owned by <span className="font-semibold text-secondary-foreground">{ownerEntityName}</span>
+                    </p>
                 </div>
             </div>
 
@@ -308,6 +324,52 @@ export default function StaffingView({
                             )
                         })}
                     </div>
+                </section>
+            )}
+
+            {overrideHistory.length > 0 && (
+                <section className="rounded-xl border border-border bg-background overflow-hidden">
+                    <button
+                        type="button"
+                        onClick={() => setOverrideHistoryOpen((open) => !open)}
+                        className={`flex w-full items-center justify-between px-5 py-4 text-left ${overrideHistoryOpen ? 'border-b border-border' : ''}`}
+                    >
+                        <div>
+                            <h3 className="text-base font-semibold text-secondary-foreground">DBM Override Remarks</h3>
+                            <p className="text-sm text-muted-foreground">
+                                Review the reasons recorded for each DBM overwrite on this form family.
+                            </p>
+                        </div>
+                        {overrideHistoryOpen ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                    </button>
+
+                    {overrideHistoryOpen && (
+                        <div>
+                            {overrideHistory.map((entry, index) => (
+                                <div
+                                    key={entry.id}
+                                    className={`bg-card px-5 py-4 ${index === overrideHistory.length - 1 ? '' : 'border-b border-border'}`}
+                                >
+                                    <div className="flex flex-wrap items-center justify-between gap-3">
+                                        <div className="text-sm font-semibold text-secondary-foreground">
+                                            {entry.overridden_by_name || 'DBM'}
+                                        </div>
+                                        <div className="text-xs text-muted-foreground">
+                                            {new Date(entry.created_at).toLocaleString()}
+                                        </div>
+                                    </div>
+                                    <p className="mt-2 whitespace-pre-wrap text-sm">
+                                        {entry.justification_remark}
+                                    </p>
+                                    {entry.legal_directive_ref && (
+                                        <p className="mt-2 text-xs text-muted-foreground">
+                                            Reference: {entry.legal_directive_ref}
+                                        </p>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </section>
             )}
 
