@@ -44,8 +44,8 @@ export interface BudgetAllocationTable {
     dbm_rec_amt: number
     nep_amt: number
     gaa_amt: number
-    valid_from: Date
-    valid_until: Date
+    valid_from: Date | null
+    valid_until: Date | null
     auth_status: 'draft' | 'proposed' | 'dbm_approved' | 'gaa_approved' | 'rejected'
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>

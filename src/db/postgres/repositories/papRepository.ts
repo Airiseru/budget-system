@@ -23,6 +23,13 @@ export type PapEntityOption = {
     entity_type: string
 }
 
+export type PapOption = {
+    id: string
+    title: string
+    entity_id: string | null
+    entity_name: string | null
+}
+
 export type PapRelatedForm = {
     id: string
     type: string
@@ -176,6 +183,18 @@ export async function getPapEntityOptions(): Promise<PapEntityOption[]> {
             abbr: row.abbr,
             entity_type: row.entity_type,
         }))
+}
+
+export async function getPapOptions(): Promise<PapOption[]> {
+    return await createPapBaseQuery()
+        .select([
+            'paps.id as id',
+            'paps.title as title',
+            'paps.entity_id as entity_id',
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+        ])
+        .orderBy('paps.title', 'asc')
+        .execute()
 }
 
 export async function getPap(criteria: Partial<Pap>): Promise<Pap[]> {

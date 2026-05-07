@@ -19,14 +19,14 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         
         // Money allocations
         .addColumn('currency', 'varchar', (col) => col.defaultTo('PHP').notNull())
-        .addColumn('proposed_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0)) 
-        .addColumn('dbm_rec_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))  
+        .addColumn('proposed_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
+        .addColumn('dbm_rec_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
         .addColumn('nep_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
         .addColumn('gaa_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
         
         // Validity dates
-        .addColumn('valid_from', 'date', (col) => col.notNull())
-        .addColumn('valid_until', 'date', (col) => col.notNull())
+        .addColumn('valid_from', 'date')
+        .addColumn('valid_until', 'date')
 
         .addColumn('auth_status', 'varchar', (col) => col.notNull().defaultTo('draft')) // draft, proposed, dbm_approved, gaa_approved, rejected
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))

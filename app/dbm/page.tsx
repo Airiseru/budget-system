@@ -35,6 +35,10 @@ export default async function HomePage() {
                     label='Manage PAPs'
                 />
                 <GeneralButton
+                    url='/dbm/tier-one'
+                    label='Tier One Allocations'
+                />
+                <GeneralButton
                     url='/dbm/entities'
                     label='Manage Entities'
                 />

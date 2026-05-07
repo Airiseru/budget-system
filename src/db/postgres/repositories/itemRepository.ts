@@ -12,6 +12,8 @@ export type ItemCatalogRecord = ItemCatalogListItem & {
     entity_type: string | null
 }
 
+export type ItemCatalogOption = ItemCatalogListItem
+
 export type ItemCatalogFilters = {
     scope?: ItemCatalogScope
     entity_id?: string
@@ -78,6 +80,18 @@ export async function getItemCatalogById(id: string) {
         ])
         .where('item_catalog.id', '=', id)
         .executeTakeFirst() as ItemCatalogRecord | undefined
+}
+
+export async function listAllItemCatalog() {
+    return await itemCatalogBaseQuery()
+        .selectAll('item_catalog')
+        .select([
+            'uacs_object_codes.description as object_code_description',
+            'paps.title as pap_title',
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+        ])
+        .orderBy('item_catalog.name', 'asc')
+        .execute() as ItemCatalogOption[]
 }
 
 export async function createItemCatalog(item: NewItemCatalog) {
