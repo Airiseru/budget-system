@@ -264,7 +264,7 @@ export default function RetireeView({
             <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left border-collapse">
-                        <thead className="bg-accent-foreground text-white font-medium border-b text-[10px] uppercase">
+                        <thead className="bg-accent-foreground text-white font-medium border-b text-s uppercase">
                             <tr>
                                 <th className="px-3 py-3 border-r w-10 text-center">
                                     #
@@ -281,7 +281,7 @@ export default function RetireeView({
                                 <th className="px-3 py-3 border-r text-center">
                                     Service / Gratuity
                                 </th>
-                                <th className="px-3 py-3 border-r">
+                                <th className="px-3 py-3 border-r text-center">
                                     Dates (DOB/Eff)
                                 </th>
                                 <th className="px-3 py-3 border-r text-right">
@@ -302,7 +302,7 @@ export default function RetireeView({
                                         key={retiree.id}
                                         className="hover:bg-slate-50/50"
                                     >
-                                        <td className="px-3 py-3 border-r text-center text-slate-400 font-mono text-xs">
+                                        <td className="px-3 py-3 border-r text-center text-slate-400 font-mono text-s">
                                             {index + 1}
                                         </td>
 
@@ -319,7 +319,7 @@ export default function RetireeView({
 
                                         {/* Column 2: Law & GSIS */}
                                         <td className="px-3 py-3 border-r text-center space-y-1">
-                                            <div className="text-xs font-semibold">
+                                            <div className="text-s font-semibold">
                                                 {retiree.retirement_law}
                                             </div>
                                             <Badge
@@ -328,7 +328,7 @@ export default function RetireeView({
                                                         ? "secondary"
                                                         : "outline"
                                                 }
-                                                className="text-[9px] bg-gray-200 text-accent-foreground"
+                                                className="text-xs bg-gray-200 text-accent-foreground"
                                             >
                                                 {retiree.is_gsis_member
                                                     ? "GSIS MEMBER"
@@ -336,50 +336,41 @@ export default function RetireeView({
                                             </Badge>
                                         </td>
 
-                                        {/* Column 2: Law & GSIS */}
+                                        {/* Column 3: Leave Credits */}
                                         <td className="px-3 py-3 border-r text-center space-y-1">
-                                            <div className="text-xs font-semibold">
-                                                {retiree.retirement_law}
+                                            <div className="text-s">
+                                                {retiree.number_vacation_leave} VLs
                                             </div>
-                                            <Badge
-                                                variant={
-                                                    retiree.is_gsis_member
-                                                        ? "secondary"
-                                                        : "outline"
-                                                }
-                                                className="text-[9px]"
-                                            >
-                                                {retiree.is_gsis_member
-                                                    ? "GSIS MEMBER"
-                                                    : "NON-GSIS"}
-                                            </Badge>
+                                            <div className="text-s">
+                                                {retiree.number_sick_leave} SLs
+                                            </div>
                                         </td>
 
                                         {/* Column 4: Service & Gratuity */}
                                         <td className="px-3 py-3 border-r text-center">
-                                            <div className="text-xs font-semibold">
+                                            <div className="text-s">
                                                 {retiree.total_credible_service ??
                                                     "0"}{" "}
                                                 Years
                                             </div>
-                                            <div className="text-[10px] text-slate-500">
+                                            <div className="text-xs text-slate-500">
                                                 {retiree.number_gratuity_months ??
                                                     "0"}{" "}
                                                 Mos. Gratuity
                                             </div>
                                         </td>
 
-                                        {/* Column 4: Service & Gratuity */}
+                                        {/* Column 5: DOB & EFF */}
                                         <td className="px-3 py-3 border-r text-center">
-                                            <div className="text-xs font-semibold">
-                                                {retiree.total_credible_service ??
-                                                    "0"}{" "}
-                                                Yrs
+                                            <div className="text-s">
+                                                DOB: {new Date(
+                                                    retiree.date_of_birth,
+                                                ).toLocaleDateString()}
                                             </div>
-                                            <div className="text-[10px] text-slate-500">
-                                                {retiree.number_gratuity_months ??
-                                                    "0"}{" "}
-                                                Mos. Gratuity
+                                            <div className="text-s">
+                                                EFF: {new Date(
+                                                    retiree.retirement_effectivity,
+                                                ).toLocaleDateString()}
                                             </div>
                                         </td>
 
@@ -420,7 +411,7 @@ export default function RetireeView({
                             <tr>
                                 <td
                                     colSpan={8}
-                                    className="px-4 py-3 text-right uppercase text-[10px]"
+                                    className="px-4 py-3 text-right uppercase text-s"
                                 >
                                     Total Monthly Requirement
                                 </td>
