@@ -953,6 +953,138 @@ export default function ProposalView({
                     </div>
 
                     <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
+                        {/* Header with Add Button */}
+                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                Foreign Financial Targets (Loan/Grant)
+                            </h3>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    // Find the highest year currently in the targets,
+                                    // default to proposal_year - 1 so the first entry becomes proposal_year
+                                    const lastYear =
+                                        payload.foreign_financial_targets.reduce(
+                                            (max, item) =>
+                                                item.year > max
+                                                    ? item.year
+                                                    : max,
+                                            payload.proposal_year - 1,
+                                        );
+
+                                    addRow("foreign_financial_targets", {
+                                        year: lastYear + 1, // Auto-increment the year
+                                        lp_imprest: 0,
+                                        lp_direct: 0,
+                                        grant: 0,
+                                        gop: 0,
+                                    });
+                                }}
+                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                            >
+                                + ADD FINANCIAL TARGET
+                            </button>
+                        </div>
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-4 border-r w-24"
+                                        >
+                                            Year
+                                        </th>
+                                        <th
+                                            colSpan={2}
+                                            className="py-2 text-center border-b border-r"
+                                        >
+                                            LP (Loan Proceeds)
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-2 text-center border-r"
+                                        >
+                                            Grant
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-2 text-center border-r"
+                                        >
+                                            GOP
+                                        </th>
+                                        <th
+                                            rowSpan={2}
+                                            className="py-4 px-2 text-center bg-muted-100/50"
+                                        >
+                                            Total
+                                        </th>
+                                        <th rowSpan={2} className="w-10"></th>
+                                    </tr>
+                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-[9px] font-black text-muted-400 uppercase">
+                                        <th className="py-2 px-2 text-center border-r">
+                                            Imprest/Special
+                                        </th>
+                                        <th className="py-2 px-2 text-center border-r">
+                                            Direct Payment
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-muted-50">
+                                    {data.foreign_financial_targets.map(
+                                        (target: any, i: any) => {
+                                            const rowTotal =
+                                                Number(target.lp_imprest || 0) +
+                                                Number(target.lp_direct || 0) +
+                                                Number(target.grant || 0) +
+                                                Number(target.gop || 0);
+
+                                            return (
+                                                <tr
+                                                    key={i}
+                                                    className="hover:bg-muted-50/30 transition-colors group"
+                                                >
+                                                    <td className="py-3 px-4 border-r">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {target.year || ""}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {target.lp_imprest ||
+                                                                ""}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {target.lp_direct ||
+                                                                ""}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {target.grant || ""}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-2 border-r">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {target.gop || ""}
+                                                        </div>
+                                                    </td>
+                                                    <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                        {rowTotal.toLocaleString()}
+                                                    </td>
+                                                </tr>
+                                            );
+                                        },
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                         <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
                             <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 Foreign Physical Targets
