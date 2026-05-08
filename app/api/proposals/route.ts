@@ -9,7 +9,7 @@ import {
 } from "@/src/lib/budget-cycle";
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
-type PgError = Error & { code?: string; detail?: string }
+type PgError = Error & { code?: string; detail?: string };
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +41,6 @@ export async function POST(req: Request) {
 
         const result = await repo.createProjectProposal(
             entityId,
-            payload, // Pass the flattened object here
             payload, // Keep this if your repo needs the raw arrays for child tables
             auth_status ?? "draft",
             payload.proposal_year, // this is practically the fiscal year
@@ -78,7 +77,7 @@ export async function POST(req: Request) {
         return NextResponse.json(result);
     } catch (error: unknown) {
         console.error("POST PROJECT ERROR:", error);
-        const pgError = error as PgError
+        const pgError = error as PgError;
 
         // If it's a unique constraint violation, send a specific response
         if (pgError.code === "23505") {

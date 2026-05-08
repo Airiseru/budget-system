@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalSchema } from "@/src/lib/validations/proposal.schema";
-import { ForeignFinancialTarget } from "@/src/types/project_proposals";
+import { AlertCircle } from "lucide-react";
 
 interface AttributionYearTier {
     year: number;
@@ -354,6 +354,50 @@ export default function ProposalForm({
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
+    const getErrorsForPath = (pathPrefix: string) => {
+        return Object.entries(errors)
+            .filter(([key]) => key.startsWith(pathPrefix))
+            .map(([_, message]) => message);
+    };
+
+    const getFriendlyErrorMessage = (path: string, message: string) => {
+        // Mapping of technical keys to friendly display names
+        const tableNames: Record<string, string> = {
+            cost_by_components: "Component",
+            foreign_physical_targets: "Physical Target",
+            foreign_financial_targets: "Financial Target",
+            pap_prerequisites: "Prerequisite",
+            local_locations: "Location",
+            local_financial_attributions: "Financial Attribution",
+            local_infrastructure_requirements: "Infrastructure Requirement",
+        };
+
+        // Helper to capitalize words
+        const toTitleCase = (str: string) =>
+            str.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+
+        const ordinal = (n: number) => {
+            const s = ["th", "st", "nd", "rd"];
+            const v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        };
+
+        // Check for nested paths: tablename.index.field
+        const match = path.match(/^(.+?)\.(\d+)\.(.+)$/);
+
+        if (match) {
+            const [_, tableKey, index, field] = match;
+            const tableName = tableNames[tableKey] || toTitleCase(tableKey);
+            const fieldName = toTitleCase(field);
+            const position = ordinal(parseInt(index) + 1);
+
+            return `${message} in ${position} ${tableName} (${fieldName})`;
+        }
+
+        // Fallback for simple paths (e.g., "title", "org_outcome_id")
+        return `${toTitleCase(path)}: ${message}`;
+    };
+
     const addRow = <K extends keyof ProjectProposalPayload>(
         field: K,
         defaultValue: ProjectProposalPayload[K] extends (infer U)[] ? U : never,
@@ -470,14 +514,18 @@ export default function ProposalForm({
 
         if (!result.success) {
             const formattedErrors: Record<string, string> = {};
-            result.error.issues.forEach((issue) => {
-                // Create a flat key for nested errors (e.g., "cost_by_components.0.component_name")
-                formattedErrors[issue.path.join(".")] = issue.message;
-            });
-            setErrors(formattedErrors);
-            setIsLoading(false);
 
+            result.error.issues.forEach((issue) => {
+                // Path will look like "cost_by_components.0.component_name"
+                const path = issue.path.join(".");
+                formattedErrors[path] = issue.message;
+            });
+
+            setErrors(formattedErrors); // This now matches Record<string, string>
+            setIsLoading(false);
+            // toast.error("Please fix the errors before submitting");
             // Scroll to the first error
+            window.scrollTo({ top: 0, behavior: "smooth" });
             console.error("Validation failed", formattedErrors);
             return;
         }
@@ -611,6 +659,23 @@ export default function ProposalForm({
             onSubmit={handleSubmit}
             className="max-w-5xl mx-auto mt-8 px-4 pb-24 space-y-8"
         >
+            {Object.keys(errors).length > 0 && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">
+                    <div className="flex items-center mb-2 text-red-800">
+                        <AlertCircle className="w-5 h-5 mr-2" />
+                        <h3 className="font-bold">
+                            Please correct the following:
+                        </h3>
+                    </div>
+                    <ul className="list-disc list-inside space-y-1">
+                        {Object.entries(errors).map(([path, message], idx) => (
+                            <li key={idx} className="text-red-700 text-sm">
+                                {getFriendlyErrorMessage(path, message)}
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            )}
             <div className="p-4 bg-muted-50 border-l-4 border-muted-600 rounded-r-lg">
                 <h2 className="text-lg font-bold text-muted-800">
                     BP Form {type}:{" "}
@@ -982,7 +1047,7 @@ export default function ProposalForm({
 
             {type === "202" && (
                 <div className="space-y-8">
-                    <div>
+                    <div className="space-y-2">
                         <div
                             className={`rounded-xl border shadow-sm overflow-hidden ${
                                 errors.cost_by_components
@@ -1134,143 +1199,188 @@ export default function ProposalForm({
 
                                 {payload.cost_by_components.length === 0 && (
                                     <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No components added. Click "+ ADD
-                                        COMPONENT" to begin.
+                                        No components added. Click &quot;+ ADD
+                                        COMPONENT&quot; to begin.
                                     </div>
                                 )}
                             </div>
                         </div>
-                        {errors.cost_by_components && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {errors.cost_by_components}
-                            </p>
+                        {getErrorsForPath("cost_by_components").length > 0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath("cost_by_components").map(
+                                    (msg, i) => (
+                                        <p
+                                            key={i}
+                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                        >
+                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                            {msg}
+                                        </p>
+                                    ),
+                                )}
+                            </div>
                         )}
                     </div>
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                LOCATION OF IMPLEMENTATION
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    addRow("local_locations", {
-                                        location: "",
-                                        costs: [],
-                                    })
-                                }
-                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
-                            >
-                                + ADD LOCATION
-                            </button>
-                        </div>
-                        <div className="p-0">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                            Location
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 text-secondary-foreground-500 bg-secondary-foreground-50/30">
-                                            PS
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
-                                            MOOE
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
-                                            CO
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
-                                            FINEX
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-muted-50">
-                                    {payload.local_locations.map((item, i) => (
-                                        <tr key={i}>
-                                            <td className="py-3 px-4">
-                                                <input
-                                                    className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                    placeholder="Region/Province"
-                                                    value={item.location}
-                                                    onChange={(e) =>
-                                                        updateRow(
-                                                            "local_locations",
-                                                            i,
-                                                            {
-                                                                location:
-                                                                    e.target
-                                                                        .value,
-                                                            },
-                                                        )
-                                                    }
-                                                />
-                                            </td>
-                                            {(
-                                                [
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ] as const
-                                            ).map((itemClass) => (
-                                                <td
-                                                    key={itemClass}
-                                                    className="py-2 px-2"
-                                                >
-                                                    <input
-                                                        type="number"
-                                                        className="w-full bg-transparent text-right outline-none text-sm"
-                                                        placeholder="0"
-                                                        value={
-                                                            item.costs.find(
-                                                                (c) =>
-                                                                    c.expense_class ===
-                                                                    itemClass,
-                                                            )?.amount ?? ""
-                                                        }
-                                                        onChange={(e) =>
-                                                            handleMatrixChange(
-                                                                "local_locations",
-                                                                i,
-                                                                itemClass,
-                                                                e.target
-                                                                    .valueAsNumber ||
-                                                                    0,
-                                                            )
-                                                        }
-                                                    />
-                                                </td>
-                                            ))}
-                                            <td className="py-3 px-2 text-center">
-                                                <button
-                                                    type="button"
-                                                    onClick={() =>
-                                                        removeRow(
-                                                            "local_locations",
-                                                            i,
-                                                        )
-                                                    }
-                                                    className="text-red-400 hover:text-red-600"
-                                                >
-                                                    ✕
-                                                </button>
-                                            </td>
+                    <div className="space-y-2">
+                        <div
+                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
+                                errors.local_locations
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                    LOCATION OF IMPLEMENTATION
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        addRow("local_locations", {
+                                            location: "",
+                                            costs: [],
+                                        })
+                                    }
+                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                                >
+                                    + ADD LOCATION
+                                </button>
+                            </div>
+                            <div className="p-0">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-muted-50/50 border-b border-muted-100">
+                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                                Location
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 text-secondary-foreground-500 bg-secondary-foreground-50/30">
+                                                PS
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                                MOOE
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                                CO
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                                FINEX
+                                            </th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody className="divide-y divide-muted-50">
+                                        {payload.local_locations.map(
+                                            (item, i) => (
+                                                <tr key={i}>
+                                                    <td className="py-3 px-4">
+                                                        <input
+                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                            placeholder="Region/Province"
+                                                            value={
+                                                                item.location
+                                                            }
+                                                            onChange={(e) =>
+                                                                updateRow(
+                                                                    "local_locations",
+                                                                    i,
+                                                                    {
+                                                                        location:
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                    </td>
+                                                    {(
+                                                        [
+                                                            "PS",
+                                                            "MOOE",
+                                                            "CO",
+                                                            "FINEX",
+                                                        ] as const
+                                                    ).map((itemClass) => (
+                                                        <td
+                                                            key={itemClass}
+                                                            className="py-2 px-2"
+                                                        >
+                                                            <input
+                                                                type="number"
+                                                                className="w-full bg-transparent text-right outline-none text-sm"
+                                                                placeholder="0"
+                                                                value={
+                                                                    item.costs.find(
+                                                                        (c) =>
+                                                                            c.expense_class ===
+                                                                            itemClass,
+                                                                    )?.amount ??
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    handleMatrixChange(
+                                                                        "local_locations",
+                                                                        i,
+                                                                        itemClass,
+                                                                        e.target
+                                                                            .valueAsNumber ||
+                                                                            0,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                    ))}
+                                                    <td className="py-3 px-2 text-center">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeRow(
+                                                                    "local_locations",
+                                                                    i,
+                                                                )
+                                                            }
+                                                            className="text-red-400 hover:text-red-600"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
 
-                            {payload.local_locations.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No components added. Click "+ ADD LOCATION"
-                                    to begin.
-                                </div>
-                            )}
+                                {payload.local_locations.length === 0 && (
+                                    <div className="p-8 text-center text-muted-400 text-sm italic">
+                                        No components added. Click &quot;+ ADD
+                                        LOCATION&quot; to begin.
+                                    </div>
+                                )}
+                            </div>
                         </div>
+                        {getErrorsForPath("local_locations").length > 0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath("local_locations").map(
+                                    (msg, i) => (
+                                        <p
+                                            key={i}
+                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                        >
+                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                            {msg}
+                                        </p>
+                                    ),
+                                )}
+                            </div>
+                        )}
                     </div>
-                    <div>
-                        <div className="bg-white rounded-xl border shadow-sm overflow-hidden mb-6">
+                    <div className="space-y-2">
+                        <div
+                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
+                                errors.local_financial_attributions
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
                             <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
                                 <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                     PAP Attribution by Expense Class
@@ -1313,7 +1423,7 @@ export default function ProposalForm({
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
-                                        <tr className="bg-white border-b">
+                                        <tr className="border-b">
                                             <th
                                                 rowSpan={2}
                                                 className="py-4 px-4 text-sm font-bold text-slate-700 uppercase border-r w-1/4 text-center"
@@ -1341,14 +1451,14 @@ export default function ProposalForm({
                                                 Tier 1 (D)
                                             </th>
                                         </tr>
-                                        <tr className="bg-white border-b">
+                                        <tr className="border-b">
                                             <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
                                                 Tier 1
                                             </th>
                                             <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
                                                 Tier 2
                                             </th>
-                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24 bg-slate-50/50">
+                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
                                                 Total
                                             </th>
                                         </tr>
@@ -1358,11 +1468,30 @@ export default function ProposalForm({
                                         (attr, attrIdx) => {
                                             // Column configuration for total calculations
                                             const cols = [
-                                                { year: 2027, tier: 1 },
-                                                { year: 2027, tier: 2 },
-                                                { isTotal: true, year: 2027 }, // Visual Total Column
-                                                { year: 2028, tier: 1 },
-                                                { year: 2029, tier: 1 },
+                                                {
+                                                    year: payload.proposal_year,
+                                                    tier: 1,
+                                                },
+                                                {
+                                                    year: payload.proposal_year,
+                                                    tier: 2,
+                                                },
+                                                {
+                                                    isTotal: true,
+                                                    year: payload.proposal_year,
+                                                }, // Visual Total Column
+                                                {
+                                                    year:
+                                                        payload.proposal_year +
+                                                        1,
+                                                    tier: 1,
+                                                },
+                                                {
+                                                    year:
+                                                        payload.proposal_year +
+                                                        2,
+                                                    tier: 1,
+                                                },
                                             ];
 
                                             return (
@@ -1630,8 +1759,7 @@ export default function ProposalForm({
                                                                                                 e.expense_class ===
                                                                                                 expClass,
                                                                                         ) // Added ?. here
-                                                                                        ?.amount ||
-                                                                                    0
+                                                                                        ?.amount
                                                                                 }
                                                                                 onChange={(
                                                                                     e,
@@ -1732,208 +1860,280 @@ export default function ProposalForm({
                                 )}
                             </div>
                         </div>
-                        {errors.local_financial_attributions && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {errors.local_financial_attributions}
-                            </p>
+                        {getErrorsForPath("local_financial_attributions")
+                            .length > 0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath(
+                                    "local_financial_attributions",
+                                ).map((msg, i) => (
+                                    <p
+                                        key={i}
+                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                    >
+                                        <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                        {msg}
+                                    </p>
+                                ))}
+                            </div>
                         )}
                     </div>
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Requirements for Operating Cost of
-                                Infrastructure Project
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    addRow(
-                                        "local_infrastructure_requirements",
-                                        {
-                                            description: "",
-                                            year: payload.proposal_year,
-                                            total_amt: 0,
-                                            costs: [],
-                                        },
-                                    )
-                                }
-                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
-                            >
-                                + ADD REQUIREMENT
-                            </button>
-                        </div>
-                        <div className="p-0">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                            Description
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            PS
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            MOOE
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            CO
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            FINEX
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-muted-50">
-                                    {payload.local_infrastructure_requirements.map(
-                                        (item, i) => (
-                                            <tr key={i}>
-                                                <td className="py-3 px-4">
-                                                    <input
-                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                        placeholder="Infrastructure Requirement"
-                                                        value={item.description}
-                                                        onChange={(e) =>
-                                                            updateRow(
-                                                                "local_infrastructure_requirements",
-                                                                i,
-                                                                {
-                                                                    description:
-                                                                        e.target
-                                                                            .value,
-                                                                },
-                                                            )
-                                                        }
-                                                    />
-                                                </td>
-                                                {(
-                                                    [
-                                                        "PS",
-                                                        "MOOE",
-                                                        "CO",
-                                                        "FINEX",
-                                                    ] as const
-                                                ).map((itemClass) => (
-                                                    <td
-                                                        key={itemClass}
-                                                        className="py-2 px-2"
-                                                    >
+                    <div className="space-y-2">
+                        <div
+                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
+                                errors.local_infrastructure_requirements
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                    Requirements for Operating Cost of
+                                    Infrastructure Project
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        addRow(
+                                            "local_infrastructure_requirements",
+                                            {
+                                                description: "",
+                                                year: payload.proposal_year,
+                                                total_amt: 0,
+                                                costs: [],
+                                            },
+                                        )
+                                    }
+                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                                >
+                                    + ADD REQUIREMENT
+                                </button>
+                            </div>
+                            <div className="p-0">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-muted-50/50 border-b border-muted-100">
+                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                                Description
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                PS
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                MOOE
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                CO
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                FINEX
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-muted-50">
+                                        {payload.local_infrastructure_requirements.map(
+                                            (item, i) => (
+                                                <tr key={i}>
+                                                    <td className="py-3 px-4">
                                                         <input
-                                                            type="number"
-                                                            className="w-full bg-transparent text-right outline-none text-sm"
-                                                            placeholder="0"
+                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                            placeholder="Infrastructure Requirement"
                                                             value={
-                                                                item.costs.find(
-                                                                    (c) =>
-                                                                        c.expense_class ===
-                                                                        itemClass,
-                                                                )?.amount ?? ""
+                                                                item.description
                                                             }
                                                             onChange={(e) =>
-                                                                handleMatrixChange(
+                                                                updateRow(
                                                                     "local_infrastructure_requirements",
                                                                     i,
-                                                                    itemClass,
-                                                                    e.target
-                                                                        .valueAsNumber ||
-                                                                        0,
+                                                                    {
+                                                                        description:
+                                                                            e
+                                                                                .target
+                                                                                .value,
+                                                                    },
                                                                 )
                                                             }
                                                         />
                                                     </td>
-                                                ))}
-                                                <td className="py-3 px-4">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            removeRow(
-                                                                "local_infrastructure_requirements",
-                                                                i,
-                                                            )
-                                                        }
-                                                        className="text-red-400 hover:text-red-600 transition-colors"
-                                                        title="Remove Component"
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ),
-                                    )}
-                                </tbody>
-                            </table>
+                                                    {(
+                                                        [
+                                                            "PS",
+                                                            "MOOE",
+                                                            "CO",
+                                                            "FINEX",
+                                                        ] as const
+                                                    ).map((itemClass) => (
+                                                        <td
+                                                            key={itemClass}
+                                                            className="py-2 px-2"
+                                                        >
+                                                            <input
+                                                                type="number"
+                                                                className="w-full bg-transparent text-right outline-none text-sm"
+                                                                placeholder="0"
+                                                                value={
+                                                                    item.costs.find(
+                                                                        (c) =>
+                                                                            c.expense_class ===
+                                                                            itemClass,
+                                                                    )?.amount ??
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    handleMatrixChange(
+                                                                        "local_infrastructure_requirements",
+                                                                        i,
+                                                                        itemClass,
+                                                                        e.target
+                                                                            .valueAsNumber ||
+                                                                            0,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                    ))}
+                                                    <td className="py-3 px-4">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeRow(
+                                                                    "local_infrastructure_requirements",
+                                                                    i,
+                                                                )
+                                                            }
+                                                            className="text-red-400 hover:text-red-600 transition-colors"
+                                                            title="Remove Component"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
 
-                            {payload.local_infrastructure_requirements
-                                .length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No locations added. Click "+ ADD
-                                    REQUIREMENT" to begin.
-                                </div>
-                            )}
+                                {payload.local_infrastructure_requirements
+                                    .length === 0 && (
+                                    <div className="p-8 text-center text-muted-400 text-sm italic">
+                                        No locations added. Click &quot;+ ADD
+                                        REQUIREMENT&quot; to begin.
+                                    </div>
+                                )}
+                            </div>
                         </div>
-                        {errors.local_infrastructure_requirements && (
-                            <p className="text-red-500 text-sm">
-                                {errors.local_infrastructure_requirements}
-                            </p>
+                        {getErrorsForPath("local_infrastructure_requirements")
+                            .length > 0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath(
+                                    "local_infrastructure_requirements",
+                                ).map((msg, i) => (
+                                    <p
+                                        key={i}
+                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                    >
+                                        <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                        {msg}
+                                    </p>
+                                ))}
+                            </div>
                         )}
                     </div>
 
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Local Physical Targets
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    addRow("local_physical_targets", {
-                                        year: payload.proposal_year,
-                                        target_description: "",
-                                    })
-                                }
-                                className="text-sm text-secondary-foreground-600 font-bold"
-                            >
-                                + ADD TARGET
-                            </button>
-                        </div>
-                        {payload.local_physical_targets.map((target, i) => (
-                            <div key={i} className="flex gap-4 mb-3 p-4">
-                                <input
-                                    className="flex-1 border-b text-sm"
-                                    placeholder="Target Description"
-                                    value={target.target_description}
-                                    onChange={(e) =>
-                                        updateRow("local_physical_targets", i, {
-                                            target_description: e.target.value,
-                                        })
-                                    }
-                                />
-                                <input
-                                    type="number"
-                                    className="w-24 border-b text-sm"
-                                    placeholder="Year"
-                                    value={target.year}
-                                    onChange={(e) =>
-                                        updateRow("local_physical_targets", i, {
-                                            year: parseInt(e.target.value),
-                                        })
-                                    }
-                                />
+                    <div className="space-y-2">
+                        <div
+                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
+                                errors.local_physical_targets
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                    Local Physical Targets
+                                </h3>
                                 <button
                                     type="button"
                                     onClick={() =>
-                                        removeRow("local_physical_targets", i)
+                                        addRow("local_physical_targets", {
+                                            year: payload.proposal_year,
+                                            target_description: "",
+                                        })
                                     }
-                                    className="text-red-400 hover:text-red-600 transition-colors"
-                                    title="Remove Component"
+                                    className="text-sm text-secondary-foreground-600 font-bold"
                                 >
-                                    ✕
+                                    + ADD TARGET
                                 </button>
                             </div>
-                        ))}
-                        {payload.local_physical_targets.length === 0 && (
-                            <div className="p-8 text-center text-muted-400 text-sm italic">
-                                No Local Physical Targets added. Click "+ ADD
-                                TARGET" to begin.
+                            {payload.local_physical_targets.map((target, i) => (
+                                <div key={i} className="flex gap-4 mb-3 p-4">
+                                    <input
+                                        className="flex-1 border-b text-sm"
+                                        placeholder="Target Description"
+                                        value={target.target_description}
+                                        onChange={(e) =>
+                                            updateRow(
+                                                "local_physical_targets",
+                                                i,
+                                                {
+                                                    target_description:
+                                                        e.target.value,
+                                                },
+                                            )
+                                        }
+                                    />
+                                    <input
+                                        type="number"
+                                        className="w-24 border-b text-sm"
+                                        placeholder="Year"
+                                        value={target.year}
+                                        onChange={(e) =>
+                                            updateRow(
+                                                "local_physical_targets",
+                                                i,
+                                                {
+                                                    year: parseInt(
+                                                        e.target.value,
+                                                    ),
+                                                },
+                                            )
+                                        }
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            removeRow(
+                                                "local_physical_targets",
+                                                i,
+                                            )
+                                        }
+                                        className="text-red-400 hover:text-red-600 transition-colors"
+                                        title="Remove Component"
+                                    >
+                                        ✕
+                                    </button>
+                                </div>
+                            ))}
+                            {payload.local_physical_targets.length === 0 && (
+                                <div className="p-8 text-center text-muted-400 text-sm italic">
+                                    No Local Physical Targets added. Click
+                                    &quot;+ ADD TARGET&quot; to begin.
+                                </div>
+                            )}
+                        </div>
+                        {getErrorsForPath("local_physical_targets").length >
+                            0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath("local_physical_targets").map(
+                                    (msg, i) => (
+                                        <p
+                                            key={i}
+                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                        >
+                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                            {msg}
+                                        </p>
+                                    ),
+                                )}
                             </div>
                         )}
                     </div>
@@ -1943,468 +2143,246 @@ export default function ProposalForm({
             {/* 5. FOREIGN ASSISTANCE (BP 203 ONLY) */}
             {type === "203" && (
                 <div className="space-y-6">
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                12.2 Costing by Components (BP 203)
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    addRow("cost_by_components", {
-                                        component_name: "",
-                                        costs: [],
-                                    })
-                                }
-                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
-                            >
-                                + ADD COMPONENT
-                            </button>
-                        </div>
+                    <div className="space-y-2">
+                        <div
+                            className={`rounded-xl border shadow-sm overflow-hidden  ${
+                                errors.cost_by_components
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <div className=" px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                    12.2 Costing by Components (BP 203)
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        addRow("cost_by_components", {
+                                            component_name: "",
+                                            costs: [],
+                                        })
+                                    }
+                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                                >
+                                    + ADD COMPONENT
+                                </button>
+                            </div>
 
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
-                                        <th className="py-4 px-4 border-r w-64">
-                                            Components
-                                        </th>
-                                        {["PS", "MOOE", "CO", "FINEX"].map(
-                                            (ec) => (
-                                                <th
-                                                    key={ec}
-                                                    className="px-2 text-center border-r min-w-[180px]"
-                                                >
-                                                    {ec}
-                                                </th>
-                                            ),
-                                        )}
-                                        <th className="w-10"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-muted-50">
-                                    {payload.cost_by_components.map(
-                                        (comp, i) => (
-                                            <tr
-                                                key={i}
-                                                className="hover:bg-muted-50/30 transition-colors group"
-                                            >
-                                                <td className="py-3 px-4 border-r align-top">
-                                                    <input
-                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                        placeholder="Enter Component Name..."
-                                                        value={
-                                                            comp.component_name
-                                                        }
-                                                        onChange={(e) =>
-                                                            updateRow(
-                                                                "cost_by_components",
-                                                                i,
-                                                                {
-                                                                    component_name:
-                                                                        e.target
-                                                                            .value,
-                                                                },
-                                                            )
-                                                        }
-                                                    />
-                                                </td>
-                                                {[
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ].map((ec) => {
-                                                    // HELPER: Find specific cost objects by class, category, and method
-                                                    const getCost = (
-                                                        cat: "LP" | "GOP",
-                                                        method?:
-                                                            | "cash"
-                                                            | "non_cash",
-                                                    ) =>
-                                                        comp.costs.find(
-                                                            (c) =>
-                                                                c.expense_class ===
-                                                                    ec &&
-                                                                c.fund_category ===
-                                                                    cat &&
-                                                                (cat !== "LP" ||
-                                                                    c.fund_method ===
-                                                                        method),
-                                                        )?.amount || "";
-
-                                                    const lpCash = Number(
-                                                        getCost("LP", "cash") ||
-                                                            0,
-                                                    );
-                                                    const lpNonCash = Number(
-                                                        getCost(
-                                                            "LP",
-                                                            "non_cash",
-                                                        ) || 0,
-                                                    );
-                                                    const gop = Number(
-                                                        getCost("GOP") || 0,
-                                                    );
-                                                    const cellTotal =
-                                                        lpCash +
-                                                        lpNonCash +
-                                                        gop;
-
-                                                    return (
-                                                        <td
-                                                            key={ec}
-                                                            className="p-3 border-r align-top min-w-[160px]"
-                                                        >
-                                                            <div className="flex flex-col gap-2">
-                                                                {/* LP Cash Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        LP CASH
-                                                                    </span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                                                                        value={getCost(
-                                                                            "LP",
-                                                                            "cash",
-                                                                        )}
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleMatrixChange203(
-                                                                                i,
-                                                                                ec,
-                                                                                "LP",
-                                                                                e
-                                                                                    .target
-                                                                                    .valueAsNumber ||
-                                                                                    0,
-                                                                                "cost_by_components",
-                                                                                "cash",
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                </div>
-
-                                                                {/* LP Non-Cash Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        LP
-                                                                        NON-CASH
-                                                                    </span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                                                                        value={getCost(
-                                                                            "LP",
-                                                                            "non_cash",
-                                                                        )}
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleMatrixChange203(
-                                                                                i,
-                                                                                ec,
-                                                                                "LP",
-                                                                                e
-                                                                                    .target
-                                                                                    .valueAsNumber ||
-                                                                                    0,
-                                                                                "cost_by_components",
-                                                                                "non_cash",
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                </div>
-
-                                                                {/* GOP Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        GOP
-                                                                    </span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                                                                        value={getCost(
-                                                                            "GOP",
-                                                                        )}
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleMatrixChange203(
-                                                                                i,
-                                                                                ec,
-                                                                                "GOP",
-                                                                                e
-                                                                                    .target
-                                                                                    .valueAsNumber ||
-                                                                                    0,
-                                                                                "cost_by_components",
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                </div>
-
-                                                                {/* Sub-total for this Expense Class */}
-                                                                <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
-                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
-                                                                        Total
-                                                                    </span>
-                                                                    <span className="text-sm font-mono font-bold text-blue-600">
-                                                                        {cellTotal.toLocaleString(
-                                                                            undefined,
-                                                                            {
-                                                                                minimumFractionDigits: 2,
-                                                                            },
-                                                                        )}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    );
-                                                })}
-                                                <td className="py-3 px-2 text-center align-top">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            removeRow(
-                                                                "cost_by_components",
-                                                                i,
-                                                            )
-                                                        }
-                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className=" border-b text-sm font-black text-muted-400 uppercase">
+                                            <th className="py-4 px-4 border-r w-64">
+                                                Components
+                                            </th>
+                                            {["PS", "MOOE", "CO", "FINEX"].map(
+                                                (ec) => (
+                                                    <th
+                                                        key={ec}
+                                                        className="px-2 text-center border-r min-w-[180px]"
                                                     >
-                                                        ✕
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ),
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        {/* Header with Add Button */}
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Foreign Financial Targets (Loan/Grant)
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    // Find the highest year currently in the targets,
-                                    // default to proposal_year - 1 so the first entry becomes proposal_year
-                                    const lastYear =
-                                        payload.foreign_financial_targets.reduce(
-                                            (max, item) =>
-                                                item.year > max
-                                                    ? item.year
-                                                    : max,
-                                            payload.proposal_year - 1,
-                                        );
-
-                                    addRow("foreign_financial_targets", {
-                                        year: lastYear + 1, // Auto-increment the year
-                                        lp_imprest: 0,
-                                        lp_direct: 0,
-                                        grant: 0,
-                                        gop: 0,
-                                    });
-                                }}
-                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
-                            >
-                                + ADD FINANCIAL TARGET
-                            </button>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
-                                        <th
-                                            rowSpan={2}
-                                            className="py-4 px-4 border-r w-24"
-                                        >
-                                            Year
-                                        </th>
-                                        <th
-                                            colSpan={2}
-                                            className="py-2 text-center border-b border-r"
-                                        >
-                                            LP (Loan Proceeds)
-                                        </th>
-                                        <th
-                                            rowSpan={2}
-                                            className="py-4 px-2 text-center border-r"
-                                        >
-                                            Grant
-                                        </th>
-                                        <th
-                                            rowSpan={2}
-                                            className="py-4 px-2 text-center border-r"
-                                        >
-                                            GOP
-                                        </th>
-                                        <th
-                                            rowSpan={2}
-                                            className="py-4 px-2 text-center bg-muted-100/50"
-                                        >
-                                            Total
-                                        </th>
-                                        <th rowSpan={2} className="w-10"></th>
-                                    </tr>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-[9px] font-black text-muted-400 uppercase">
-                                        <th className="py-2 px-2 text-center border-r">
-                                            Imprest/Special
-                                        </th>
-                                        <th className="py-2 px-2 text-center border-r">
-                                            Direct Payment
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-muted-50">
-                                    {payload.foreign_financial_targets.map(
-                                        (target, i) => {
-                                            const rowTotal =
-                                                Number(target.lp_imprest || 0) +
-                                                Number(target.lp_direct || 0) +
-                                                Number(target.grant || 0) +
-                                                Number(target.gop || 0);
-
-                                            return (
+                                                        {ec}
+                                                    </th>
+                                                ),
+                                            )}
+                                            <th className="w-10"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-muted-50">
+                                        {payload.cost_by_components.map(
+                                            (comp, i) => (
                                                 <tr
                                                     key={i}
                                                     className="hover:bg-muted-50/30 transition-colors group"
                                                 >
-                                                    <td className="py-3 px-4 border-r">
+                                                    <td className="py-3 px-4 border-r align-top">
                                                         <input
-                                                            type="number"
                                                             className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                            value={target.year}
+                                                            placeholder="Enter Component Name..."
+                                                            value={
+                                                                comp.component_name
+                                                            }
                                                             onChange={(e) =>
                                                                 updateRow(
-                                                                    "foreign_financial_targets",
+                                                                    "cost_by_components",
                                                                     i,
                                                                     {
-                                                                        year: parseInt(
+                                                                        component_name:
                                                                             e
                                                                                 .target
                                                                                 .value,
-                                                                        ),
                                                                     },
                                                                 )
                                                             }
                                                         />
                                                     </td>
-                                                    <td className="py-3 px-2 border-r">
-                                                        <input
-                                                            type="number"
-                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
-                                                            placeholder="0"
-                                                            value={
-                                                                target.lp_imprest ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                updateRow(
-                                                                    "foreign_financial_targets",
-                                                                    i,
-                                                                    {
-                                                                        lp_imprest:
-                                                                            parseInt(
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            ),
-                                                                    } as any,
-                                                                )
-                                                            }
-                                                        />
-                                                    </td>
-                                                    <td className="py-3 px-2 border-r">
-                                                        <input
-                                                            type="number"
-                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
-                                                            placeholder="0"
-                                                            value={
-                                                                target.lp_direct ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                updateRow(
-                                                                    "foreign_financial_targets",
-                                                                    i,
-                                                                    {
-                                                                        lp_direct:
-                                                                            parseInt(
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            ),
-                                                                    } as any,
-                                                                )
-                                                            }
-                                                        />
-                                                    </td>
-                                                    <td className="py-3 px-2 border-r">
-                                                        <input
-                                                            type="number"
-                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
-                                                            placeholder="0"
-                                                            value={
-                                                                target.grant ||
-                                                                ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                updateRow(
-                                                                    "foreign_financial_targets",
-                                                                    i,
-                                                                    {
-                                                                        grant: parseInt(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        ),
-                                                                    } as any,
-                                                                )
-                                                            }
-                                                        />
-                                                    </td>
-                                                    <td className="py-3 px-2 border-r">
-                                                        <input
-                                                            type="number"
-                                                            className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
-                                                            placeholder="0"
-                                                            value={
-                                                                target.gop || ""
-                                                            }
-                                                            onChange={(e) =>
-                                                                updateRow(
-                                                                    "foreign_financial_targets",
-                                                                    i,
-                                                                    {
-                                                                        gop: parseInt(
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                        ),
-                                                                    } as any,
-                                                                )
-                                                            }
-                                                        />
-                                                    </td>
-                                                    <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
-                                                        {rowTotal.toLocaleString()}
-                                                    </td>
-                                                    <td className="py-3 px-2 text-center">
+                                                    {[
+                                                        "PS",
+                                                        "MOOE",
+                                                        "CO",
+                                                        "FINEX",
+                                                    ].map((ec) => {
+                                                        // HELPER: Find specific cost objects by class, category, and method
+                                                        const getCost = (
+                                                            cat: "LP" | "GOP",
+                                                            method?:
+                                                                | "cash"
+                                                                | "non_cash",
+                                                        ) =>
+                                                            comp.costs.find(
+                                                                (c) =>
+                                                                    c.expense_class ===
+                                                                        ec &&
+                                                                    c.fund_category ===
+                                                                        cat &&
+                                                                    (cat !==
+                                                                        "LP" ||
+                                                                        c.fund_method ===
+                                                                            method),
+                                                            )?.amount || "";
+
+                                                        const lpCash = Number(
+                                                            getCost(
+                                                                "LP",
+                                                                "cash",
+                                                            ) || 0,
+                                                        );
+                                                        const lpNonCash =
+                                                            Number(
+                                                                getCost(
+                                                                    "LP",
+                                                                    "non_cash",
+                                                                ) || 0,
+                                                            );
+                                                        const gop = Number(
+                                                            getCost("GOP") || 0,
+                                                        );
+                                                        const cellTotal =
+                                                            lpCash +
+                                                            lpNonCash +
+                                                            gop;
+
+                                                        return (
+                                                            <td
+                                                                key={ec}
+                                                                className="p-3 border-r align-top min-w-[160px]"
+                                                            >
+                                                                <div className="flex flex-col gap-2">
+                                                                    {/* LP Cash Input */}
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-sm font-bold text-muted-500 w-12">
+                                                                            LP
+                                                                            CASH
+                                                                        </span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            value={getCost(
+                                                                                "LP",
+                                                                                "cash",
+                                                                            )}
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                handleMatrixChange203(
+                                                                                    i,
+                                                                                    ec,
+                                                                                    "LP",
+                                                                                    e
+                                                                                        .target
+                                                                                        .valueAsNumber ||
+                                                                                        0,
+                                                                                    "cost_by_components",
+                                                                                    "cash",
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* LP Non-Cash Input */}
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-sm font-bold text-muted-500 w-12">
+                                                                            LP
+                                                                            NON-CASH
+                                                                        </span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            value={getCost(
+                                                                                "LP",
+                                                                                "non_cash",
+                                                                            )}
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                handleMatrixChange203(
+                                                                                    i,
+                                                                                    ec,
+                                                                                    "LP",
+                                                                                    e
+                                                                                        .target
+                                                                                        .valueAsNumber ||
+                                                                                        0,
+                                                                                    "cost_by_components",
+                                                                                    "non_cash",
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* GOP Input */}
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-sm font-bold text-muted-500 w-12">
+                                                                            GOP
+                                                                        </span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            value={getCost(
+                                                                                "GOP",
+                                                                            )}
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                handleMatrixChange203(
+                                                                                    i,
+                                                                                    ec,
+                                                                                    "GOP",
+                                                                                    e
+                                                                                        .target
+                                                                                        .valueAsNumber ||
+                                                                                        0,
+                                                                                    "cost_by_components",
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Sub-total for this Expense Class */}
+                                                                    <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
+                                                                        <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
+                                                                            Total
+                                                                        </span>
+                                                                        <span className="text-sm font-mono font-bold text-blue-600">
+                                                                            {cellTotal.toLocaleString(
+                                                                                undefined,
+                                                                                {
+                                                                                    minimumFractionDigits: 2,
+                                                                                },
+                                                                            )}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td className="py-3 px-2 text-center align-top">
                                                         <button
                                                             type="button"
                                                             onClick={() =>
                                                                 removeRow(
-                                                                    "foreign_financial_targets",
+                                                                    "cost_by_components",
                                                                     i,
                                                                 )
                                                             }
@@ -2414,259 +2392,574 @@ export default function ProposalForm({
                                                         </button>
                                                     </td>
                                                 </tr>
-                                            );
-                                        },
-                                    )}
-                                </tbody>
-                            </table>
-                            {payload.foreign_financial_targets.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No foreign financial targets added. Click "+
-                                    ADD FINANCIAL TARGET" to begin.
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Foreign Physical Targets
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    addRow("foreign_physical_targets", {
-                                        name: "",
-                                        costs: [],
-                                    })
-                                }
-                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
-                            >
-                                + ADD PHYSICAL TARGET
-                            </button>
-                        </div>
-
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead>
-                                    <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
-                                        <th className="py-4 px-4 border-r w-64">
-                                            Components
-                                        </th>
-                                        {["PS", "MOOE", "CO", "FINEX"].map(
-                                            (ec) => (
-                                                <th
-                                                    key={ec}
-                                                    className="px-2 text-center border-r min-w-[180px]"
-                                                >
-                                                    {ec}
-                                                </th>
                                             ),
                                         )}
-                                        <th className="w-10"></th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-muted-50">
-                                    {payload.foreign_physical_targets.map(
-                                        (phys, i) => (
-                                            <tr
-                                                key={i}
-                                                className="hover:bg-muted-50/30 transition-colors group"
-                                            >
-                                                <td className="py-3 px-4 border-r align-top">
-                                                    <input
-                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                        placeholder="Enter Component Name..."
-                                                        value={phys.name}
-                                                        onChange={(e) =>
-                                                            updateRow(
-                                                                "foreign_physical_targets",
-                                                                i,
-                                                                {
-                                                                    name: e
-                                                                        .target
-                                                                        .value,
-                                                                } as any,
-                                                            )
-                                                        }
-                                                    />
-                                                </td>
-                                                {[
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ].map((ec) => {
-                                                    // HELPER: Find specific cost objects by class, category, and method
-                                                    const getCost = (
-                                                        cat: "LP" | "GOP",
-                                                        method?:
-                                                            | "cash"
-                                                            | "non_cash",
-                                                    ) =>
-                                                        phys.costs.find(
-                                                            (c) =>
-                                                                c.expense_class ===
-                                                                    ec &&
-                                                                c.fund_category ===
-                                                                    cat &&
-                                                                (cat !== "LP" ||
-                                                                    c.fund_method ===
-                                                                        method),
-                                                        )?.amount || "";
-
-                                                    const lpCash = Number(
-                                                        getCost("LP", "cash") ||
-                                                            0,
-                                                    );
-                                                    const lpNonCash = Number(
-                                                        getCost(
-                                                            "LP",
-                                                            "non_cash",
-                                                        ) || 0,
-                                                    );
-                                                    const gop = Number(
-                                                        getCost("GOP") || 0,
-                                                    );
-                                                    const cellTotal =
-                                                        lpCash +
-                                                        lpNonCash +
-                                                        gop;
-
-                                                    return (
-                                                        <td
-                                                            key={ec}
-                                                            className="p-3 border-r align-top min-w-[160px]"
-                                                        >
-                                                            <div className="flex flex-col gap-2">
-                                                                {/* LP Cash Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        LP CASH
-                                                                    </span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                                                                        value={getCost(
-                                                                            "LP",
-                                                                            "cash",
-                                                                        )}
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleMatrixChange203(
-                                                                                i,
-                                                                                ec,
-                                                                                "LP",
-                                                                                e
-                                                                                    .target
-                                                                                    .valueAsNumber ||
-                                                                                    0,
-                                                                                "foreign_physical_targets",
-                                                                                "cash",
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                </div>
-
-                                                                {/* LP Non-Cash Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        LP
-                                                                        NON-CASH
-                                                                    </span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                                                                        value={getCost(
-                                                                            "LP",
-                                                                            "non_cash",
-                                                                        )}
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleMatrixChange203(
-                                                                                i,
-                                                                                ec,
-                                                                                "LP",
-                                                                                e
-                                                                                    .target
-                                                                                    .valueAsNumber ||
-                                                                                    0,
-                                                                                "foreign_physical_targets",
-                                                                                "non_cash",
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                </div>
-
-                                                                {/* GOP Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        GOP
-                                                                    </span>
-                                                                    <input
-                                                                        type="number"
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                                                                        value={getCost(
-                                                                            "GOP",
-                                                                        )}
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) =>
-                                                                            handleMatrixChange203(
-                                                                                i,
-                                                                                ec,
-                                                                                "GOP",
-                                                                                e
-                                                                                    .target
-                                                                                    .valueAsNumber ||
-                                                                                    0,
-                                                                                "foreign_physical_targets",
-                                                                            )
-                                                                        }
-                                                                    />
-                                                                </div>
-
-                                                                {/* Sub-total for this Expense Class */}
-                                                                <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
-                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
-                                                                        Total
-                                                                    </span>
-                                                                    <span className="text-sm font-mono font-bold text-blue-600">
-                                                                        {cellTotal.toLocaleString(
-                                                                            undefined,
-                                                                            {
-                                                                                minimumFractionDigits: 2,
-                                                                            },
-                                                                        )}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    );
-                                                })}
-                                                <td className="py-3 px-2 text-center align-top">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            removeRow(
-                                                                "foreign_physical_targets",
-                                                                i,
-                                                            )
-                                                        }
-                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    >
-                                                        ✕
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ),
-                                    )}
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
+                        {getErrorsForPath("cost_by_components").length > 0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath("cost_by_components").map(
+                                    (msg, i) => (
+                                        <p
+                                            key={i}
+                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                        >
+                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                            {msg}
+                                        </p>
+                                    ),
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        <div
+                            className={`rounded-xl border shadow-sm overflow-hidden  ${
+                                errors.foreign_financial_targets
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            {/* Header with Add Button */}
+                            <div className=" px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                    Foreign Financial Targets (Loan/Grant)
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        // Find the highest year currently in the targets,
+                                        // default to proposal_year - 1 so the first entry becomes proposal_year
+                                        const lastYear =
+                                            payload.foreign_financial_targets.reduce(
+                                                (max, item) =>
+                                                    item.year > max
+                                                        ? item.year
+                                                        : max,
+                                                payload.proposal_year - 1,
+                                            );
+
+                                        addRow("foreign_financial_targets", {
+                                            year: lastYear + 1, // Auto-increment the year
+                                            lp_imprest: 0,
+                                            lp_direct: 0,
+                                            grant: 0,
+                                            gop: 0,
+                                        });
+                                    }}
+                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                                >
+                                    + ADD FINANCIAL TARGET
+                                </button>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
+                                            <th
+                                                rowSpan={2}
+                                                className="py-4 px-4 border-r w-24"
+                                            >
+                                                Year
+                                            </th>
+                                            <th
+                                                colSpan={2}
+                                                className="py-2 text-center border-b border-r"
+                                            >
+                                                LP (Loan Proceeds)
+                                            </th>
+                                            <th
+                                                rowSpan={2}
+                                                className="py-4 px-2 text-center border-r"
+                                            >
+                                                Grant
+                                            </th>
+                                            <th
+                                                rowSpan={2}
+                                                className="py-4 px-2 text-center border-r"
+                                            >
+                                                GOP
+                                            </th>
+                                            <th
+                                                rowSpan={2}
+                                                className="py-4 px-2 text-center bg-muted-100/50"
+                                            >
+                                                Total
+                                            </th>
+                                            <th
+                                                rowSpan={2}
+                                                className="w-10"
+                                            ></th>
+                                        </tr>
+                                        <tr className="bg-muted-50/50 border-b border-muted-100 text-[9px] font-black text-muted-400 uppercase">
+                                            <th className="py-2 px-2 text-center border-r">
+                                                Imprest/Special
+                                            </th>
+                                            <th className="py-2 px-2 text-center border-r">
+                                                Direct Payment
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-muted-50">
+                                        {payload.foreign_financial_targets.map(
+                                            (target, i) => {
+                                                const rowTotal =
+                                                    Number(
+                                                        target.lp_imprest || 0,
+                                                    ) +
+                                                    Number(
+                                                        target.lp_direct || 0,
+                                                    ) +
+                                                    Number(target.grant || 0) +
+                                                    Number(target.gop || 0);
+
+                                                return (
+                                                    <tr
+                                                        key={i}
+                                                        className="hover:bg-muted-50/30 transition-colors group"
+                                                    >
+                                                        <td className="py-3 px-4 border-r">
+                                                            <input
+                                                                type="number"
+                                                                className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                value={
+                                                                    target.year
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "foreign_financial_targets",
+                                                                        i,
+                                                                        {
+                                                                            year: parseInt(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            ),
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-2 border-r">
+                                                            <input
+                                                                type="number"
+                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                                placeholder="0"
+                                                                value={
+                                                                    target.lp_imprest ||
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "foreign_financial_targets",
+                                                                        i,
+                                                                        {
+                                                                            lp_imprest:
+                                                                                parseInt(
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                                ),
+                                                                        } as any,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-2 border-r">
+                                                            <input
+                                                                type="number"
+                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                                placeholder="0"
+                                                                value={
+                                                                    target.lp_direct ||
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "foreign_financial_targets",
+                                                                        i,
+                                                                        {
+                                                                            lp_direct:
+                                                                                parseInt(
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                                ),
+                                                                        } as any,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-2 border-r">
+                                                            <input
+                                                                type="number"
+                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                                placeholder="0"
+                                                                value={
+                                                                    target.grant ||
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "foreign_financial_targets",
+                                                                        i,
+                                                                        {
+                                                                            grant: parseInt(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            ),
+                                                                        } as any,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-2 border-r">
+                                                            <input
+                                                                type="number"
+                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
+                                                                placeholder="0"
+                                                                value={
+                                                                    target.gop ||
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "foreign_financial_targets",
+                                                                        i,
+                                                                        {
+                                                                            gop: parseInt(
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                            ),
+                                                                        } as any,
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                            {rowTotal.toLocaleString()}
+                                                        </td>
+                                                        <td className="py-3 px-2 text-center">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeRow(
+                                                                        "foreign_financial_targets",
+                                                                        i,
+                                                                    )
+                                                                }
+                                                                className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            },
+                                        )}
+                                    </tbody>
+                                </table>
+                                {payload.foreign_financial_targets.length ===
+                                    0 && (
+                                    <div className="p-8 text-center text-muted-400 text-sm italic">
+                                        No foreign financial targets added.
+                                        Click &quot;+ ADD FINANCIAL TARGET&quot;
+                                        to begin.
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                        {getErrorsForPath("foreign_financial_targets").length >
+                            0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath(
+                                    "foreign_financial_targets",
+                                ).map((msg, i) => (
+                                    <p
+                                        key={i}
+                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                    >
+                                        <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                        {msg}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-2">
+                        <div
+                            className={`rounded-xl border shadow-sm overflow-hidden  ${
+                                errors.foreign_physical_targets
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                    Foreign Physical Targets
+                                </h3>
+                                <button
+                                    type="button"
+                                    onClick={() =>
+                                        addRow("foreign_physical_targets", {
+                                            name: "",
+                                            costs: [],
+                                        })
+                                    }
+                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                                >
+                                    + ADD PHYSICAL TARGET
+                                </button>
+                            </div>
+
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-left border-collapse">
+                                    <thead>
+                                        <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
+                                            <th className="py-4 px-4 border-r w-64">
+                                                Components
+                                            </th>
+                                            {["PS", "MOOE", "CO", "FINEX"].map(
+                                                (ec) => (
+                                                    <th
+                                                        key={ec}
+                                                        className="px-2 text-center border-r min-w-[180px]"
+                                                    >
+                                                        {ec}
+                                                    </th>
+                                                ),
+                                            )}
+                                            <th className="w-10"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-muted-50">
+                                        {payload.foreign_physical_targets.map(
+                                            (phys, i) => (
+                                                <tr
+                                                    key={i}
+                                                    className="hover:bg-muted-50/30 transition-colors group"
+                                                >
+                                                    <td className="py-3 px-4 border-r align-top">
+                                                        <input
+                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                            placeholder="Enter Component Name..."
+                                                            value={phys.name}
+                                                            onChange={(e) =>
+                                                                updateRow(
+                                                                    "foreign_physical_targets",
+                                                                    i,
+                                                                    {
+                                                                        name: e
+                                                                            .target
+                                                                            .value,
+                                                                    } as any,
+                                                                )
+                                                            }
+                                                        />
+                                                    </td>
+                                                    {[
+                                                        "PS",
+                                                        "MOOE",
+                                                        "CO",
+                                                        "FINEX",
+                                                    ].map((ec) => {
+                                                        // HELPER: Find specific cost objects by class, category, and method
+                                                        const getCost = (
+                                                            cat: "LP" | "GOP",
+                                                            method?:
+                                                                | "cash"
+                                                                | "non_cash",
+                                                        ) =>
+                                                            phys.costs.find(
+                                                                (c) =>
+                                                                    c.expense_class ===
+                                                                        ec &&
+                                                                    c.fund_category ===
+                                                                        cat &&
+                                                                    (cat !==
+                                                                        "LP" ||
+                                                                        c.fund_method ===
+                                                                            method),
+                                                            )?.amount || "";
+
+                                                        const lpCash = Number(
+                                                            getCost(
+                                                                "LP",
+                                                                "cash",
+                                                            ) || 0,
+                                                        );
+                                                        const lpNonCash =
+                                                            Number(
+                                                                getCost(
+                                                                    "LP",
+                                                                    "non_cash",
+                                                                ) || 0,
+                                                            );
+                                                        const gop = Number(
+                                                            getCost("GOP") || 0,
+                                                        );
+                                                        const cellTotal =
+                                                            lpCash +
+                                                            lpNonCash +
+                                                            gop;
+
+                                                        return (
+                                                            <td
+                                                                key={ec}
+                                                                className="p-3 border-r align-top min-w-[160px]"
+                                                            >
+                                                                <div className="flex flex-col gap-2">
+                                                                    {/* LP Cash Input */}
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-sm font-bold text-muted-500 w-12">
+                                                                            LP
+                                                                            CASH
+                                                                        </span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            value={getCost(
+                                                                                "LP",
+                                                                                "cash",
+                                                                            )}
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                handleMatrixChange203(
+                                                                                    i,
+                                                                                    ec,
+                                                                                    "LP",
+                                                                                    e
+                                                                                        .target
+                                                                                        .valueAsNumber ||
+                                                                                        0,
+                                                                                    "foreign_physical_targets",
+                                                                                    "cash",
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* LP Non-Cash Input */}
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-sm font-bold text-muted-500 w-12">
+                                                                            LP
+                                                                            NON-CASH
+                                                                        </span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            value={getCost(
+                                                                                "LP",
+                                                                                "non_cash",
+                                                                            )}
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                handleMatrixChange203(
+                                                                                    i,
+                                                                                    ec,
+                                                                                    "LP",
+                                                                                    e
+                                                                                        .target
+                                                                                        .valueAsNumber ||
+                                                                                        0,
+                                                                                    "foreign_physical_targets",
+                                                                                    "non_cash",
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* GOP Input */}
+                                                                    <div className="flex items-center justify-between gap-2">
+                                                                        <span className="text-sm font-bold text-muted-500 w-12">
+                                                                            GOP
+                                                                        </span>
+                                                                        <input
+                                                                            type="number"
+                                                                            className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            value={getCost(
+                                                                                "GOP",
+                                                                            )}
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                handleMatrixChange203(
+                                                                                    i,
+                                                                                    ec,
+                                                                                    "GOP",
+                                                                                    e
+                                                                                        .target
+                                                                                        .valueAsNumber ||
+                                                                                        0,
+                                                                                    "foreign_physical_targets",
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </div>
+
+                                                                    {/* Sub-total for this Expense Class */}
+                                                                    <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
+                                                                        <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
+                                                                            Total
+                                                                        </span>
+                                                                        <span className="text-sm font-mono font-bold text-blue-600">
+                                                                            {cellTotal.toLocaleString(
+                                                                                undefined,
+                                                                                {
+                                                                                    minimumFractionDigits: 2,
+                                                                                },
+                                                                            )}
+                                                                        </span>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                        );
+                                                    })}
+                                                    <td className="py-3 px-2 text-center align-top">
+                                                        <button
+                                                            type="button"
+                                                            onClick={() =>
+                                                                removeRow(
+                                                                    "foreign_physical_targets",
+                                                                    i,
+                                                                )
+                                                            }
+                                                            className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            ✕
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        {getErrorsForPath("foreign_physical_targets").length >
+                            0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath(
+                                    "foreign_physical_targets",
+                                ).map((msg, i) => (
+                                    <p
+                                        key={i}
+                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                    >
+                                        <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                        {msg}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     {/* Physical Targets Section Styled similarly */}
