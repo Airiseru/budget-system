@@ -179,9 +179,6 @@ export default function ProposalView({
         form_id: data.id,
     };
 
-    console.log("PROPOSAL VIEW");
-    console.log(data);
-
     const budgetYear = Number(data.proposal_year);
     const forwardYear1 = budgetYear + 1;
     const forwardYear2 = budgetYear + 2;
@@ -547,12 +544,6 @@ export default function ProposalView({
                                                 order.indexOf(a) -
                                                 order.indexOf(b),
                                         ) as string[];
-
-                                        console.log(
-                                            "Unique Classes for ",
-                                            attr.description,
-                                            uniqueClasses,
-                                        );
 
                                         const getVal = (
                                             year: number,

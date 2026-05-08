@@ -136,9 +136,11 @@ export default async function ProposalsPage() {
                                                     ]
                                                 }
                                             >
-                                                {STATUS_LABELS[
-                                                    proposal.auth_status
-                                                ] ?? "Draft"}
+                                                {proposal.auth_status
+                                                    ? STATUS_LABELS[
+                                                          proposal.auth_status
+                                                      ]
+                                                    : "Draft"}
                                             </Badge>
                                         </div>
                                         <p className="text-md text-primary-500 font-bold">

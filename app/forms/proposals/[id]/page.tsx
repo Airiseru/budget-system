@@ -126,6 +126,13 @@ export default async function ProposalDetailsPage({
         workflow,
     );
 
+    const deleteFormAction = async (formId: string) => {
+        "use server";
+        if (data.auth_status !== "draft") return;
+        await ProposalRepo.deleteProjectProposal(formId);
+        redirect("/forms/proposals");
+    };
+
     return (
         <ProposalView
             data={data}
@@ -137,9 +144,13 @@ export default async function ProposalDetailsPage({
             isDbmEvaluator={isActingAsEvaluator}
             userCanSign={entityActionsLockedByBudgetCycle ? false : userCanSign}
             budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
+            currentSignatoryRole={currentSignatoryRole}
+            existingSignature={existingSignature}
+            allSignatures={allSignatures}
             pastSignatures={pastSignatures}
             latestRejection={latestRejection}
             updateAuthStatus={updateAuthStatus}
+            deleteFormAction={deleteFormAction}
         />
     );
 }

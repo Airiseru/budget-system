@@ -303,7 +303,7 @@ const PrerequisiteRow = ({
 );
 
 interface WrapperProps {
-    project?: ProposalFormProject;
+    project?: any;
     type: "202" | "203";
     userId: string;
     entityName: string;
@@ -538,7 +538,6 @@ export default function ProposalForm({
             // toast.error("Please fix the errors before submitting");
             // Scroll to the first error
             window.scrollTo({ top: 0, behavior: "smooth" });
-            console.error("Validation failed", formattedErrors);
             return;
         }
 
@@ -571,13 +570,10 @@ export default function ProposalForm({
                         priority_rank:
                             "This priority rank is already taken by another proposal.",
                     });
-                } else {
-                    console.error("Submission failed:", errorData);
-                    // Handle other general errors
                 }
             }
         } catch {
-            console.error("Fetch error");
+            // toast.error("An unexpected error occurred. Please try again.");
         } finally {
             setIsLoading(false);
         }
@@ -647,8 +643,6 @@ export default function ProposalForm({
 
             currentComp.costs = currentCosts;
             updatedComponents[componentIdx] = currentComp;
-
-            console.log("Updated Components after change:", updatedComponents);
 
             return { ...prev, [field]: updatedComponents };
         });
