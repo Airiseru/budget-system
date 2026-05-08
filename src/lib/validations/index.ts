@@ -1,7 +1,7 @@
 import { staffingFormSchema } from "@/src/lib/validations/staffing.schema"
 import { retireeFormSchema } from "@/src/lib/validations/retiree.schema"
 
-export function cleanDataBasedOnTable(tableName: string, data: any) {
+export function cleanDataBasedOnTable(tableName: string, data: unknown) {
     switch (tableName) {
         case 'staffing_summaries': {
             return staffingFormSchema.parse(data)

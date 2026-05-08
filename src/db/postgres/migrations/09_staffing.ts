@@ -1,6 +1,6 @@
 import { Kysely, sql } from 'kysely'
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<unknown>): Promise<void> {
     // Create the Parent Table (Staffing Summary)
     await db.schema
         .createTable('staffing_summaries')
@@ -55,7 +55,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     await db.schema.createIndex('idx_comp_rule_id').on('compensations').column('compensation_rule_id').execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop indexes
     await db.schema.dropIndex('idx_pap_id').execute()
     await db.schema.dropIndex('idx_staffing_summary_id').execute()

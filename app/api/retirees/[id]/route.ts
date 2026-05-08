@@ -9,6 +9,7 @@ import { BP205Schema } from '@/src/lib/validations/retiree.schema';
 import { logNewForm, logSaveFormEdits, logSubmitForm, logFormOverwrite } from '@/src/actions/audit';
 import { createFormRepository } from '@/src/db/factory'
 import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle';
+import { NewRetireeRecord } from '@/src/types/retirees';
 
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -18,6 +19,8 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
     try {
         const body = await request.json();
         const isDbm = body.isDbm ?? body.isDBM ?? false
+        const overrideRemarks =
+            typeof body.overrideRemarks === 'string' ? body.overrideRemarks.trim() : ''
 
         // 1. THE LOCK CHECK: Verify status before doing anything else
         const current = await getRetireesFormById(id);
@@ -38,6 +41,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
         const canEditDraft = current.auth_status === 'draft'
         const canEditPendingDbm = isDbm && current.auth_status === 'pending_dbm'
+
+        if (canEditPendingDbm && !overrideRemarks) {
+            return NextResponse.json(
+                { error: "DBM remarks are required when overwriting or changing this form." },
+                { status: 400 }
+            );
+        }
 
         if (!canEditDraft && !canEditPendingDbm) {
             return NextResponse.json(
@@ -84,13 +94,13 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             !current.parent_form_id
 
         const overwriteResult = shouldCreateDbmCopy
-            ? await createDbmRetireeOverwrite(id, listData, retireesWithId as any, body.auth_status)
+            ? await createDbmRetireeOverwrite(id, listData, retireesWithId as NewRetireeRecord[], body.auth_status)
             : null
 
         const targetFormId = overwriteResult?.formId ?? id
 
         if (!shouldCreateDbmCopy) {
-            await updateRetireeSubmission(id, listData, retireesWithId as any, body.auth_status)
+            await updateRetireeSubmission(id, listData, retireesWithId as NewRetireeRecord[], body.auth_status)
         }
 
         const updated = await getRetireesFormById(targetFormId)
@@ -115,6 +125,23 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
             if (!logCreateResult.success) {
                 return NextResponse.json({ error: "Failed to log overwritten form creation" }, { status: 500 });
+            }
+
+            if (body.auth_status === 'pending_dbm') {
+                const firstOverwriteLogResult = await logFormOverwrite(
+                    body.userId,
+                    current.entity_id,
+                    'retirees_list',
+                    targetFormId,
+                    current,
+                    updated,
+                    updated.updated_at,
+                    overrideRemarks
+                )
+
+                if (!firstOverwriteLogResult.success) {
+                    return NextResponse.json({ error: "Failed to log initial form overwrite" }, { status: 500 });
+                }
             }
         }
 
@@ -153,25 +180,31 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         else if (body.auth_status === 'pending_dbm') {
             const result = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
 
-            const overwriteLogResult = await logFormOverwrite(
-                body.userId,
-                current.entity_id,
-                'retirees_list',
-                targetFormId,
-                current,
-                updated,
-                result.updated_at
-            )
+            if (!overwriteResult?.created) {
+                const overwriteLogResult = await logFormOverwrite(
+                    body.userId,
+                    current.entity_id,
+                    'retirees_list',
+                    targetFormId,
+                    current,
+                    updated,
+                    result.updated_at,
+                    overrideRemarks
+                )
 
-            if (!overwriteLogResult.success) {
-                return NextResponse.json({ error: "Failed to log form overwrite" }, { status: 500 });
+                if (!overwriteLogResult.success) {
+                    return NextResponse.json({ error: "Failed to log form overwrite" }, { status: 500 });
+                }
             }
         }
 
         return NextResponse.json({ formId: targetFormId });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("API_RETIREES_PUT_ERROR:", error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : "Failed to update form" },
+            { status: 500 }
+        );
     }
 }

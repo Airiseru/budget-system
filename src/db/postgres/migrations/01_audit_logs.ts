@@ -1,6 +1,6 @@
 import { Kysely, sql } from "kysely"
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<unknown>): Promise<void> {
     await db.schema
         .createTable('audit_logs')
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
@@ -87,7 +87,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     `.execute(db)
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop triggers
     await sql`DROP TRIGGER IF EXISTS trg_prevent_status_rollback ON forms`.execute(db)
     await sql`DROP TRIGGER IF EXISTS trg_audit_logs_append_only ON audit_logs`.execute(db)

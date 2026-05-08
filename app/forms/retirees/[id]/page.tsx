@@ -3,6 +3,8 @@ import {
     createKeyRepository,
     createFormRepository,
     createAuditRepository,
+    createAdministrativeOverrideRepository,
+    createEntityRepository,
 } from "@/src/db/factory";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { redirect, notFound } from "next/navigation";
@@ -26,6 +28,10 @@ const FormRepo = createFormRepository(process.env.DATABASE_TYPE || "postgres");
 const AuditRepo = createAuditRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
+const AdministrativeOverrideRepo = createAdministrativeOverrideRepository(
+    process.env.DATABASE_TYPE || "postgres",
+);
+const EntityRepo = createEntityRepository(process.env.DATABASE_TYPE || "postgres");
 
 export default async function RetireeDetailsPage({
     params,
@@ -80,6 +86,12 @@ export default async function RetireeDetailsPage({
         "retirees_list",
         data.id ?? "",
     );
+    const overrideHistory =
+        await AdministrativeOverrideRepo.listAdministrativeOverridesByTargets(
+            "retirees_list",
+            versionFamily.forms.map((form) => form.id),
+        );
+    const ownerEntityName = await EntityRepo.getFullEntityNameById(data.entity_id);
 
     // Determine the correct back path based on the user's role
     const isOwnAgencyForm = session.user.entity_id === data.entity_id;
@@ -147,6 +159,8 @@ export default async function RetireeDetailsPage({
             allSignatures={allSignatures}
             pastSignatures={pastSignatures}
             latestRejection={latestRejection}
+            ownerEntityName={ownerEntityName || "Unknown Agency"}
+            overrideHistory={overrideHistory}
             updateAuthStatus={updateAuthStatus}
             deleteFormAction={deleteFormAction}
         />

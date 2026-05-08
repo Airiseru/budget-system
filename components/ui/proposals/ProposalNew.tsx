@@ -2,11 +2,12 @@
 
 import { useSearchParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, Save } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import ProposalForm from "@/components/ui/proposals/ProposalForm";
+import { FullProjectProposal } from "@/src/types/project_proposals";
 
 interface WrapperProps {
-    project?: any; // <--- Add this line
+    project?: FullProjectProposal;
     type?: "202" | "203";
     userId: string;
     entityName: string;

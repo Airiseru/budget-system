@@ -4,9 +4,7 @@ import { NewPap } from '@/src/types/pap'
 export const dynamic = 'force-dynamic';
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 
-export async function GET(
-    request: Request
-) {
+export async function GET() {
     // TODO: get all relevant pap information (join)
     const paps = await PapRepository.getAllPaps()
     console.log(`GET PAPS RESULT: ${JSON.stringify(paps)}`)

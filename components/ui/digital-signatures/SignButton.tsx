@@ -124,8 +124,12 @@ export function SignButton({
             setStep("signed");
             setPin("");
             onApproved?.();
-        } catch (err: any) {
-            setError(err.message ?? "Failed to approved. Please try again.");
+        } catch (err: unknown) {
+            setError(
+                err instanceof Error
+                    ? err.message
+                    : "Failed to approved. Please try again.",
+            );
             setStep("pin");
             setPin("");
         }

@@ -46,9 +46,11 @@ import {
 } from "./uacs"
 import {
     ItemCatalogTable,
-    BudgetAllocationTable
+    BudgetAllocationTable,
+    AllocationWorkflowLogTable,
 } from "./line_items"
 import { BudgetCycleTable } from "./budget_settings"
+import { AdministrativeOverrideTable } from "./administrative_overrides"
 
 export interface Database {
     // users
@@ -69,6 +71,7 @@ export interface Database {
     // audit
     audit_logs: AuditLogTable
     merkle_roots: MerkleRootTable
+    administrative_overrides: AdministrativeOverrideTable
 
     // paps
     paps: PapTable
@@ -116,8 +119,9 @@ export interface Database {
     foreign_physical_targets: ForeignPhysicalTargetTable
 
     // line items
-    item_catalogs: ItemCatalogTable
+    item_catalog: ItemCatalogTable
     budget_allocations: BudgetAllocationTable
+    allocation_workflow_logs: AllocationWorkflowLogTable
 
     // budget settings
     budget_cycles: BudgetCycleTable

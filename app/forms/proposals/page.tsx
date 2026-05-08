@@ -26,6 +26,19 @@ const statusColors: Record<
     rejected: "destructive",
 };
 
+type ProposalSummary = {
+    id: string;
+    type: "202" | "203";
+    proposal_year: number;
+    priority_rank: number;
+    auth_status: string | null;
+    title: string;
+    total_proposal_currency: string;
+    total_proposal_cost: number;
+    is_infrastructure: boolean;
+    submission_date: Date | string | null;
+};
+
 export default async function ProposalsPage() {
     const session = await sessionWithEntity();
 
@@ -93,7 +106,7 @@ export default async function ProposalsPage() {
                     Budget Proposals (BP 202/203)
                 </h1>
                 <div className="grid gap-4">
-                    {data.map((proposal: any) => (
+                    {data.map((proposal: ProposalSummary) => (
                         <Link
                             href={`/forms/proposals/${proposal.id}`}
                             key={proposal.id}

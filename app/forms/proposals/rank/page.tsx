@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
 import { sessionWithEntity } from "@/src/actions/auth";
-import ProposalClientWrapper from "@/components/ui/proposals/ProposalNew";
 import RankManager from "@/components/ui/proposals/ProposalPriority";
 import { createProposalRepository } from "@/src/db/factory";
 

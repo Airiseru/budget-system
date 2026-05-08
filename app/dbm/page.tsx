@@ -31,6 +31,14 @@ export default async function HomePage() {
                     label='View All Forms'
                 />
                 <GeneralButton
+                    url='/dbm/paps'
+                    label='Manage PAPs'
+                />
+                <GeneralButton
+                    url='/dbm/tier-one'
+                    label='Tier One Allocations'
+                />
+                <GeneralButton
                     url='/dbm/entities'
                     label='Manage Entities'
                 />
@@ -41,6 +49,10 @@ export default async function HomePage() {
                 <GeneralButton
                     url='/dbm/uacs'
                     label='Manage UACS Codes'
+                />
+                <GeneralButton
+                    url='/dbm/items'
+                    label='Manage Line Items'
                 />
                 {isApprover && (
                     <GeneralButton

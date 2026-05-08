@@ -2,9 +2,11 @@ import { db } from '../database'
 import { TLB_FACTOR } from '@/src/lib/constants';
 import { NewRetireeRecord, NewRetireesList } from '@/src/types/retirees';
 import { getOperatingUnitDescendantIds } from './entityRepository';
+import { Transaction } from 'kysely';
+import { Database } from '@/src/types';
 
 async function createRetireeSubmissionRecord(
-    trx: any,
+    trx: typeof db,
     entityId: string,
     fiscal_year: number,
     listData: Omit<NewRetireesList, 'id' | 'submission_date' | 'created_at' | 'updated_at'>,
@@ -110,7 +112,7 @@ export async function getAllRetireeSubmissions(
     inDbmModule: boolean = false,
     fiscalYear: number = new Date().getFullYear() + 1,
 ) {
-    let query = db
+    const query = db
         .selectFrom('retirees_list')
         .innerJoin('forms', 'forms.id', 'retirees_list.id')
         .select([
@@ -227,7 +229,7 @@ export async function updateRetireeListMetadata(id: string, data: { fiscal_year?
 }
 
 async function updateRetireeSubmissionRecord(
-    trx: any,
+    trx: Transaction<Database>,
     formId: string,
     data: { fiscal_year?: number; is_mandatory?: boolean },
     retirees: NewRetireeRecord[],
@@ -326,7 +328,12 @@ export async function createDbmRetireeOverwrite(
             sourceForm.entity_id,
             data.fiscal_year ?? new Date().getFullYear() + 1,
             { is_mandatory: data.is_mandatory ?? true },
-            retirees.map(({ id: _id, retirees_list_id: _retireesListId, ...retiree }) => retiree),
+            retirees.map((retiree) => {
+                const retireePayload: Partial<NewRetireeRecord> = { ...retiree }
+                delete retireePayload.id
+                delete retireePayload.retirees_list_id
+                return retireePayload as Omit<NewRetireeRecord, 'id' | 'retirees_list_id'>
+            }),
             authStatus ?? sourceForm.auth_status ?? 'pending_dbm',
             parentFormId,
             (sourceForm.version ?? 1) + 1

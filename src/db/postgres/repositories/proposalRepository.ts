@@ -1,11 +1,71 @@
 import { db } from "../database";
-import {
-    FullProjectProposal,
-    NewProjectProposal,
-} from "../../../types/project_proposals";
+import { FullProjectProposal } from "../../../types/project_proposals";
 import { sql } from "kysely";
 import { Transaction } from "kysely";
 import { Database } from "@/src/types";
+
+type ProposalExpenseClass = {
+    amount: number | string;
+    expense_class: string;
+    currency?: string;
+};
+
+type ProposalCostSourceItem = Record<string, unknown> & {
+    costs?: ProposalExpenseClass[];
+};
+
+type ProposalAttributionEntry = {
+    year: number;
+    tier: number;
+    costs: ProposalExpenseClass[];
+};
+
+type ProposalAttribution = {
+    description: string;
+    attribution_costs: ProposalAttributionEntry[];
+};
+
+type ProposalSummaryData = {
+    title: string;
+    proposal_year: number;
+    priority_rank: number;
+    is_new?: boolean;
+    is_infrastructure?: boolean;
+    for_ict?: boolean | null;
+    myca_issuance?: boolean | null;
+    total_proposal_currency?: string;
+    total_proposal_cost?: number;
+    type: "202" | "203";
+    org_outcome_id?: string;
+    description?: string;
+    purpose?: string;
+    beneficiaries?: string;
+};
+
+type ProposalWritePayload = {
+    proposal_year: number;
+    priority_rank: number;
+    is_new: boolean;
+    is_infrastructure: boolean;
+    for_ict?: boolean | null;
+    total_proposal_cost: number;
+    type: "202" | "203";
+    pap_prerequisites?: Array<Record<string, unknown>>;
+    cost_by_components: ProposalCostSourceItem[];
+    local_financial_attributions?: ProposalAttribution[];
+    local_infrastructure_requirements?: ProposalCostSourceItem[];
+    local_locations?: ProposalCostSourceItem[];
+    local_physical_targets?: Array<Record<string, unknown>>;
+    foreign_financial_targets?: ProposalCostSourceItem[];
+    foreign_physical_targets?: Array<Record<string, unknown>>;
+};
+
+type CostSourceTableName =
+    | "cost_by_components"
+    | "local_infrastructure_requirements"
+    | "local_locations"
+    | "foreign_financial_targets"
+    | "foreign_physical_targets";
 
 /**
  * Helper to handle the "Cost Source" architecture.
@@ -13,9 +73,9 @@ import { Database } from "@/src/types";
  */
 async function insertWithCostSource(
     trx: Transaction<Database>,
-    tableName: keyof Database,
+    tableName: CostSourceTableName,
     proposalId: string,
-    items: any[],
+    items: ProposalCostSourceItem[],
     type: string,
 ) {
     if (!items || items.length === 0) return;
@@ -33,7 +93,7 @@ async function insertWithCostSource(
 
         // 3. Insert the entity (e.g., the Component Row)
         await trx
-            .insertInto(tableName as any)
+            .insertInto(trx.dynamic.table(tableName))
             .values({
                 ...entityData,
                 proposal_id: proposalId,
@@ -46,7 +106,7 @@ async function insertWithCostSource(
             await trx
                 .insertInto("cost_by_expense_class")
                 .values(
-                    costs.map((c: any) => ({
+                    costs.map((c) => ({
                         amount: c.amount,
                         expense_class: c.expense_class,
                         currency: c.currency || "PHP",
@@ -63,7 +123,7 @@ async function insertWithCostSource(
 async function insertAttributions(
     trx: Transaction<Database>,
     proposalId: string,
-    attributions: any[],
+    attributions: ProposalAttribution[],
 ) {
     if (!attributions?.length) return;
 
@@ -104,7 +164,7 @@ async function insertAttributions(
             await trx
                 .insertInto("cost_by_expense_class")
                 .values(
-                    entry.costs.map((c: any) => ({
+                    entry.costs.map((c) => ({
                         cost_source_id: source.id,
                         expense_class: c.expense_class,
                         amount: c.amount || 0,
@@ -119,8 +179,8 @@ async function insertAttributions(
 
 export async function createProjectProposal(
     entityId: string,
-    proposalData: any,
-    payload: any,
+    proposalData: ProposalSummaryData,
+    payload: ProposalWritePayload,
     authStatus: string,
     fiscal_year: number,
     parent_form_id?: string,
@@ -213,7 +273,7 @@ export async function createProjectProposal(
             await trx
                 .insertInto("pap_prerequisites")
                 .values(
-                    payload.pap_prerequisites.map((p: any) => ({
+                    payload.pap_prerequisites.map((p) => ({
                         ...p,
                         proposal_id: form.id,
                     })),
@@ -255,7 +315,7 @@ export async function createProjectProposal(
                 await trx
                     .insertInto("local_physical_targets")
                     .values(
-                        payload.local_physical_targets.map((p: any) => ({
+                        payload.local_physical_targets.map((p) => ({
                             ...p,
                             proposal_id: form.id,
                         })),
@@ -306,17 +366,17 @@ export async function getProjectProposalById(
 
     if (!project) return null;
 
-    const fetchWithCosts = async (tableName: any) => {
+    const fetchWithCosts = async (tableName: CostSourceTableName) => {
         const items = await db
-            .selectFrom(tableName)
+            .selectFrom(db.dynamic.table(tableName))
             .where("proposal_id", "=", id)
             .selectAll()
             .execute();
         return await Promise.all(
-            items.map(async (item: any) => {
+            items.map(async (item) => {
                 const costs = await db
                     .selectFrom("cost_by_expense_class")
-                    .where("cost_source_id", "=", item.cost_source_id)
+                    .where("cost_source_id", "=", String(item.cost_source_id))
                     .selectAll()
                     .execute();
                 return { ...item, costs };
@@ -435,7 +495,10 @@ export async function getAllProposalSummaries(
         .execute();
 }
 
-export async function updateProjectProposal(proposalId: string, payload: any) {
+export async function updateProjectProposal(
+    proposalId: string,
+    payload: { payload: ProposalWritePayload; auth_status?: string },
+) {
     return await db.transaction().execute(async (trx) => {
         const p = payload.payload;
         const auth_status = payload.auth_status;
@@ -514,7 +577,7 @@ export async function updateProjectProposal(proposalId: string, payload: any) {
             await trx
                 .insertInto("pap_prerequisites")
                 .values(
-                    p.pap_prerequisites.map((i: any) => ({
+                    p.pap_prerequisites.map((i) => ({
                         ...i,
                         proposal_id: proposalId,
                     })),
@@ -555,7 +618,7 @@ export async function updateProjectProposal(proposalId: string, payload: any) {
                 await trx
                     .insertInto("local_physical_targets")
                     .values(
-                        p.local_physical_targets.map((i: any) => ({
+                        p.local_physical_targets.map((i) => ({
                             ...i,
                             proposal_id: proposalId,
                         })),
@@ -567,7 +630,7 @@ export async function updateProjectProposal(proposalId: string, payload: any) {
                 await trx
                     .insertInto("foreign_financial_targets")
                     .values(
-                        p.foreign_financial_targets.map((i: any) => ({
+                        p.foreign_physical_targets.map((i) => ({
                             ...i,
                             proposal_id: proposalId,
                         })),

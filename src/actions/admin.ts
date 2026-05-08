@@ -7,7 +7,6 @@ import { UserRole, UserAccessLevel, UserWorkflowRole } from '@/src/types/entitie
 import { redirect } from 'next/navigation'
 
 export async function requireAdmin(
-    errorMessage: string = 'Unauthorized: You must be an admin to perform this action.'
 ) {
     const session = await sessionDetails()
     if (!session || session?.user?.role !== 'admin') {
@@ -16,7 +15,6 @@ export async function requireAdmin(
 }
 
 export async function requireDbm(
-    errorMessage: string = 'Unauthorized: You must be a dbm to perform this action.'
 ) {
     const session = await sessionDetails()
     if (!session || session?.user?.role !== 'dbm') {

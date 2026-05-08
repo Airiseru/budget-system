@@ -1,7 +1,6 @@
 'use client'
 
 import { Trash2 } from "lucide-react"
-import { useRouter } from "next/navigation"
 
 interface FormDeleteButtonProps {
     id: string;
@@ -9,8 +8,6 @@ interface FormDeleteButtonProps {
 }
 
 export default function FormDeleteButton({ id, onDelete }: FormDeleteButtonProps) {
-    const router = useRouter();
-
     const handleDelete = async () => {
         const confirmed = window.confirm(
             "Are you sure you want to delete this? This cannot be undone."

@@ -95,6 +95,10 @@ export function UacsForm({ category, mode, initialValues, code }: Props) {
         setSelectedStatus(value ?? 'active')
     }
 
+    const handleScopeChange = (value: string | null) => {
+        setScope(value ?? 'record')
+    }
+
     const helperText = useMemo(() => {
         if (mode === 'create' || isRecordScope) return null
         if (category === 'funding_source') return 'Branch edits only change the selected hierarchy level, status, and the descendant full codes that depend on it.'
@@ -114,19 +118,25 @@ export function UacsForm({ category, mode, initialValues, code }: Props) {
             {mode === 'edit' && (
                 <div className="space-y-2">
                     <label htmlFor='scope' className="font-medium">Cascade Scope</label>
-                    <select
-                        name="scope"
-                        id='scope'
+                    <input type="hidden" name="scope" value={scope} />
+                    <Select
                         value={scope}
-                        onChange={(event) => setScope(event.target.value)}
-                        className="border border-border px-3 py-2 w-full rounded bg-background"
+                        onValueChange={handleScopeChange}
                     >
-                        {scopeOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                                {option.label}
-                            </option>
-                        ))}
-                    </select>
+                        <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
+                            <SelectValue placeholder="Select Scope">
+                                {scopeOptions.find((option) => option.value === scope)?.label}
+                            </SelectValue>
+                        </SelectTrigger>
+
+                        <SelectContent>
+                            {scopeOptions.map((option) => (
+                                <SelectItem key={option.value} value={option.value}>
+                                    {option.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                     {helperText && (
                         <p className="text-xs text-muted-foreground">{helperText}</p>
                     )}

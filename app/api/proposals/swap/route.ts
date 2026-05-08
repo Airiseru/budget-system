@@ -15,7 +15,7 @@ export async function POST(req: Request) {
         );
 
         return NextResponse.json({ success: true });
-    } catch (error: any) {
+    } catch (error: unknown) {
         console.error("SWAP ERROR:", error);
         return NextResponse.json(
             { error: "Failed to swap ranks" },

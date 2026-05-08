@@ -1,6 +1,6 @@
-import { Kysely, sql } from "kysely";
+import { Kysely } from "kysely";
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<unknown>): Promise<void> {
     // Create Junction Table for Form-PAP relationship
     await db.schema
         .createTable('form_paps')
@@ -15,7 +15,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop tables
     await db.schema.dropTable('form_paps').execute()
 }

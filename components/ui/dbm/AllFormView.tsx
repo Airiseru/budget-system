@@ -14,8 +14,21 @@ import {
 } from "@/components/ui/select"
 import { Filter, ChevronRight, FileText, Building2 } from 'lucide-react'
 
+type DBMFormListItem = {
+    id: string
+    entity_abbr: string | null
+    entity_name: string | null
+    department_name?: string | null
+    type: string | null
+    codename: string
+    fiscal_year: number
+    version: number
+    auth_status: string | null
+    updated_at: Date | string
+}
+
 interface DBMFormViewProps {
-    forms: any[]
+    forms: DBMFormListItem[]
     page: number
     totalPages: number
     selectedYear?: number
@@ -50,7 +63,7 @@ export default function AllFormView({
     const [status, setStatus] = useState(selectedStatus || "")
     const [type, setType] = useState(selectedType || "")
 
-    const handleFilter = (e: React.FormEvent<HTMLFormElement>) => {
+    const handleFilter = (e: React.SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault();
 
         const params = new URLSearchParams();
@@ -183,8 +196,8 @@ export default function AllFormView({
                                             <div className="flex items-center gap-4">
                                                 <Building2 size={16} className="text-muted-foreground/70 shrink-0" />
                                                 <div>
-                                                    <p className="font-bold text-secondary-foreground leading-tight">{form.entity_abbr || form.entity_name}</p>
-                                                    <p className="text-sm text-muted-foreground line-clamp-1">{form.entity_name}</p>
+                                                    <p className="font-bold text-secondary-foreground leading-tight">{form.entity_name}</p>
+                                                    <p className="text-sm text-muted-foreground line-clamp-1">{form.department_name || 'No department'}</p>
                                                 </div>
                                             </div>
                                         </td>

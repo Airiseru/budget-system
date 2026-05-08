@@ -17,9 +17,53 @@ import {
     Component,
     Banknote,
 } from "lucide-react";
+import { FullProjectProposal } from "@/src/types/project_proposals";
 import BackButton from "../BackButton";
 import FormDeleteButton from "../FormDeleteButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
+
+type ProposalExpenseClass = "PS" | "MOOE" | "CO" | "FE" | "FINEX";
+
+type ProposalExpenseValue = {
+    expense_class: ProposalExpenseClass;
+    amount: number;
+};
+
+type ProposalCostEntry = {
+    year?: number;
+    tier?: number;
+    expense_class?: ProposalExpenseClass;
+    amount?: number;
+    expense_classes?: ProposalExpenseValue[];
+};
+
+type ProposalCostedItem = {
+    component_name?: string;
+    description?: string;
+    location?: string;
+    costs?: ProposalCostEntry[];
+};
+
+type ProposalPrerequisite = {
+    name: string;
+    type: string;
+    status: string;
+    remarks: string | null;
+};
+
+type ProposalLocalPhysicalTarget = {
+    target_description: string;
+    year: number;
+};
+
+type ProposalViewData = FullProjectProposal & {
+    pap_prerequisites?: ProposalPrerequisite[];
+    cost_by_components?: ProposalCostedItem[];
+    local_financial_attributions?: ProposalCostedItem[];
+    local_locations?: ProposalCostedItem[];
+    local_physical_targets?: ProposalLocalPhysicalTarget[];
+    local_infrastructure_requirements?: ProposalCostedItem[];
+};
 
 interface ProposalViewProps {
     data: any;
@@ -57,7 +101,7 @@ interface ProposalViewProps {
 
 const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FINEX"];
 
-const CostBreakdownColumns = ({ item }: { item: any }) => {
+const CostBreakdownColumns = ({ item }: { item: ProposalCostedItem }) => {
     if (!item.costs || item.costs.length === 0) {
         return (
             <td className="p-4 text-center col-span-4 text-muted-400 italic text-sm">
@@ -70,7 +114,7 @@ const CostBreakdownColumns = ({ item }: { item: any }) => {
         <>
             {EXPENSE_CLASSES.map((cls) => {
                 const costEntry = item.costs?.find(
-                    (c: any) => c.expense_class === cls,
+                    (c) => c.expense_class === cls,
                 );
                 return (
                     <td
@@ -958,32 +1002,6 @@ export default function ProposalView({
                             <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                                 Foreign Financial Targets (Loan/Grant)
                             </h3>
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    // Find the highest year currently in the targets,
-                                    // default to proposal_year - 1 so the first entry becomes proposal_year
-                                    const lastYear =
-                                        payload.foreign_financial_targets.reduce(
-                                            (max, item) =>
-                                                item.year > max
-                                                    ? item.year
-                                                    : max,
-                                            payload.proposal_year - 1,
-                                        );
-
-                                    addRow("foreign_financial_targets", {
-                                        year: lastYear + 1, // Auto-increment the year
-                                        lp_imprest: 0,
-                                        lp_direct: 0,
-                                        grant: 0,
-                                        gop: 0,
-                                    });
-                                }}
-                                className="text-secondary-foreground-600 text-sm font-bold hover:underline"
-                            >
-                                + ADD FINANCIAL TARGET
-                            </button>
                         </div>
 
                         <div className="overflow-x-auto">

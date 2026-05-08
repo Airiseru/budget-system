@@ -11,7 +11,7 @@ export interface AuditLogTable {
     event_type: AuditEventType
     table_name: string | null
     record_id : string | null
-    payload: any | null
+    payload: Record<string, unknown> | string | null
     changed_at: Generated<Date>
     prev_hash: string | null
     hash: string

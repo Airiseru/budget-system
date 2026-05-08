@@ -1,14 +1,13 @@
 "use server"
 
-import { createAuditRepository, createKeyRepository } from "@/src/db/factory"
+import { createAdministrativeOverrideRepository, createAuditRepository, createKeyRepository } from "@/src/db/factory"
 import { NewAuditLog, SignedLogInput } from "../types/audit"
-import { sessionWithEntity } from "./auth"
-import { redirect } from 'next/navigation'
 import { computeDiff, isDiffEmpty } from "../lib/diff"
 import { AuditEventType, SignaturePayload } from "../types/audit"
 
 const AuditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
+const AdministrativeOverrideRepository = createAdministrativeOverrideRepository(process.env.DATABASE_TYPE || 'postgres')
 
 async function executeAudit(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null = null) {
     try {
@@ -315,21 +314,45 @@ export async function logFormOverwrite(
     recordId: string,
     oldData: Record<string, unknown>,
     newData: Record<string, unknown>,
-    date: Date
+    date: Date,
+    justificationRemark: string,
+    legalDirectiveRef?: string,
 ) {
     const diff = computeDiff(oldData, newData)
-    if (isDiffEmpty(diff)) return { success: true }
     console.log(`DIFF: ${JSON.stringify(diff)}`)
 
-    return await executeAudit({
-        entity_id: entityId,
-        user_id: userId,
-        event_type: 'OVERWRITE_FORM',
-        table_name: tableName,
-        record_id: recordId,
-        payload: diff,
-        changed_at: date
-    })
+    if (!isDiffEmpty(diff)) {
+        const auditResult = await executeAudit({
+            entity_id: entityId,
+            user_id: userId,
+            event_type: 'OVERWRITE_FORM',
+            table_name: tableName,
+            record_id: recordId,
+            payload: diff,
+            changed_at: date
+        })
+
+        if (!auditResult.success) {
+            return auditResult
+        }
+    }
+
+    try {
+        await AdministrativeOverrideRepository.createAdministrativeOverride({
+            target_table: tableName,
+            target_record_id: recordId,
+            overridden_by: userId,
+            justification_remark: justificationRemark,
+            legal_directive_ref: legalDirectiveRef ?? null,
+            snapshot_before: oldData,
+            snapshot_after: newData,
+        })
+
+        return { success: true }
+    } catch (error) {
+        console.error('Failed to log administrative override', error)
+        return { success: false, error: 'Failed to log administrative override' }
+    }
 }
 
 export async function getFormIntegrity(tableName: string, recordId: string) {

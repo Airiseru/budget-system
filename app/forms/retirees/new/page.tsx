@@ -17,7 +17,7 @@ export default async function NewRetireeFormPage() {
     }
 
     const activeCycle = await getActiveBudgetPrepCycle()
-    let components = []
+    const components = []
 
     if (!activeCycle) {
         components.push(<BudgetPrepClosedBanner key="budget-cycle-closed" />)

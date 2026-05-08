@@ -1,0 +1,360 @@
+'use server'
+
+import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
+import { z } from 'zod'
+import { requireDbm } from './admin'
+import { sessionDetails } from './auth'
+import {
+    createBudgetAllocationRepository,
+    createBudgetSettingsRepository,
+    createEntityRepository,
+    createItemRepository,
+    createPapRepository,
+    createUacsRepository,
+} from '../db/factory'
+import {
+    AllocationRemarkFormState,
+    AllocationRemarkSchema,
+    TierOneAllocationFormState,
+    TierOneAllocationSchema,
+} from '../lib/validations/budgetAllocations'
+import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '../lib/constants'
+
+const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
+const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
+const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
+const ItemRepository = createItemRepository(process.env.DATABASE_TYPE || 'postgres')
+const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
+const UacsRepository = createUacsRepository(process.env.DATABASE_TYPE || 'postgres')
+
+const emptyToUndefined = (value: FormDataEntryValue | null) => {
+    if (typeof value !== 'string') return undefined
+    const trimmed = value.trim()
+    return trimmed === '' ? undefined : trimmed
+}
+
+function flattenState(error: z.ZodError, values: Record<string, string | undefined>): TierOneAllocationFormState {
+    return {
+        ...z.flattenError(error),
+        values,
+    }
+}
+
+function flattenRemarkState(error: z.ZodError, values: Record<string, string | undefined>): AllocationRemarkFormState {
+    return {
+        ...z.flattenError(error),
+        values,
+    }
+}
+
+const DBM_REVIEW_STAGE: BUDGET_PREP_WORKFLOW_STAGES_TYPE = 'dbm_review'
+
+export async function loadTierOneDashboard() {
+    await requireDbm()
+
+    const activeCycle = await BudgetSettingsRepository.getActiveBudgetCycle()
+    const cycles = await BudgetSettingsRepository.listBudgetCycles()
+    const fallbackYear = cycles[0]?.fiscal_year ?? null
+
+    return await loadTierOneDashboardForYear(activeCycle?.fiscal_year ?? fallbackYear)
+}
+
+export async function loadTierOneDashboardForYear(selectedYear?: number | null) {
+    await requireDbm()
+
+    const activeCycle = await BudgetSettingsRepository.getActiveBudgetCycle()
+    const cycles = await BudgetSettingsRepository.listBudgetCycles()
+    const viewingYear = activeCycle?.fiscal_year ?? selectedYear ?? cycles[0]?.fiscal_year ?? null
+
+    const [entitySegments, paps, items, fundingSources, allocations] = await Promise.all([
+        EntityRepository.getAllEntitySegments(true),
+        PapRepository.getPapOptions(),
+        ItemRepository.listAllItemCatalog(),
+        UacsRepository.listFundingSources(),
+        viewingYear
+            ? BudgetAllocationRepository.listBudgetAllocationsByYear(viewingYear, 1)
+            : Promise.resolve([]),
+    ])
+
+    return {
+        activeCycle,
+        viewingYear,
+        availableYears: cycles.map((cycle) => cycle.fiscal_year),
+        isViewingOnly: !activeCycle,
+        entities: [
+            ...entitySegments.departments,
+            ...entitySegments.agencies,
+            ...entitySegments.operatingUnits,
+        ],
+        paps,
+        items,
+        fundingSources: fundingSources.filter((source) => source.status === 'active'),
+        allocations,
+    }
+}
+
+export async function loadTierOneAllocation(id: string) {
+    await requireDbm()
+
+    const [dashboard, allocation, remarks] = await Promise.all([
+        loadTierOneDashboard(),
+        BudgetAllocationRepository.getBudgetAllocationById(id),
+        BudgetAllocationRepository.listAllocationWorkflowLogs(id),
+    ])
+
+    if (!allocation) return null
+
+    return {
+        ...dashboard,
+        allocation,
+        remarks,
+    }
+}
+
+export async function createTierOneAllocationAction(
+    _state: TierOneAllocationFormState,
+    formData: FormData
+): Promise<TierOneAllocationFormState> {
+    void _state
+    await requireDbm()
+
+    const activeCycle = await BudgetSettingsRepository.getActiveBudgetCycle()
+    if (!activeCycle) {
+        return {
+            formErrors: ['There is no active budget cycle. Start one before creating Tier One allocations.'],
+        }
+    }
+
+    const values = {
+        entity_id: emptyToUndefined(formData.get('entity_id')) ?? '',
+        pap_code: emptyToUndefined(formData.get('pap_code')) ?? '',
+        item_catalog_id: emptyToUndefined(formData.get('item_catalog_id')) ?? '',
+        fund_code: emptyToUndefined(formData.get('fund_code')) ?? '',
+        workflow_stage: emptyToUndefined(formData.get('workflow_stage')) ?? DBM_REVIEW_STAGE,
+        specific_description: emptyToUndefined(formData.get('specific_description')) ?? '',
+        quantity: emptyToUndefined(formData.get('quantity')) ?? '',
+        currency: emptyToUndefined(formData.get('currency')) ?? 'PHP',
+        proposed_amt: emptyToUndefined(formData.get('proposed_amt')) ?? '0',
+        dbm_rec_amt: emptyToUndefined(formData.get('dbm_rec_amt')) ?? '0',
+        nep_amt: emptyToUndefined(formData.get('nep_amt')) ?? '0',
+        gaa_amt: emptyToUndefined(formData.get('gaa_amt')) ?? '0',
+        valid_from: emptyToUndefined(formData.get('valid_from')) ?? '',
+        valid_until: emptyToUndefined(formData.get('valid_until')) ?? '',
+    }
+
+    const parsed = TierOneAllocationSchema.safeParse(values)
+    if (!parsed.success) {
+        return flattenState(parsed.error, values)
+    }
+
+    try {
+        const created = await BudgetAllocationRepository.createBudgetAllocation({
+            entity_id: parsed.data.entity_id,
+            budget_cycle_year: activeCycle.fiscal_year,
+            pap_code: parsed.data.pap_code,
+            fund_code: parsed.data.fund_code,
+            item_catalog_id: parsed.data.item_catalog_id,
+            tier: 1,
+            specific_description: parsed.data.specific_description,
+            quantity: parsed.data.quantity,
+            currency: parsed.data.currency,
+            proposed_amt: parsed.data.proposed_amt,
+            dbm_rec_amt: parsed.data.dbm_rec_amt,
+            nep_amt: parsed.data.nep_amt,
+            gaa_amt: parsed.data.gaa_amt,
+            valid_from: parsed.data.valid_from ? new Date(parsed.data.valid_from) : null,
+            valid_until: parsed.data.valid_until ? new Date(parsed.data.valid_until) : null,
+            auth_status: 'draft',
+        })
+
+        const remarks = emptyToUndefined(formData.get('remarks'))
+        const parsedRemarks = remarks
+            ? AllocationRemarkSchema.safeParse({
+                workflow_stage: values.workflow_stage,
+                remarks,
+            })
+            : null
+        if (parsedRemarks && !parsedRemarks.success) {
+            return {
+                formErrors: parsedRemarks.error.flatten().formErrors,
+                fieldErrors: parsedRemarks.error.flatten().fieldErrors,
+                values,
+            }
+        }
+        const session = await sessionDetails()
+        if (parsedRemarks?.success && session?.user?.id) {
+            await BudgetAllocationRepository.createAllocationWorkflowLog({
+                allocation_id: created.id,
+                workflow_stage: parsedRemarks.data.workflow_stage,
+                remarks: parsedRemarks.data.remarks,
+                amt_before: null,
+                amt_after: parsed.data.dbm_rec_amt,
+                performed_by: session.user.id,
+            })
+        }
+    } catch (error) {
+        return {
+            formErrors: [error instanceof Error ? error.message : 'Failed to create Tier One allocation.'],
+            values,
+        }
+    }
+
+    revalidatePath('/dbm/tier-one')
+    redirect('/dbm/tier-one')
+}
+
+export async function updateTierOneAllocationAction(
+    _state: TierOneAllocationFormState,
+    formData: FormData
+): Promise<TierOneAllocationFormState> {
+    void _state
+    await requireDbm()
+
+    const id = emptyToUndefined(formData.get('id'))
+    if (!id) {
+        return {
+            formErrors: ['Allocation ID is required.'],
+        }
+    }
+
+    const values = {
+        entity_id: emptyToUndefined(formData.get('entity_id')) ?? '',
+        pap_code: emptyToUndefined(formData.get('pap_code')) ?? '',
+        item_catalog_id: emptyToUndefined(formData.get('item_catalog_id')) ?? '',
+        fund_code: emptyToUndefined(formData.get('fund_code')) ?? '',
+        workflow_stage: emptyToUndefined(formData.get('workflow_stage')) ?? DBM_REVIEW_STAGE,
+        specific_description: emptyToUndefined(formData.get('specific_description')) ?? '',
+        remarks: emptyToUndefined(formData.get('remarks')) ?? '',
+        quantity: emptyToUndefined(formData.get('quantity')) ?? '',
+        currency: emptyToUndefined(formData.get('currency')) ?? 'PHP',
+        proposed_amt: emptyToUndefined(formData.get('proposed_amt')) ?? '0',
+        dbm_rec_amt: emptyToUndefined(formData.get('dbm_rec_amt')) ?? '0',
+        nep_amt: emptyToUndefined(formData.get('nep_amt')) ?? '0',
+        gaa_amt: emptyToUndefined(formData.get('gaa_amt')) ?? '0',
+        valid_from: emptyToUndefined(formData.get('valid_from')) ?? '',
+        valid_until: emptyToUndefined(formData.get('valid_until')) ?? '',
+    }
+
+    const parsed = TierOneAllocationSchema.safeParse(values)
+    if (!parsed.success) {
+        return flattenState(parsed.error, values)
+    }
+
+    const parsedRemarks = AllocationRemarkSchema.safeParse({
+        workflow_stage: values.workflow_stage,
+        remarks: values.remarks,
+    })
+    if (!parsedRemarks.success) {
+        return {
+            formErrors: parsedRemarks.error.flatten().formErrors,
+            fieldErrors: {
+                remarks: parsedRemarks.error.flatten().fieldErrors.remarks,
+            },
+            values,
+        }
+    }
+
+    try {
+        const existing = await BudgetAllocationRepository.getBudgetAllocationById(id)
+        if (!existing) {
+            return {
+                formErrors: ['Allocation not found.'],
+                values,
+            }
+        }
+
+        await BudgetAllocationRepository.updateBudgetAllocation(id, {
+            entity_id: parsed.data.entity_id,
+            pap_code: parsed.data.pap_code,
+            fund_code: parsed.data.fund_code,
+            item_catalog_id: parsed.data.item_catalog_id,
+            specific_description: parsed.data.specific_description,
+            quantity: parsed.data.quantity,
+            currency: parsed.data.currency,
+            proposed_amt: parsed.data.proposed_amt,
+            dbm_rec_amt: parsed.data.dbm_rec_amt,
+            nep_amt: parsed.data.nep_amt,
+            gaa_amt: parsed.data.gaa_amt,
+            valid_from: parsed.data.valid_from ? new Date(parsed.data.valid_from) : null,
+            valid_until: parsed.data.valid_until ? new Date(parsed.data.valid_until) : null,
+        })
+
+        const session = await sessionDetails()
+        if (session?.user?.id) {
+            await BudgetAllocationRepository.createAllocationWorkflowLog({
+                allocation_id: id,
+                workflow_stage: DBM_REVIEW_STAGE,
+                remarks: parsedRemarks.data.remarks,
+                amt_before: existing.dbm_rec_amt,
+                amt_after: parsed.data.dbm_rec_amt,
+                performed_by: session.user.id,
+            })
+        }
+    } catch (error) {
+        return {
+            formErrors: [error instanceof Error ? error.message : 'Failed to update Tier One allocation.'],
+            values,
+        }
+    }
+
+    revalidatePath('/dbm/tier-one')
+    redirect('/dbm/tier-one')
+}
+
+export async function addTierOneAllocationRemarkAction(
+    _state: AllocationRemarkFormState,
+    formData: FormData
+): Promise<AllocationRemarkFormState> {
+    void _state
+    await requireDbm()
+
+    const allocationId = emptyToUndefined(formData.get('allocation_id'))
+    const values = {
+        workflow_stage: emptyToUndefined(formData.get('workflow_stage')) ?? DBM_REVIEW_STAGE,
+        remarks: emptyToUndefined(formData.get('remarks')) ?? '',
+    }
+
+    if (!allocationId) {
+        return {
+            formErrors: ['Allocation ID is required.'],
+            values,
+        }
+    }
+
+    const parsed = AllocationRemarkSchema.safeParse(values)
+    if (!parsed.success) {
+        return flattenRemarkState(parsed.error, values)
+    }
+
+    const [session, allocation] = await Promise.all([
+        sessionDetails(),
+        BudgetAllocationRepository.getBudgetAllocationById(allocationId),
+    ])
+
+    if (!session?.user?.id || !allocation) {
+        return {
+            formErrors: ['Unable to add remarks for this allocation.'],
+            values,
+        }
+    }
+
+    try {
+            await BudgetAllocationRepository.createAllocationWorkflowLog({
+                allocation_id: allocationId,
+                workflow_stage: parsed.data.workflow_stage,
+                remarks: parsed.data.remarks,
+                amt_before: allocation.dbm_rec_amt,
+                amt_after: allocation.dbm_rec_amt,
+            performed_by: session.user.id,
+        })
+    } catch (error) {
+        return {
+            formErrors: [error instanceof Error ? error.message : 'Failed to add remarks.'],
+            values,
+        }
+    }
+
+    revalidatePath(`/dbm/tier-one/${allocationId}/edit`)
+    redirect(`/dbm/tier-one/${allocationId}/edit`)
+}

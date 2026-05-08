@@ -10,13 +10,45 @@ import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants"
 import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
+import { StaffingSummaryWithPositions } from "@/src/types/staffing";
+import CollapsibleRemarksSection from "@/components/ui/remarks/CollapsibleRemarksSection";
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
+type PapOption = {
+    id: string
+    title: string
+}
+
+type SessionLike = {
+    user: {
+        id: string
+        role: string
+        access_level: string
+    }
+}
+
+type SignatorySummary = {
+    id: string
+    user_name: string
+    role: string
+    created_at: Date
+}
+
+type ExistingSignature = {
+    role: string
+} | null
+
+type StaffingPositionView = StaffingSummaryWithPositions["positions"][number]
+
+type StaffingSummaryView = StaffingSummaryWithPositions & {
+    entity_id: string
+}
+
 interface StaffingViewProps {
-    summary: any
-    paps: any[]
-    session: any
+    summary: StaffingSummaryView
+    paps: PapOption[]
+    session: SessionLike
     backUrl: string
     isDbmEvaluator?: boolean
     budgetPrepClosedForEntityActions?: boolean
@@ -33,8 +65,8 @@ interface StaffingViewProps {
         userInWorkflow: boolean
         userCanSign: boolean
         currentSignatoryRole: string | null
-        existingSignature: any
-        allSignatures: any[]
+        existingSignature: ExistingSignature
+        allSignatures: SignatorySummary[]
         pastSignatures: {
             id: string
             user_name: string
@@ -49,6 +81,15 @@ interface StaffingViewProps {
     };
     updateAuthStatus: () => Promise<void>
     deleteFormAction: (id: string) => Promise<void>
+    ownerEntityName: string
+    overrideHistory: {
+        id: string
+        target_record_id: string
+        overridden_by_name: string | null
+        justification_remark: string
+        legal_directive_ref: string | null
+        created_at: Date
+    }[]
 }
 
 export default function StaffingView({
@@ -61,6 +102,8 @@ export default function StaffingView({
     workflowData,
     updateAuthStatus,
     deleteFormAction,
+    ownerEntityName,
+    overrideHistory,
     isDbmEvaluator = false,
     budgetPrepClosedForEntityActions = false,
     allowClosedCycleActions = false
@@ -84,11 +127,11 @@ export default function StaffingView({
 
     const allPositions = summary?.positions || [];
 
-    const overallBasicSalary = allPositions.reduce((sum: number, pos: any) => sum + (Number(pos.total_salary) || 0), 0);
+    const overallBasicSalary = allPositions.reduce((sum: number, pos: StaffingPositionView) => sum + (Number(pos.total_salary) || 0), 0);
 
     const overallCompensationTotals = VALID_COMPENSATION_NAMES.map(compName => {
-        return allPositions.reduce((sum: number, pos: any) => {
-            const compMatch = pos.compensations?.find((c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
+        return allPositions.reduce((sum: number, pos: StaffingPositionView) => {
+            const compMatch = pos.compensations?.find((c) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
             return sum + (compMatch ? Number(compMatch.amount) : 0);
         }, 0);
     });
@@ -96,17 +139,17 @@ export default function StaffingView({
     const overallGrandTotal = overallBasicSalary + overallCompensationTotals.reduce((a: number, b: number) => a + b, 0);
 
     const renderStaffTypeGroup = (type: string) => {
-        const filteredPositions = (summary?.positions || []).filter((pos: any) => {
+        const filteredPositions = (summary?.positions || []).filter((pos: StaffingPositionView) => {
             return pos.staff_type === type;
         });
 
         if (filteredPositions.length === 0) return null;
 
-        const totalBasicSalary = filteredPositions.reduce((sum: number, pos: any) => sum + (Number(pos.total_salary) || 0), 0);
+        const totalBasicSalary = filteredPositions.reduce((sum: number, pos: StaffingPositionView) => sum + (Number(pos.total_salary) || 0), 0);
 
         const compensationTotals = VALID_COMPENSATION_NAMES.map(compName => {
-            return filteredPositions.reduce((sum: number, pos: any) => {
-                const compMatch = pos.compensations?.find((c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
+            return filteredPositions.reduce((sum: number, pos: StaffingPositionView) => {
+                const compMatch = pos.compensations?.find((c) => c.name.trim().toLowerCase() === compName.trim().toLowerCase());
                 return sum + (compMatch ? Number(compMatch.amount) : 0);
             }, 0);
         });
@@ -141,8 +184,8 @@ export default function StaffingView({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-300">
-                            {filteredPositions.map((pos: any) => {
-                                const relatedPap = paps.find((p: any) => p.id === pos.pap_id);
+                            {filteredPositions.map((pos: StaffingPositionView) => {
+                                const relatedPap = paps.find((p) => p.id === pos.pap_id);
                                 const rowBasic = Number(pos.total_salary) || 0;
                                 let rowCompensationsTotal = 0;
 
@@ -161,7 +204,7 @@ export default function StaffingView({
 
                                         {VALID_COMPENSATION_NAMES.map(compName => {
                                             const compMatch = pos.compensations?.find(
-                                                (c: any) => c.name.trim().toLowerCase() === compName.trim().toLowerCase()
+                                                (c) => c.name.trim().toLowerCase() === compName.trim().toLowerCase()
                                             );
                                             const amount = compMatch ? Number(compMatch.amount) : 0;
                                             rowCompensationsTotal += amount;
@@ -242,6 +285,9 @@ export default function StaffingView({
                     >
                         {STATUS_LABELS[summary.auth_status ?? ""] ?? summary.auth_status}
                     </Badge>
+                    <p className="mt-3 text-sm text-muted-foreground">
+                        Owned by <span className="font-semibold text-secondary-foreground">{ownerEntityName}</span>
+                    </p>
                 </div>
             </div>
 
@@ -278,6 +324,37 @@ export default function StaffingView({
                         })}
                     </div>
                 </section>
+            )}
+
+            {overrideHistory.length > 0 && (
+                <CollapsibleRemarksSection
+                    title="DBM Override Remarks"
+                    description="Review the reasons recorded for each DBM overwrite on this form family."
+                    items={overrideHistory}
+                    renderItem={(entry, index) => (
+                        <div
+                            key={entry.id}
+                            className={`bg-card px-5 py-4 ${index === overrideHistory.length - 1 ? '' : 'border-b border-border'}`}
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-sm font-semibold text-secondary-foreground">
+                                    {entry.overridden_by_name || 'DBM'}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    {new Date(entry.created_at).toLocaleString()}
+                                </div>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm">
+                                {entry.justification_remark}
+                            </p>
+                            {entry.legal_directive_ref && (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    Reference: {entry.legal_directive_ref}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                />
             )}
 
             {/* Staff Per Type */}

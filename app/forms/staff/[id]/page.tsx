@@ -1,6 +1,6 @@
 import { STAFFING_WORKFLOW } from "@/src/lib/workflows/staffing-flow"
 import { getCurrentSignatoryRole, canSign, getNextStatus, roleInWorkflow } from "@/src/lib/workflows"
-import { createStaffingRepository, createKeyRepository, createPapRepository, createFormRepository, createAuditRepository } from "@/src/db/factory"
+import { createStaffingRepository, createKeyRepository, createPapRepository, createFormRepository, createAuditRepository, createAdministrativeOverrideRepository, createEntityRepository } from "@/src/db/factory"
 import { submitForm } from "@/src/actions/form"
 import { sessionWithEntity } from "@/src/actions/auth"
 import { redirect, notFound } from "next/navigation"
@@ -13,6 +13,8 @@ const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 const PapRepo = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const AuditRepo = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
+const AdministrativeOverrideRepo = createAdministrativeOverrideRepository(process.env.DATABASE_TYPE || 'postgres')
+const EntityRepo = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function StaffingFormPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -41,6 +43,11 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const allSignatures = await KeyRepo.getSignatoriesByFormId(summary.id ?? "")
     const pastSignatures = await KeyRepo.getPastSignatoriesByFormId(summary.id ?? "")
     const latestRejection = await AuditRepo.getLatestFormRejection('staffing_summaries', summary.id ?? "")
+    const overrideHistory = await AdministrativeOverrideRepo.listAdministrativeOverridesByTargets(
+        'staffing_summaries',
+        versionFamily.forms.map((form) => form.id)
+    )
+    const ownerEntityName = await EntityRepo.getFullEntityNameById(summary.entity_id)
 
     // Determine the correct back path based on the user's role
     const isOwnAgencyForm = session.user.entity_id === summary.entity_id;
@@ -104,6 +111,8 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
                 pastSignatures,
                 latestRejection
             }}
+            ownerEntityName={ownerEntityName || "Unknown Agency"}
+            overrideHistory={overrideHistory}
         />
     )
 }

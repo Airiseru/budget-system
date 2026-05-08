@@ -34,10 +34,10 @@ export interface CompensationRulesTable {
     name: string
     effective_date: Date
     calculation_type: string
-    rule_value: Number
+    rule_value: number
     frequency: string
-    min_salary_grade: Number
-    max_salary_grade: Number
+    min_salary_grade: number
+    max_salary_grade: number
     created_at: Generated<Date>
 }
 

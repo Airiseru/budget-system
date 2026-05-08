@@ -1,6 +1,6 @@
-import { Kysely, sql } from "kysely";
+import { Kysely, sql } from "kysely"
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<unknown>): Promise<void> {
     // Create Pap Table
     await db.schema
         .createTable('paps')
@@ -46,7 +46,7 @@ export async function up(db: Kysely<any>): Promise<void> {
     `.execute(db)
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop indexes
     await sql`DROP INDEX IF EXISTS idx_pap_search`.execute(db)
     await db.schema.dropIndex('idx_pap_entity_id').execute()

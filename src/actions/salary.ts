@@ -48,8 +48,8 @@ export async function createSalaryScheduleAction(
             parsed.data.effective_date,
             parsed.data.rates,
         )
-    } catch (err: any) {
-        return { formErrors: [err?.message ?? 'Failed to create salary schedule'] }
+    } catch (err: unknown) {
+        return { formErrors: [err instanceof Error ? err.message : 'Failed to create salary schedule'] }
     }
  
     revalidatePath('/dbm/salary')
@@ -76,8 +76,8 @@ export async function createCompensationRuleAction(
  
     try {
         await SalaryRepository.createNewCompensationRule(parsed.data)
-    } catch (err: any) {
-        return { formErrors: [err?.message ?? 'Failed to create compensation rule'], values: raw }
+    } catch (err: unknown) {
+        return { formErrors: [err instanceof Error ? err.message : 'Failed to create compensation rule'], values: raw }
     }
  
     revalidatePath('/dbm/salary')

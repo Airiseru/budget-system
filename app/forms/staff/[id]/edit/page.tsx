@@ -1,6 +1,6 @@
 import StaffForm from "@/components/ui/staff/StaffingForm";
 import { sessionWithEntity } from "@/src/actions/auth";
-import { createFormRepository, createStaffingRepository, createPapRepository, createSalaryRepository } from "@/src/db/factory"
+import { createFormRepository, createStaffingRepository, createPapRepository, createSalaryRepository, createEntityRepository } from "@/src/db/factory"
 import { ButtonGroup } from "@/components/ui/button-group"
 import BackButton from "@/components/ui/BackButton";
 import { ModeToggle } from "@/components/ui/system-toggle";
@@ -10,6 +10,7 @@ import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const SalaryRepository = createSalaryRepository(process.env.DATABASE_TYPE || 'postgres')
+const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function EditStaffPage({ params }: { params: Promise<{ id: string }> }) {
     // 1. Resolve params
@@ -70,6 +71,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
 
     const compensationRules = await SalaryRepository.getLatestCompensationRules()
     const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
+    const ownerEntityName = await EntityRepository.getFullEntityNameById(staff.entity_id)
 
     return (
         <main className="m-4">
@@ -88,8 +90,8 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
                 staff={staff}
                 availablePaps={paps.map(p => ({ id: p.id, title: p.title }))} 
                 userId={session.user.id}
-                entityId={session.user.entity_id} 
-                entityName={session.user_entity.entity_name || "Unknown Agency"} 
+                entityId={staff.entity_id} 
+                entityName={ownerEntityName || "Unknown Agency"} 
             />
         </main>
     );

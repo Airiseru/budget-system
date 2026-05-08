@@ -16,7 +16,7 @@ export default function PapDeleteButton({ id }: { id: string }) {
             const res = await fetch(`/api/paps/${id}`, { method: 'DELETE' })
             if (!res.ok) throw new Error('Failed to delete')
             router.push('/paps')
-        } catch (err) {
+        } catch {
             alert('Failed to delete PAP')
         } finally {
             setIsLoading(false)

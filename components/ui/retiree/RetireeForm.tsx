@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState } from 'react';
-import { Plus, Trash2, Save, Send, X, Download } from 'lucide-react';
+import { useState } from 'react';
+import { Plus, Trash2, Save, Send } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { z } from "zod";
 import { RetireeRowSchema, BP205Schema } from '@/src/lib/validations/retiree.schema';
@@ -53,6 +53,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
   const [isLoading, setIsLoading] = useState(false);
   const [submitAction, setSubmitAction] = useState<'draft' | 'pending_personnel' | 'pending_dbm'>('draft');
   const [error, setError] = useState<string | null>(null);
+  const [overrideRemarks, setOverrideRemarks] = useState('');
 
   const isEditing = !!retireeData
 
@@ -94,12 +95,12 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
     }];
   });
 
-  const [fiscalYear, setFiscalYear] = useState(
+  const [fiscalYear] = useState(
     retireeData?.fiscal_year ?? initialFiscalYear ?? new Date().getFullYear() + 1
   );
 
-  const handleInputChange = (id: string, field: string, value: any) => {
-    setRetirees((prev: any) => prev.map((r: any) => {
+  const handleInputChange = (id: string, field: keyof RetireeRow, value: RetireeRow[keyof RetireeRow]) => {
+    setRetirees((prev) => prev.map((r) => {
       if (r.id !== id) return r;
 
       const updatedRow = { ...r, [field]: value };
@@ -141,7 +142,8 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
       },
       retirees: validation.data.retirees,
       auth_status: submitAction,
-      isDBM
+      isDBM,
+      overrideRemarks: isDBM ? overrideRemarks : undefined,
     };
 
     const endpoint = isEditing ? `/api/retirees/${retireeData.id}` : '/api/retirees';
@@ -163,7 +165,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
         const err = await response.json();
         setError(err.error || "Failed to save");
       }
-    } catch (err) {
+    } catch {
       setError("A network error occurred.");
     } finally {
       setIsLoading(false);
@@ -210,6 +212,24 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
       </h1>
       <form onSubmit={handleSubmit} className="w-full space-y-4">
         {error && <div className="p-3 bg-red-100 text-red-700 rounded-md text-sm">{error}</div>}
+
+        {isDBM && (
+          <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+            <label htmlFor="override-remarks" className="text-sm font-bold text-secondary-foreground">
+              DBM Override Remarks
+            </label>
+            <textarea
+              id="override-remarks"
+              value={overrideRemarks}
+              onChange={(event) => setOverrideRemarks(event.target.value)}
+              className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+              placeholder="State why this DBM overwrite or change is being made."
+            />
+            <p className="text-xs text-muted-foreground">
+              Required for DBM overrides and recorded in the administrative override history.
+            </p>
+          </div>
+        )}
 
         <div className="flex justify-between items-center bg-muted/50 p-3 border rounded-t-lg">
           <div className="flex gap-2">
@@ -285,9 +305,9 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
                     <input 
                       required
                       className="w-full p-1.5 bg-transparent focus:ring-1 focus:ring-ring outline-none" 
-                      value={row.name} 
+                      value={row.name.toUpperCase()}
                       placeholder='DELA CRUZ, JUAN, R.'
-                      onChange={(e) => handleInputChange(row.id, 'name', e.target.value)}
+                      onChange={(e) => handleInputChange(row.id, 'name', e.target.value.toUpperCase())}
                     />
                   </td>
                   <td className="p-1 border-r text-center">
@@ -414,9 +434,9 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
 
         {/* Footer Info */}
         <div className="flex justify-between items-start text-xs text-muted-500 px-2">
-          <p>* Ensure "Effectivity Date" falls within FY {fiscalYear} for TLP eligibility.</p>
+          <p>* Ensure &quot;Effectivity Date&quot; falls within FY {fiscalYear} for TLP eligibility.</p>
           <div className="text-right">
-              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r: any) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary)*( Number(r.number_vacation_leave) + Number(r.number_sick_leave))*TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary) * (Number(r.number_vacation_leave) + Number(r.number_sick_leave)) * TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
       </form>

@@ -225,12 +225,12 @@ export async function getFullEntityNameById(entityId: string): Promise<string | 
         const operatingUnit = await getOperatingUnitById(entityId).catch(() => null)
         if (!operatingUnit) return null
 
-        let parentOperatingUnit = null
+        // let parentOperatingUnit = null
 
-        if (operatingUnit.parent_ou_id) {
-            parentOperatingUnit = await getOperatingUnitById(operatingUnit.parent_ou_id).catch(() => null)
-            if (!parentOperatingUnit) return null
-        }
+        // if (operatingUnit.parent_ou_id) {
+        //     parentOperatingUnit = await getOperatingUnitById(operatingUnit.parent_ou_id).catch(() => null)
+        //     if (!parentOperatingUnit) return null
+        // }
 
         const agency = await getAgencyById(operatingUnit.agency_id).catch(() => null)
         if (!agency) return null
@@ -240,11 +240,11 @@ export async function getFullEntityNameById(entityId: string): Promise<string | 
 
         text = `${operatingUnit.name}`
 
-        if (parentOperatingUnit) {
-            text = `${parentOperatingUnit.name} - ${text}`
-        }
+        // if (parentOperatingUnit) {
+        //     text = `${parentOperatingUnit.name} - ${text}`
+        // }
         
-        text += `under the ${department.name}'s ${agency.name}`
+        text += ` under the ${department.name}'s ${agency.name}`
     }
 
     else if (entity.type === 'agency') {

@@ -9,10 +9,58 @@ import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
+import CollapsibleRemarksSection from "@/components/ui/remarks/CollapsibleRemarksSection";
+
+type RetireeRowView = {
+    id: string
+    name: string
+    is_gsis_member: boolean
+    retirement_law: string
+    position: string
+    salary_grade: number
+    highest_monthly_salary: number | string
+    tlb_amount: number | null
+    rg_amount: number | null
+    date_of_birth: Date | string
+    original_appointment: Date | string
+    retirement_effectivity: Date | string
+    number_vacation_leave: number | null
+    number_sick_leave: number | null
+    total_credible_service: number | null
+    number_gratuity_months: number | null
+}
+
+type RetireeFormView = {
+    id: string
+    fiscal_year: number
+    is_mandatory: boolean
+    entity_id: string
+    auth_status: string | null
+    retirees: RetireeRowView[]
+}
+
+type SessionLike = {
+    user: {
+        id: string
+        role: string
+        access_level: string
+    }
+}
+
+type SignatorySummary = {
+    id: string
+    user_name: string
+    role: string
+    created_at: Date
+}
+
+type ExistingSignature = {
+    role: string
+} | null
 
 interface RetireeViewProps {
-    data: any;
-    session: any;
+    data: RetireeFormView;
+    session: SessionLike;
     backUrl: string;
     isDbmEvaluator?: boolean;
     budgetPrepClosedForEntityActions?: boolean;
@@ -28,8 +76,8 @@ interface RetireeViewProps {
     userInWorkflow: boolean;
     userCanSign: boolean;
     currentSignatoryRole: string | null;
-    existingSignature: any;
-    allSignatures: any[];
+    existingSignature: ExistingSignature;
+    allSignatures: SignatorySummary[];
     pastSignatures: {
         id: string;
         user_name: string;
@@ -41,6 +89,15 @@ interface RetireeViewProps {
         changed_at: Date;
         user_name: string | null;
     } | null;
+    ownerEntityName: string;
+    overrideHistory: {
+        id: string;
+        target_record_id: string;
+        overridden_by_name: string | null;
+        justification_remark: string;
+        legal_directive_ref: string | null;
+        created_at: Date;
+    }[];
     updateAuthStatus: () => Promise<void>;
     deleteFormAction: (id: string) => Promise<void>;
 }
@@ -61,6 +118,8 @@ export default function RetireeView({
     allSignatures,
     pastSignatures,
     latestRejection,
+    ownerEntityName,
+    overrideHistory,
     updateAuthStatus,
     deleteFormAction,
 }: RetireeViewProps) {
@@ -187,6 +246,37 @@ export default function RetireeView({
                 </section>
             )}
 
+            {overrideHistory.length > 0 && (
+                <CollapsibleRemarksSection
+                    title="DBM Override Remarks"
+                    description="Review the reasons recorded for each DBM overwrite on this form family."
+                    items={overrideHistory}
+                    renderItem={(entry, index) => (
+                        <div
+                            key={entry.id}
+                            className={`bg-card px-5 py-4 ${index === overrideHistory.length - 1 ? "" : "border-b border-border"}`}
+                        >
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <div className="text-sm font-semibold text-secondary-foreground">
+                                    {entry.overridden_by_name || "DBM"}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                    {new Date(entry.created_at).toLocaleString()}
+                                </div>
+                            </div>
+                            <p className="mt-2 whitespace-pre-wrap text-sm">
+                                {entry.justification_remark}
+                            </p>
+                            {entry.legal_directive_ref && (
+                                <p className="mt-2 text-xs text-muted-foreground">
+                                    Reference: {entry.legal_directive_ref}
+                                </p>
+                            )}
+                        </div>
+                    )}
+                />
+            )}
+
             {/* Metadata Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-white p-4 border rounded-lg shadow-sm">
@@ -205,10 +295,10 @@ export default function RetireeView({
                 </div>
                 <div className="bg-white p-4 border rounded-lg shadow-sm">
                     <label className="text-[10px] uppercase font-bold text-slate-400">
-                        Entity ID
+                        Entity
                     </label>
-                    <p className="text-lg font-semibold font-mono text-sm">
-                        {data.entity_id}
+                    <p className="text-lg font-semibold text-sm">
+                        {ownerEntityName}
                     </p>
                 </div>
             </div>
@@ -217,7 +307,7 @@ export default function RetireeView({
             <div className="bg-white border rounded-xl shadow-sm overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm text-left border-collapse">
-                        <thead className="bg-accent-foreground text-white font-medium border-b text-[10px] uppercase">
+                        <thead className="bg-accent-foreground text-white font-medium border-b text-s uppercase">
                             <tr>
                                 <th className="px-3 py-3 border-r w-10 text-center">
                                     #
@@ -234,7 +324,7 @@ export default function RetireeView({
                                 <th className="px-3 py-3 border-r text-center">
                                     Service / Gratuity
                                 </th>
-                                <th className="px-3 py-3 border-r">
+                                <th className="px-3 py-3 border-r text-center">
                                     Dates (DOB/Eff)
                                 </th>
                                 <th className="px-3 py-3 border-r text-right">
@@ -250,12 +340,12 @@ export default function RetireeView({
                         </thead>
                         <tbody className="divide-y">
                             {data.retirees.map(
-                                (retiree: any, index: number) => (
+                                (retiree: RetireeRowView, index: number) => (
                                     <tr
                                         key={retiree.id}
                                         className="hover:bg-slate-50/50"
                                     >
-                                        <td className="px-3 py-3 border-r text-center text-slate-400 font-mono text-xs">
+                                        <td className="px-3 py-3 border-r text-center text-slate-400 font-mono text-s">
                                             {index + 1}
                                         </td>
 
@@ -272,7 +362,7 @@ export default function RetireeView({
 
                                         {/* Column 2: Law & GSIS */}
                                         <td className="px-3 py-3 border-r text-center space-y-1">
-                                            <div className="text-xs font-semibold">
+                                            <div className="text-s font-semibold">
                                                 {retiree.retirement_law}
                                             </div>
                                             <Badge
@@ -281,7 +371,7 @@ export default function RetireeView({
                                                         ? "secondary"
                                                         : "outline"
                                                 }
-                                                className="text-[9px] bg-gray-200 text-accent-foreground"
+                                                className="text-xs bg-gray-200 text-accent-foreground"
                                             >
                                                 {retiree.is_gsis_member
                                                     ? "GSIS MEMBER"
@@ -289,50 +379,41 @@ export default function RetireeView({
                                             </Badge>
                                         </td>
 
-                                        {/* Column 2: Law & GSIS */}
+                                        {/* Column 3: Leave Credits */}
                                         <td className="px-3 py-3 border-r text-center space-y-1">
-                                            <div className="text-xs font-semibold">
-                                                {retiree.retirement_law}
+                                            <div className="text-s">
+                                                {retiree.number_vacation_leave} VLs
                                             </div>
-                                            <Badge
-                                                variant={
-                                                    retiree.is_gsis_member
-                                                        ? "secondary"
-                                                        : "outline"
-                                                }
-                                                className="text-[9px]"
-                                            >
-                                                {retiree.is_gsis_member
-                                                    ? "GSIS MEMBER"
-                                                    : "NON-GSIS"}
-                                            </Badge>
+                                            <div className="text-s">
+                                                {retiree.number_sick_leave} SLs
+                                            </div>
                                         </td>
 
                                         {/* Column 4: Service & Gratuity */}
                                         <td className="px-3 py-3 border-r text-center">
-                                            <div className="text-xs font-semibold">
+                                            <div className="text-s">
                                                 {retiree.total_credible_service ??
                                                     "0"}{" "}
                                                 Years
                                             </div>
-                                            <div className="text-[10px] text-slate-500">
+                                            <div className="text-xs text-slate-500">
                                                 {retiree.number_gratuity_months ??
                                                     "0"}{" "}
                                                 Mos. Gratuity
                                             </div>
                                         </td>
 
-                                        {/* Column 4: Service & Gratuity */}
+                                        {/* Column 5: DOB & EFF */}
                                         <td className="px-3 py-3 border-r text-center">
-                                            <div className="text-xs font-semibold">
-                                                {retiree.total_credible_service ??
-                                                    "0"}{" "}
-                                                Yrs
+                                            <div className="text-s">
+                                                DOB: {new Date(
+                                                    retiree.date_of_birth,
+                                                ).toLocaleDateString()}
                                             </div>
-                                            <div className="text-[10px] text-slate-500">
-                                                {retiree.number_gratuity_months ??
-                                                    "0"}{" "}
-                                                Mos. Gratuity
+                                            <div className="text-s">
+                                                EFF: {new Date(
+                                                    retiree.retirement_effectivity,
+                                                ).toLocaleDateString()}
                                             </div>
                                         </td>
 
@@ -373,7 +454,7 @@ export default function RetireeView({
                             <tr>
                                 <td
                                     colSpan={8}
-                                    className="px-4 py-3 text-right uppercase text-[10px]"
+                                    className="px-4 py-3 text-right uppercase text-s"
                                 >
                                     Total Monthly Requirement
                                 </td>
@@ -381,7 +462,7 @@ export default function RetireeView({
                                     ₱
                                     {data.retirees
                                         .reduce(
-                                            (sum: number, r: any) =>
+                                            (sum: number, r: RetireeRowView) =>
                                                 sum +
                                                 Number(
                                                     r.highest_monthly_salary,

@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalSchema } from "@/src/lib/validations/proposal.schema";
-import { ForeignFinancialTarget } from "@/src/types/project_proposals";
 
 interface AttributionYearTier {
     year: number;
@@ -172,7 +171,54 @@ interface ProjectProposalPayload {
     foreign_physical_targets: { name: string; costs: ExpenseRow[] }[];
 }
 
-const PrerequisiteRow = ({ pre, index, updateRow, removeRow }: any) => (
+type ProposalPrerequisite = ProjectProposalPayload["pap_prerequisites"][number];
+type ArrayFieldKey = {
+    [K in keyof ProjectProposalPayload]: ProjectProposalPayload[K] extends any[]
+        ? K
+        : never;
+}[keyof ProjectProposalPayload] &
+    keyof ProjectProposalPayload;
+type ArrayItem<K extends ArrayFieldKey> = K extends keyof ProjectProposalPayload
+    ? ProjectProposalPayload[K] extends (infer U)[]
+        ? U
+        : never
+    : never;
+type NonArrayFieldKey = Exclude<keyof ProjectProposalPayload, ArrayFieldKey>;
+type ExpenseMatrixFieldKey =
+    | "cost_by_components"
+    | "local_locations"
+    | "local_infrastructure_requirements";
+type ProposalFormProject = Partial<ProjectProposalPayload> & {
+    id: string;
+    title: string;
+    proposal_year: number;
+    priority_rank: number;
+    org_outcome_id: string;
+    description: string;
+    purpose: string;
+    beneficiaries: string;
+};
+
+interface PrerequisiteRowProps {
+    pre: ProposalPrerequisite;
+    index: number;
+    updateRow: <K extends ArrayFieldKey & keyof ProjectProposalPayload>(
+        field: K,
+        index: number,
+        value: Partial<ArrayItem<K>>,
+    ) => void;
+    removeRow: <K extends ArrayFieldKey & keyof ProjectProposalPayload>(
+        field: K,
+        index: number,
+    ) => void;
+}
+
+const PrerequisiteRow = ({
+    pre,
+    index,
+    updateRow,
+    removeRow,
+}: PrerequisiteRowProps) => (
     <tr className="border-b border-muted-100 last:border-0 hover:bg-muted-50/30 transition-colors">
         <td className="py-3 px-4 text-sm text-muted-700 font-medium border-r bg-background">
             <input
@@ -255,84 +301,8 @@ const PrerequisiteRow = ({ pre, index, updateRow, removeRow }: any) => (
     </tr>
 );
 
-const ExpenseSubForm = ({
-    field,
-    parentIdx,
-    costs,
-    updateExpense,
-    updateRow,
-}: {
-    field: any;
-    parentIdx: number;
-    costs: ExpenseRow[];
-    updateRow: Function;
-    updateExpense: Function;
-}) => {
-    // Helper to find or update a specific expense class within the array
-    const handleValueChange = (
-        targetClass: "PS" | "MOOE" | "CO" | "FINEX",
-        value: string,
-    ) => {
-        const existingIdx = costs.findIndex(
-            (c) => c.expense_class === targetClass,
-        );
-
-        if (existingIdx > -1) {
-            // Update existing class
-            updateExpense(field, parentIdx, existingIdx, { amount: value });
-        } else {
-            // If class doesn't exist yet, add it to the array via updateRow logic
-            const newCosts = [
-                ...costs,
-                {
-                    expense_class: targetClass,
-                    amount: value,
-                    currency: "PHP",
-                },
-            ];
-            updateRow(field, parentIdx, { costs: newCosts });
-        }
-    };
-
-    const getAmount = (targetClass: string) =>
-        costs.find((c) => c.expense_class === targetClass)?.amount ?? "";
-
-    return (
-        <div className="mt-4 pl-4 border-l-2 border-muted-100">
-            {/* Table Header */}
-            <div className="grid grid-cols-4 gap-4 mb-1">
-                {["PS", "MOOE", "CO", "FINEX"].map((h) => (
-                    <span
-                        key={h}
-                        className="text-[9px] font-black text-muted-400 uppercase text-center"
-                    >
-                        {h}
-                    </span>
-                ))}
-            </div>
-
-            {/* Values Row */}
-            <div className="grid grid-cols-4 gap-4">
-                {(["PS", "MOOE", "CO", "FINEX"] as const).map((itemClass) => (
-                    <div key={itemClass} className="relative">
-                        <input
-                            type="number"
-                            className="w-full border-b border-muted-100 outline-none text-sm text-right pr-1 focus:border-secondary-foreground-400 focus:bg-secondary-foreground-50/30 transition-all"
-                            placeholder="0"
-                            value={getAmount(itemClass)}
-                            onChange={(e) =>
-                                handleValueChange(itemClass, e.target.value)
-                            }
-                        />
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
 interface WrapperProps {
-    project?: any; // <--- Add this line
+    project?: ProposalFormProject;
     type: "202" | "203";
     userId: string;
     entityName: string;
@@ -353,10 +323,6 @@ export default function ProposalForm({
     const [submitAction, setSubmitAction] = useState<
         "draft" | "pending_budget"
     >("draft");
-
-    if (project) {
-        console.log("THIS IS THE PROJECT PROP: ", project);
-    }
 
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         title: project?.title || "",
@@ -380,8 +346,11 @@ export default function ProposalForm({
         pap_prerequisites: project?.pap_prerequisites || DEFAULT_PREREQUISITES,
         cost_by_components: project?.cost_by_components || [],
 
-        local_locations:
-            project?.local_locations?.length > 0 ? project.local_locations : [],
+        local_locations: project?.local_locations?.length
+            ? project?.local_locations?.length > 0
+                ? project?.local_locations
+                : []
+            : [],
 
         local_financial_attributions:
             project?.local_financial_attributions || [],
@@ -400,42 +369,57 @@ export default function ProposalForm({
     ) => {
         setPayload((prev) => ({
             ...prev,
-            [field]: [...(prev[field] as any[]), defaultValue],
+            [field]: [
+                ...(prev[field] as Array<typeof defaultValue>),
+                defaultValue,
+            ],
         }));
     };
 
-    const updateRow = <K extends keyof ProjectProposalPayload>(
+    function updateRow<K extends NonArrayFieldKey>(
         field: K,
-        index: number | null, // null for top-level fields
-        value: Partial<ProjectProposalPayload[K]> | ProjectProposalPayload[K],
-    ) => {
+        index: undefined,
+        value: ProjectProposalPayload[K],
+    ): void;
+    function updateRow<K extends ArrayFieldKey>(
+        field: K,
+        index: number,
+        value: Partial<ArrayItem<K>>,
+    ): void;
+    function updateRow<K extends keyof ProjectProposalPayload>(
+        field: K,
+        index: number | undefined,
+        value: unknown,
+    ) {
         setPayload((prev) => {
-            // Case 1: Updating a top-level field (is_new, priority_rank, etc.)
-            if (index === null) {
-                return { ...prev, [field]: value };
+            if (index === undefined) {
+                return {
+                    ...prev,
+                    [field]: value as ProjectProposalPayload[K],
+                };
             }
 
-            // Case 2: Updating an item inside an array (pap_prerequisites, etc.)
             const currentArray = prev[field];
             if (Array.isArray(currentArray)) {
                 const updatedArray = [...currentArray];
                 updatedArray[index] =
                     typeof value === "object" && value !== null
-                        ? { ...updatedArray[index], ...value }
-                        : value;
+                        ? {
+                              ...updatedArray[index],
+                              ...(value as Record<string, unknown>),
+                          }
+                        : updatedArray[index];
                 return { ...prev, [field]: updatedArray };
             }
 
             return prev;
         });
-    };
+    }
 
-    const removeRow = <K extends keyof ProjectProposalPayload>(
-        field: K,
-        index: number,
-    ) => {
+    const removeRow = <K extends ArrayFieldKey>(field: K, index: number) => {
         setPayload((prev) => {
-            const currentArray = prev[field];
+            // We cast to any[] here because we know K is an ArrayFieldKey
+            const currentArray = prev[field] as any[];
             if (Array.isArray(currentArray)) {
                 return {
                     ...prev,
@@ -453,7 +437,9 @@ export default function ProposalForm({
         value: Partial<ExpenseRow>,
     ) => {
         setPayload((prev) => {
-            const updatedParentArray = [...(prev[field] as any[])];
+            const updatedParentArray = [
+                ...(prev[field] as Array<{ costs: ExpenseRow[] }>),
+            ];
             const updatedCosts = [...updatedParentArray[parentIdx].costs];
 
             updatedCosts[expIdx] = { ...updatedCosts[expIdx], ...value };
@@ -466,7 +452,7 @@ export default function ProposalForm({
         });
     };
 
-    async function handleSubmit(e: React.FormEvent) {
+    async function handleSubmit(e: React.SyntheticEvent<HTMLFormElement>) {
         e.preventDefault();
         setErrors({});
 
@@ -492,8 +478,6 @@ export default function ProposalForm({
         };
 
         const result = ProposalSchema.safeParse(finalPayload);
-        console.log("FINAL PAYLOAD SENT TO VALIDATION:");
-        console.log(finalPayload);
 
         if (!result.success) {
             const formattedErrors: Record<string, string> = {};
@@ -505,7 +489,6 @@ export default function ProposalForm({
             setIsLoading(false);
 
             // Scroll to the first error
-            const firstErrorKey = Object.keys(formattedErrors)[0];
             console.error("Validation failed", formattedErrors);
             return;
         }
@@ -530,17 +513,11 @@ export default function ProposalForm({
             if (res.ok) {
                 router.push("/forms/proposals");
             } else {
-                // Read the body ONCE
                 const errorData = await res.json();
-                console.log("NOOOOOOOOOOO");
-                console.log(errorData);
-
-                // Check the error code from the parsed object
                 if (
                     errorData.code === "23505" ||
                     errorData.error?.includes("unique_entity_rank")
                 ) {
-                    console.log("YOOO");
                     setErrors({
                         priority_rank:
                             "This priority rank is already taken by another proposal.",
@@ -550,8 +527,8 @@ export default function ProposalForm({
                     // Handle other general errors
                 }
             }
-        } catch (err) {
-            console.error("Fetch error:", err);
+        } catch {
+            console.error("Fetch error");
         } finally {
             setIsLoading(false);
         }
@@ -579,7 +556,7 @@ export default function ProposalForm({
                 { expense_class: targetClass, amount: value, currency: "PHP" },
             ];
             // Cast the update to any to bypass the union check here
-            updateRow(field, parentIdx, { costs: newCosts } as any);
+            updateRow(field, parentIdx, { costs: newCosts });
         }
     };
 
@@ -823,7 +800,7 @@ export default function ProposalForm({
                                 onChange={(e) =>
                                     updateRow(
                                         "is_new",
-                                        null as any,
+                                        undefined,
                                         e.target.checked,
                                     )
                                 }
@@ -841,7 +818,7 @@ export default function ProposalForm({
                                     onChange={(e) =>
                                         updateRow(
                                             "myca_issuance",
-                                            null as any,
+                                            undefined,
                                             e.target.checked,
                                         )
                                     }
@@ -860,7 +837,7 @@ export default function ProposalForm({
                                 onChange={(e) =>
                                     updateRow(
                                         "is_infrastructure",
-                                        null as any,
+                                        undefined,
                                         e.target.checked,
                                     )
                                 }
@@ -876,7 +853,11 @@ export default function ProposalForm({
                                 className="w-5 h-5 rounded border-muted-300 text-blue-600 focus:ring-blue-500"
                                 checked={payload.for_ict ?? false}
                                 onChange={(e) =>
-                                    updateRow("for_ict", null, e.target.checked)
+                                    updateRow(
+                                        "for_ict",
+                                        undefined,
+                                        e.target.checked,
+                                    )
                                 }
                             />
                             <span className="text-sm font-medium text-muted-700 group-hover:text-blue-600 transition-colors">
@@ -1094,7 +1075,7 @@ export default function ProposalForm({
                                                                                 e
                                                                                     .target
                                                                                     .value,
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -1167,9 +1148,9 @@ export default function ProposalForm({
                                 </table>
 
                                 {payload.cost_by_components.length === 0 && (
-                                    <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No components added. Click "+ ADD
-                                        COMPONENT" to begin.
+                                    <div className="p-8 text-center text-muted-400 text-xs italic">
+                                        No components added. Click &quot;+ ADD
+                                        COMPONENT&quot; to begin.
                                     </div>
                                 )}
                             </div>
@@ -1235,7 +1216,7 @@ export default function ProposalForm({
                                                                 location:
                                                                     e.target
                                                                         .value,
-                                                            } as any,
+                                                            },
                                                         )
                                                     }
                                                 />
@@ -1296,9 +1277,9 @@ export default function ProposalForm({
                             </table>
 
                             {payload.local_locations.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No components added. Click "+ ADD LOCATION"
-                                    to begin.
+                                <div className="p-8 text-center text-muted-400 text-xs italic">
+                                    No components added. Click &quot;+ ADD
+                                    LOCATION&quot; to begin.
                                 </div>
                             )}
                         </div>
@@ -1421,7 +1402,7 @@ export default function ProposalForm({
                                                                                 e
                                                                                     .target
                                                                                     .value,
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -1742,7 +1723,7 @@ export default function ProposalForm({
                                                                                         {
                                                                                             attribution_costs:
                                                                                                 newAttrCosts,
-                                                                                        } as any,
+                                                                                        },
                                                                                     );
                                                                                 }}
                                                                             />
@@ -1761,7 +1742,8 @@ export default function ProposalForm({
                                     0 && (
                                     <div className="p-8 text-center text-muted-400 text-sm italic">
                                         No Local Financial Attributions added.
-                                        Click "+ ADD ATTRIBUTION" to begin.
+                                        Click &quot;+ ADD ATTRIBUTION&quot; to
+                                        begin.
                                     </div>
                                 )}
                             </div>
@@ -1834,7 +1816,7 @@ export default function ProposalForm({
                                                                     description:
                                                                         e.target
                                                                             .value,
-                                                                } as any,
+                                                                },
                                                             )
                                                         }
                                                     />
@@ -1898,9 +1880,9 @@ export default function ProposalForm({
 
                             {payload.local_infrastructure_requirements
                                 .length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No locations added. Click "+ ADD
-                                    REQUIREMENT" to begin.
+                                <div className="p-8 text-center text-muted-400 text-xs italic">
+                                    No locations added. Click &quot;+ ADD
+                                    REQUIREMENT&quot; to begin.
                                 </div>
                             )}
                         </div>
@@ -1938,7 +1920,7 @@ export default function ProposalForm({
                                     onChange={(e) =>
                                         updateRow("local_physical_targets", i, {
                                             target_description: e.target.value,
-                                        } as any)
+                                        })
                                     }
                                 />
                                 <input
@@ -1949,7 +1931,7 @@ export default function ProposalForm({
                                     onChange={(e) =>
                                         updateRow("local_physical_targets", i, {
                                             year: parseInt(e.target.value),
-                                        } as any)
+                                        })
                                     }
                                 />
                                 <button
@@ -1965,9 +1947,9 @@ export default function ProposalForm({
                             </div>
                         ))}
                         {payload.local_physical_targets.length === 0 && (
-                            <div className="p-8 text-center text-muted-400 text-sm italic">
-                                No Local Physical Targets added. Click "+ ADD
-                                TARGET" to begin.
+                            <div className="p-8 text-center text-muted-400 text-xs italic">
+                                No Local Physical Targets added. Click &quot;+
+                                ADD TARGET&quot; to begin.
                             </div>
                         )}
                     </div>
@@ -2038,7 +2020,7 @@ export default function ProposalForm({
                                                                     component_name:
                                                                         e.target
                                                                             .value,
-                                                                } as any,
+                                                                },
                                                             )
                                                         }
                                                     />
@@ -2328,7 +2310,7 @@ export default function ProposalForm({
                                                                                 .target
                                                                                 .value,
                                                                         ),
-                                                                    } as any,
+                                                                    },
                                                                 )
                                                             }
                                                         />
@@ -2454,9 +2436,9 @@ export default function ProposalForm({
                                 </tbody>
                             </table>
                             {payload.foreign_financial_targets.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No foreign financial targets added. Click "+
-                                    ADD FINANCIAL TARGET" to begin.
+                                <div className="p-8 text-center text-muted-400 text-xs italic">
+                                    No foreign financial targets added. Click
+                                    &quot;+ ADD FINANCIAL TARGET&quot; to begin.
                                 </div>
                             )}
                         </div>
@@ -2740,7 +2722,7 @@ export default function ProposalForm({
                                                     i,
                                                     {
                                                         name: e.target.value,
-                                                    } as any,
+                                                    },
                                                 )
                                             }
                                         />

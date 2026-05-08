@@ -1,6 +1,6 @@
 import { Kysely, sql } from "kysely"
 
-export async function up(db: Kysely<any>): Promise<void> {
+export async function up(db: Kysely<unknown>): Promise<void> {
     // Funding Source
     await db.schema
         .createTable('uacs_funding_sources')
@@ -68,7 +68,7 @@ export async function up(db: Kysely<any>): Promise<void> {
         .execute()
 }
 
-export async function down(db: Kysely<any>): Promise<void> {
+export async function down(db: Kysely<unknown>): Promise<void> {
     await db.schema.dropTable('uacs_funding_sources').execute()
     await db.schema.dropTable('uacs_locations').execute()
     await db.schema.dropTable('uacs_object_codes').execute()

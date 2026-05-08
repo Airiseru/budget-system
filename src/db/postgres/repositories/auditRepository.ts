@@ -21,17 +21,8 @@ import isEqual from "lodash/isEqual"
 import { fetchHydratedFormState } from "./formHydrator"
 import { cleanDataBasedOnTable } from "@/src/lib/validations"
 
-const cleanState = (state: any) => {
-    if (!state) return state
-    const { 
-        auth_status, entity_id, created_at, updated_at,
-        ...cleanState 
-    } = state
-    return cleanState
-}
-
 export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
-    let editedLog: NewAuditLog = {
+    const editedLog: NewAuditLog = {
         ...log,
         table_name: log.table_name ?? null,
         record_id: log.record_id ?? null,
@@ -211,7 +202,6 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
     let isDataMatch = false
     let reconstructedState = null
     let currentState = null
-    let validFormStatus = true
     let approvalHashesValid = true
     let snapshotsMatchHistory = true
 
@@ -234,7 +224,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
 
         for (const log of formLogsWithProofs) {
-            const payload = log.payload as any
+            const payload = log.payload as Record<string, unknown>
 
             if (log.event_type === 'CREATE_FORM') {
                 reconstructedState = JSON.parse(JSON.stringify(payload))

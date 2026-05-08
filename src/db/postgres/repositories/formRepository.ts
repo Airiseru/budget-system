@@ -107,15 +107,21 @@ export async function getAllForms(filters: FormFilters = {}) {
         .leftJoin('departments', 'forms.entity_id', 'departments.id')
         .leftJoin('agencies', 'forms.entity_id', 'agencies.id')
         .leftJoin('operating_units', 'forms.entity_id', 'operating_units.id')
+        .leftJoin('agencies as parent_agencies', 'parent_agencies.id', 'operating_units.agency_id')
+        .leftJoin('departments as agency_departments', 'agency_departments.id', 'agencies.department_id')
+        .leftJoin('departments as parent_agency_departments', 'parent_agency_departments.id', 'parent_agencies.department_id')
         .selectAll('forms')
-        // Dynamically pull the correct name and abbreviation
         .select((eb) => [
             eb.fn.coalesce(
                 'departments.name',
                 'agencies.name',
                 'operating_units.name'
             ).as('entity_name'),
-            
+            eb.fn.coalesce(
+                'departments.name',
+                'agency_departments.name',
+                'parent_agency_departments.name'
+            ).as('department_name'),
             eb.fn.coalesce(
                 'departments.abbr',
                 'agencies.abbr',

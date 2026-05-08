@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useEffect } from 'react'
+import { useActionState, useEffect, useMemo, useState } from 'react'
 import { createSalaryScheduleAction } from '@/src/actions/salary'
 import { MAX_SG, MAX_STEP } from '@/src/lib/constants'
 import { Button } from '@/components/ui/button'
@@ -26,23 +26,27 @@ export function NewSalaryScheduleForm({ onClose }: { onClose: () => void }) {
     const [rates, setRates] = useState<Rate[]>(buildEmptyGrid())
     const [stepCount, setStepCount] = useState(DEFAULT_STEPS)
     const [sgCount, setSgCount] = useState(DEFAULT_SG)
-    
-    const [todayDate, setTodayDate] = useState('')
-
-    useEffect(() => {
-        // Generate today's date in YYYY-MM-DD format based on the user's local timezone
+    const todayDate = useMemo(() => {
         const d = new Date()
         const year = d.getFullYear()
         const month = String(d.getMonth() + 1).padStart(2, '0')
         const day = String(d.getDate()).padStart(2, '0')
-        setTodayDate(`${year}-${month}-${day}`)
+        return `${year}-${month}-${day}`
+    }, [])
 
+    useEffect(() => {
         // close on success
         if (state?.success) onClose()
     }, [state?.success, onClose])
 
-    const steps = Array.from({ length: stepCount }, (_, i) => i + 1)
-    const grades = Array.from({ length: sgCount }, (_, i) => i + 1)
+    const steps = useMemo(
+        () => Array.from({ length: stepCount }, (_, i) => i + 1),
+        [stepCount]
+    )
+    const grades = useMemo(
+        () => Array.from({ length: sgCount }, (_, i) => i + 1),
+        [sgCount]
+    )
 
     const getRate = (sg: number, step: number) =>
         rates.find(r => r.salary_grade === sg && r.step === step)?.amount ?? ''
