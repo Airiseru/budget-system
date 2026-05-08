@@ -7,7 +7,7 @@ import { logUserSignUp, logUserLogout } from "./audit"
 import { SignupFormSchema, UserFormState } from "../lib/validations/user"
 import { redirect } from "next/navigation"
 import * as z from 'zod'
-import { UserAccessLevels } from "../types/entities"
+import { ACCESS_LEVELS_HIERARCHY } from "../lib/constants"
 
 export async function sessionDetails() {
     return await auth.api.getSession({
@@ -76,8 +76,8 @@ export async function requireMinAccessLevel(minimumLevel: string, returnSession:
     const session = await sessionWithEntity()
     if (!session) redirect('/login')
 
-    const userLevelIndex = UserAccessLevels.indexOf(session.user.access_level)
-    const requiredLevelIndex = UserAccessLevels.indexOf(minimumLevel)
+    const userLevelIndex = ACCESS_LEVELS_HIERARCHY.indexOf(session.user.access_level)
+    const requiredLevelIndex = ACCESS_LEVELS_HIERARCHY.indexOf(minimumLevel)
 
     if (userLevelIndex < requiredLevelIndex) {
         if (returnSession) redirect('/home')

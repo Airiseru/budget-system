@@ -80,13 +80,13 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
     return (
         <TableRow>
             <TableCell>
-                <div className="font-medium text-foreground">{user.user_name}</div>
-                <div className="text-xs text-muted-foreground">{user.user_email}</div>
+                <div className="font-medium text-foreground whitespace-normal break-word">{user.user_name}</div>
+                <div className="text-xs text-muted-foreground whitespace-normal break-word">{user.user_email}</div>
             </TableCell>
 
             <TableCell>
-                <div className="font-medium text-foreground">{user.position}</div>
-                <div className="text-xs text-muted-foreground">{user.entity_name}</div>
+                <div className="font-medium text-foreground whitespace-normal break-word">{user.position}</div>
+                <div className="text-xs text-muted-foreground whitespace-normal break-word">{user.entity_name}</div>
             </TableCell>
             
             <TableCell>

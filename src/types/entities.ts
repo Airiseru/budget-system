@@ -6,6 +6,8 @@ import {
     Updateable
 } from 'kysely'
 
+import { ROLE_LABELS, ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '../lib/constants'
+
 export interface EntitiesTable {
     id: Generated<string>,
     type: string
@@ -14,11 +16,9 @@ export interface EntitiesTable {
 export type Entity = Selectable<EntitiesTable>
 export type NewEntity = Insertable<EntitiesTable>
 
-export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency' | 'archived'
-export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve'
-export const UserAccessLevels = ['none', 'view', 'encode', 'review', 'approve']
-export type UserWorkflowRole = 'personnel_officer' | 'budget_officer' | 'planning_officer' | 'chief_accountant' | 'office_head' | 'agency_head' | 'dbm'
-export const UserWorkflowRoles = ['personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head', 'dbm']
+export type UserRole = keyof typeof ROLE_LABELS | 'archived'
+export type UserAccessLevel = keyof typeof ACCESS_LEVEL_LABELS | 'none'
+export type UserWorkflowRole = keyof typeof WORKFLOW_ROLE_LABELS
 
 export interface UserTable {
     id: string

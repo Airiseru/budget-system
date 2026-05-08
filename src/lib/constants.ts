@@ -90,7 +90,7 @@ export const STATUS_COLOR_MAPPER = (status: string) => {
 export const ROLE_LABELS: Record<string, string> = {
     admin: 'Administrator',
     dbm: 'DBM',
-    departmnet: 'Department',
+    department: 'Department',
     agency: 'Agency',
     ou: 'Operating Unit',
     others: 'Others',
@@ -102,6 +102,8 @@ export const ACCESS_LEVEL_LABELS: Record<string, string> = {
     review: 'Reviewer',
     approve: 'Approver',
 }
+
+export const ACCESS_LEVELS_HIERARCHY = ['none', 'view', 'encode', 'review', 'approve']
 
 export const TLB_FACTOR = 0.0481927
 

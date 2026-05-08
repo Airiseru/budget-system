@@ -68,10 +68,10 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
                         onValueChange={handleEntityChange}
                     >
                         <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base">
-                            <SelectValue placeholder="Select your Department or Agency">
+                            <SelectValue placeholder="Select your Entity">
                                 {selectedEntityId 
                                     ? getEntityName(selectedEntityId) 
-                                    : <span className="text-gray-400">Select your Department or Agency</span>
+                                    : <span className="text-gray-400">Select your Entity</span>
                                 }
                             </SelectValue>
                         </SelectTrigger>
