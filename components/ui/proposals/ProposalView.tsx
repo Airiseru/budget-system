@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { SignSection } from "@/components/ui/digital-signatures/SignSection";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
