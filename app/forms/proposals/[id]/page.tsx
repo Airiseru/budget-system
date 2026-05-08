@@ -32,27 +32,27 @@ export default async function ProposalDetailsPage({
 }: {
     params: Promise<{ id: string }>;
 }) {
-    const { id } = await params;
-    const session = await sessionWithEntity();
-    if (!session) redirect("/login");
+    const { id } = await params
+    const session = await sessionWithEntity()
+    if (!session) redirect("/login")
 
     // 1. Fetch Version Family (Crucial for DBM Overwrites)
     const versionFamily = await FormRepo.getFormVersionFamily(id).catch(
         () => null,
-    );
-    if (!versionFamily) return notFound();
+    )
+    if (!versionFamily) return notFound()
 
-    const data = await ProposalRepo.getProjectProposalById(id);
-    if (!data) return notFound();
+    const data = await ProposalRepo.getProjectProposalById(id)
+    if (!data) return notFound()
 
     // 2. Workflow Logic
-    const workflow = PROPOSAL_WORKFLOW;
-    const currentStatus = data.auth_status ?? "draft";
+    const workflow = PROPOSAL_WORKFLOW
+    const currentStatus = data.auth_status ?? "draft"
 
     const currentSignatoryRole = getCurrentSignatoryRole(
         currentStatus,
         workflow,
-    );
+    )
 
     const userCanSign = currentSignatoryRole
         ? canSign(
@@ -62,46 +62,53 @@ export default async function ProposalDetailsPage({
               currentSignatoryRole,
               workflow,
           )
-        : false;
+        : false
 
     // Determine the next status for the "Submit" action
     const nextStatus =
-        getNextStatus(currentStatus, workflow, "submit") || "approved";
+        getNextStatus(currentStatus, workflow, "submit") || "approved"
 
     // 3. Signature & Audit Data
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(
         data.id ?? "",
         session.user.id,
-    );
-    const allSignatures = await KeyRepo.getSignatoriesByFormId(data.id ?? "");
+    )
+    const allSignatures = await KeyRepo.getSignatoriesByFormId(data.id ?? "")
+    const isBudgetPrepOpenForProposalYear = await isBudgetPrepActiveForYear(
+        data.proposal_year,
+    )
+    const entityActionsLockedByBudgetCycle = !isBudgetPrepOpenForProposalYear;
     const pastSignatures = await KeyRepo.getPastSignatoriesByFormId(
         data.id ?? "",
-    );
+    )
     const latestRejection = await AuditRepo.getLatestFormRejection(
         "project_proposals",
         data.id ?? "",
-    );
+    )
 
     // 4. Back Navigation Logic
-    const isOwnAgencyForm = session.user.entity_id === data.entity_id;
-    const isActingAsEvaluator = session.user.workflow_role === "dbm";
+    const isOwnAgencyForm = session.user.entity_id === data.entity_id
+    const isActingAsEvaluator = session.user.workflow_role === "dbm"
 
-    let backUrl = "/forms/proposals";
+    let backUrl = "/forms/proposals"
 
     if (session.user.role === "dbm") {
         if (!isOwnAgencyForm) {
-            backUrl = "/dbm/forms";
+            backUrl = "/dbm/forms"
         } else if (isActingAsEvaluator && data.auth_status === "pending_dbm") {
-            backUrl = "/dbm/forms";
+            backUrl = "/dbm/forms"
         }
     }
 
     // 5. Server Actions
     const updateAuthStatus = async () => {
-        "use server";
+        "use server"
+        if (data.auth_status !== "draft") return
+        if (entityActionsLockedByBudgetCycle) return
+        await FormRepo.updateFormAuthStatus(data.id ?? "", "pending_budget")
         // Logic check: only allow submission if in draft or in DBM-edit mode
         if (data.auth_status !== "draft" && data.auth_status !== "pending_dbm")
-            return;
+            return
 
         await submitForm(
             data.id ?? "",
@@ -110,21 +117,21 @@ export default async function ProposalDetailsPage({
             data.entity_id,
             "project_proposals",
             nextStatus,
-        );
-        revalidatePath(`/forms/proposals/${id}`);
-    };
-
-    const deleteFormAction = async (formId: string) => {
-        "use server";
-        if (data.auth_status !== "draft") return;
-        await ProposalRepo.deleteProjectProposal(formId);
-        redirect("/forms/proposals");
-    };
+        )
+        revalidatePath(`/forms/proposals/${id}`)
+    }
 
     const userInWorkflow = roleInWorkflow(
         session.user.workflow_role ?? "",
         workflow,
-    );
+    )
+
+    const deleteFormAction = async (formId: string) => {
+        "use server"
+        if (data.auth_status !== "draft") return;
+        await ProposalRepo.deleteProjectProposal(formId)
+        redirect("/forms/proposals")
+    }
 
     return (
         <ProposalView
@@ -135,13 +142,15 @@ export default async function ProposalDetailsPage({
             userInWorkflow={userInWorkflow}
             originalFormId={versionFamily.originalFormId}
             isDbmEvaluator={isActingAsEvaluator}
-            userCanSign={userCanSign}
+            userCanSign={entityActionsLockedByBudgetCycle ? false : userCanSign}
+            budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}
             allSignatures={allSignatures}
             pastSignatures={pastSignatures}
             latestRejection={latestRejection}
             updateAuthStatus={updateAuthStatus}
+            deleteFormAction={deleteFormAction}
         />
-    );
+    )
 }
