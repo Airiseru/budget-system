@@ -47,7 +47,7 @@ export default function ProposalClientWrapper({
                         Create New BP {type || searchType}
                     </h1>
                     <p className="text-muted-foreground italic">
-                        Agency: {entityName}
+                        Government Entity: {entityName}
                     </p>
                 </div>
 
