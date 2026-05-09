@@ -766,49 +766,51 @@ export default function ProposalView({
                     </div>
 
                     {/* Infrastructure Requirements */}
-                    <div className="space-y-3">
-                        <h4 className="text-md font-black text-secondary-foreground uppercase flex items-center tracking-widest gap-2">
-                            <Building size={12} />
-                            Infrastructure Requirements
-                        </h4>
-                        <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
-                            <table className="w-full text-sm">
-                                <thead>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                            Infrastructure Requirement
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            PS
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            MOOE
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            CO
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            FINEX
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y">
-                                    {data.local_infrastructure_requirements?.map(
-                                        (infra: any, i: number) => (
-                                            <tr key={i}>
-                                                <td className="p-4 text-muted-700">
-                                                    {infra.description}
-                                                </td>
-                                                <CostBreakdownColumns
-                                                    item={infra}
-                                                />
-                                            </tr>
-                                        ),
-                                    )}
-                                </tbody>
-                            </table>
+                    {data.local_infrastructure_requirements?.length > 0 && (
+                        <div className="space-y-3">
+                            <h4 className="text-md font-black text-secondary-foreground uppercase flex items-center tracking-widest gap-2">
+                                <Building size={12} />
+                                Infrastructure Requirements
+                            </h4>
+                            <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="bg-muted-50/50 border-b border-muted-100">
+                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                                Infrastructure Requirement
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                PS
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                MOOE
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                CO
+                                            </th>
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                FINEX
+                                            </th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {data.local_infrastructure_requirements?.map(
+                                            (infra: any, i: number) => (
+                                                <tr key={i}>
+                                                    <td className="p-4 text-muted-700">
+                                                        {infra.description}
+                                                    </td>
+                                                    <CostBreakdownColumns
+                                                        item={infra}
+                                                    />
+                                                </tr>
+                                            ),
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 

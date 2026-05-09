@@ -91,8 +91,7 @@ export const ProposalSchema = z.discriminatedUnion("type", [
                     total_amt: z.coerce.number().min(0),
                     costs: NonZeroCostArraySchema,
                 }),
-            )
-            .min(1, "Please add at least one infrastructure requirement"),
+            ),
         local_physical_targets: z
             .array(
                 z.object({
@@ -103,6 +102,17 @@ export const ProposalSchema = z.discriminatedUnion("type", [
                 }),
             )
             .min(1, "Please add at least one physical target"),
+    }).superRefine((data, ctx) => {
+        if (
+            data.is_infrastructure &&
+            data.local_infrastructure_requirements.length < 1
+        ) {
+            ctx.addIssue({
+                code: "custom",
+                path: ["local_infrastructure_requirements"],
+                message: "Please add at least one infrastructure requirement",
+            })
+        }
     }),
 
     // --- FORM 203 ---

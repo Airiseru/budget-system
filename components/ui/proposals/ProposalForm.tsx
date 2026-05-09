@@ -185,20 +185,6 @@ type ArrayItem<K extends ArrayFieldKey> = K extends keyof ProjectProposalPayload
         : never
     : never;
 type NonArrayFieldKey = Exclude<keyof ProjectProposalPayload, ArrayFieldKey>;
-type ExpenseMatrixFieldKey =
-    | "cost_by_components"
-    | "local_locations"
-    | "local_infrastructure_requirements";
-type ProposalFormProject = Partial<ProjectProposalPayload> & {
-    id: string;
-    title: string;
-    proposal_year: number;
-    priority_rank: number;
-    org_outcome_id: string;
-    description: string;
-    purpose: string;
-    beneficiaries: string;
-};
 
 interface PrerequisiteRowProps {
     pre: ProposalPrerequisite;
@@ -438,6 +424,14 @@ export default function ProposalForm({
     ) {
         setPayload((prev) => {
             if (index === undefined) {
+                if (field === "is_infrastructure" && value === false) {
+                    return {
+                        ...prev,
+                        is_infrastructure: false,
+                        local_infrastructure_requirements: [],
+                    };
+                }
+
                 return {
                     ...prev,
                     [field]: value as ProjectProposalPayload[K],
@@ -515,9 +509,15 @@ export default function ProposalForm({
 
         const finalPayload = {
             ...payload,
+            local_infrastructure_requirements: payload.is_infrastructure
+                ? payload.local_infrastructure_requirements
+                : [],
             cost_by_components: normalizedComponents,
             total_proposal_cost: calculateTotal({
                 ...payload,
+                local_infrastructure_requirements: payload.is_infrastructure
+                    ? payload.local_infrastructure_requirements
+                    : [],
                 cost_by_components: normalizedComponents,
             }),
         };
@@ -1888,167 +1888,170 @@ export default function ProposalForm({
                             </div>
                         )}
                     </div>
-                    <div className="space-y-2">
-                        <div
-                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
-                                errors.local_infrastructure_requirements
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
-                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    Requirements for Operating Cost of
-                                    Infrastructure Project
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        addRow(
-                                            "local_infrastructure_requirements",
-                                            {
-                                                description: "",
-                                                year: payload.proposal_year,
-                                                total_amt: 0,
-                                                costs: [],
-                                            },
-                                        )
-                                    }
-                                    className="text-secondary-foreground-600 text-sm font-bold hover:underline"
-                                >
-                                    + ADD REQUIREMENT
-                                </button>
-                            </div>
-                            <div className="p-0">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-muted-50/50 border-b border-muted-100">
-                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                                Description
-                                            </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                PS
-                                            </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                MOOE
-                                            </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                CO
-                                            </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                FINEX
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-muted-50">
-                                        {payload.local_infrastructure_requirements.map(
-                                            (item, i) => (
-                                                <tr key={i}>
-                                                    <td className="py-3 px-4">
-                                                        <input
-                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                            placeholder="Infrastructure Requirement"
-                                                            value={
-                                                                item.description
-                                                            }
-                                                            onChange={(e) =>
-                                                                updateRow(
-                                                                    "local_infrastructure_requirements",
-                                                                    i,
-                                                                    {
-                                                                        description:
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                        />
-                                                    </td>
-                                                    {(
-                                                        [
-                                                            "PS",
-                                                            "MOOE",
-                                                            "CO",
-                                                            "FINEX",
-                                                        ] as const
-                                                    ).map((itemClass) => (
-                                                        <td
-                                                            key={itemClass}
-                                                            className="py-2 px-2"
-                                                        >
+
+                    {payload.is_infrastructure && (
+                        <div className="space-y-2">
+                            <div
+                                className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
+                                    errors.local_infrastructure_requirements
+                                        ? "border-red-500 bg-red-50"
+                                        : "border-muted-200"
+                                }`}
+                            >
+                                <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
+                                    <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
+                                        Requirements for Operating Cost of
+                                        Infrastructure Project
+                                    </h3>
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            addRow(
+                                                "local_infrastructure_requirements",
+                                                {
+                                                    description: "",
+                                                    year: payload.proposal_year,
+                                                    total_amt: 0,
+                                                    costs: [],
+                                                },
+                                            )
+                                        }
+                                        className="text-secondary-foreground-600 text-sm font-bold hover:underline"
+                                    >
+                                        + ADD REQUIREMENT
+                                    </button>
+                                </div>
+                                <div className="p-0">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="bg-muted-50/50 border-b border-muted-100">
+                                                <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                                    Description
+                                                </th>
+                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                    PS
+                                                </th>
+                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                    MOOE
+                                                </th>
+                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                    CO
+                                                </th>
+                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                    FINEX
+                                                </th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-muted-50">
+                                            {payload.local_infrastructure_requirements.map(
+                                                (item, i) => (
+                                                    <tr key={i}>
+                                                        <td className="py-3 px-4">
                                                             <input
-                                                                type="number"
-                                                                className="w-full bg-transparent text-right outline-none text-sm"
-                                                                placeholder="0"
+                                                                className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                placeholder="Infrastructure Requirement"
                                                                 value={
-                                                                    item.costs.find(
-                                                                        (c) =>
-                                                                            c.expense_class ===
-                                                                            itemClass,
-                                                                    )?.amount ??
-                                                                    ""
+                                                                    item.description
                                                                 }
                                                                 onChange={(e) =>
-                                                                    handleMatrixChange(
+                                                                    updateRow(
                                                                         "local_infrastructure_requirements",
                                                                         i,
-                                                                        itemClass,
-                                                                        e.target
-                                                                            .valueAsNumber ||
-                                                                            0,
+                                                                        {
+                                                                            description:
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
                                                         </td>
-                                                    ))}
-                                                    <td className="py-3 px-4">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                removeRow(
-                                                                    "local_infrastructure_requirements",
-                                                                    i,
-                                                                )
-                                                            }
-                                                            className="text-red-400 hover:text-red-600 transition-colors"
-                                                            title="Remove Component"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ),
-                                        )}
-                                    </tbody>
-                                </table>
+                                                        {(
+                                                            [
+                                                                "PS",
+                                                                "MOOE",
+                                                                "CO",
+                                                                "FINEX",
+                                                            ] as const
+                                                        ).map((itemClass) => (
+                                                            <td
+                                                                key={itemClass}
+                                                                className="py-2 px-2"
+                                                            >
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-full bg-transparent text-right outline-none text-sm"
+                                                                    placeholder="0"
+                                                                    value={
+                                                                        item.costs.find(
+                                                                            (c) =>
+                                                                                c.expense_class ===
+                                                                                itemClass,
+                                                                        )?.amount ??
+                                                                        ""
+                                                                    }
+                                                                    onChange={(e) =>
+                                                                        handleMatrixChange(
+                                                                            "local_infrastructure_requirements",
+                                                                            i,
+                                                                            itemClass,
+                                                                            e.target
+                                                                                .valueAsNumber ||
+                                                                                0,
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </td>
+                                                        ))}
+                                                        <td className="py-3 px-4">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() =>
+                                                                    removeRow(
+                                                                        "local_infrastructure_requirements",
+                                                                        i,
+                                                                    )
+                                                                }
+                                                                className="text-red-400 hover:text-red-600 transition-colors"
+                                                                title="Remove Component"
+                                                            >
+                                                                ✕
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                ),
+                                            )}
+                                        </tbody>
+                                    </table>
 
-                                {payload.local_infrastructure_requirements
-                                    .length === 0 && (
-                                    <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No locations added. Click &quot;+ ADD
-                                        REQUIREMENT&quot; to begin.
-                                    </div>
-                                )}
+                                    {payload.local_infrastructure_requirements
+                                        .length === 0 && (
+                                        <div className="p-8 text-center text-muted-400 text-sm italic">
+                                            No locations added. Click &quot;+ ADD
+                                            REQUIREMENT&quot; to begin.
+                                        </div>
+                                    )}
+                                </div>
                             </div>
+                            {getErrorsForPath("local_infrastructure_requirements")
+                                .length > 0 && (
+                                <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                    {getErrorsForPath(
+                                        "local_infrastructure_requirements",
+                                    ).map((msg, i) => (
+                                        <p
+                                            key={i}
+                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                        >
+                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                            {msg}
+                                        </p>
+                                    ))}
+                                </div>
+                            )}
                         </div>
-                        {getErrorsForPath("local_infrastructure_requirements")
-                            .length > 0 && (
-                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
-                                {getErrorsForPath(
-                                    "local_infrastructure_requirements",
-                                ).map((msg, i) => (
-                                    <p
-                                        key={i}
-                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
-                                    >
-                                        <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
-                                        {msg}
-                                    </p>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                    )}
 
                     <div className="space-y-2">
                         <div
