@@ -27,17 +27,17 @@ const statusColors: Record<
 };
 
 type ProposalSummary = {
-    id: string
-    type: "202" | "203"
-    proposal_year: number
-    priority_rank: number
-    auth_status: string | null
-    title: string
-    total_proposal_currency: string
-    total_proposal_cost: number
-    is_infrastructure: boolean
-    submission_date: Date | string | null
-}
+    id: string;
+    type: "202" | "203";
+    proposal_year: number;
+    priority_rank: number;
+    auth_status: string | null;
+    title: string;
+    total_proposal_currency: string;
+    total_proposal_cost: number;
+    is_infrastructure: boolean;
+    submission_date: Date | string | null;
+};
 
 export default async function ProposalsPage() {
     const session = await sessionWithEntity();

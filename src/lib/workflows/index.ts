@@ -73,7 +73,10 @@ export function isTerminalStatus(authStatus: string, workflow: Workflow, action:
 export const WORKFLOWS: Record<string, Workflow> = {
     bp_staffing: STAFFING_WORKFLOW,
     bp_retiree: RETIREE_WORKFLOW,
-    bp_proposal: PROPOSAL_WORKFLOW
+    bp_local_proposal_new: PROPOSAL_WORKFLOW,
+    bp_local_proposal_expanded: PROPOSAL_WORKFLOW,
+    bp_foreign_proposal_new: PROPOSAL_WORKFLOW,
+    bp_foreign_proposal_expanded: PROPOSAL_WORKFLOW,
 }
 
 export function getWorkflow(formType: string): Workflow {

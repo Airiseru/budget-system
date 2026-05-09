@@ -1,20 +1,18 @@
 import { db } from "../database";
-import {
-    FullProjectProposal,
-} from "../../../types/project_proposals";
+import { FullProjectProposal } from "../../../types/project_proposals";
 import { sql } from "kysely";
 import { Transaction } from "kysely";
 import { Database } from "@/src/types";
 
 type ProposalExpenseClass = {
-    amount: number | string
-    expense_class: string
-    currency?: string
-}
+    amount: number | string;
+    expense_class: string;
+    currency?: string;
+};
 
 type ProposalCostSourceItem = Record<string, unknown> & {
-    costs?: ProposalExpenseClass[]
-}
+    costs?: ProposalExpenseClass[];
+};
 
 type ProposalAttributionEntry = {
     year: number;
@@ -23,9 +21,9 @@ type ProposalAttributionEntry = {
 };
 
 type ProposalAttribution = {
-    description: string
-    attribution_costs: ProposalAttributionEntry[]
-}
+    description: string;
+    attribution_costs: ProposalAttributionEntry[];
+};
 
 // type ProposalSummaryData = {
 //     title: string;
@@ -74,6 +72,7 @@ type CostSourceTableName =
     | "local_infrastructure_requirements"
     | "local_locations"
     | "foreign_financial_targets"
+    | "foreign_physical_targets";
 
 /**
  * Helper to handle the "Cost Source" architecture.
@@ -647,7 +646,6 @@ export async function updateProjectProposal(
                 await trx
                     .insertInto("foreign_financial_targets")
                     .values(
-                        p.foreign_financial_targets.map((i: any) => ({
                         p.foreign_financial_targets.map((i: any) => ({
                             ...i,
                             proposal_id: proposalId,

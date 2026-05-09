@@ -20,6 +20,7 @@ import { replayDiffs } from "@/src/lib/diff"
 import isEqual from "lodash/isEqual"
 import { fetchHydratedFormState } from "./formHydrator"
 import { cleanDataBasedOnTable } from "@/src/lib/validations"
+import { Diff } from "@/src/types/audit"
 
 export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
     const editedLog: NewAuditLog = {
@@ -233,7 +234,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
             else if (log.event_type === 'EDIT_FORM') {
                 // Delta: Apply diff to current reconstructed state
                 if (reconstructedState) {
-                    reconstructedState = replayDiffs(reconstructedState, [payload])
+                    reconstructedState = replayDiffs(reconstructedState, [payload as Diff])
                 }
             }
             else if (log.event_type === 'SUBMIT_FORM') {

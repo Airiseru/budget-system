@@ -1,8 +1,9 @@
-import { db } from "../database"
 import * as StaffingRepository from "./staffingRepository"
 import { staffingFormSchema } from "@/src/lib/validations/staffing.schema"
 import * as RetireeRepository from "./retireeRepository"
 import { retireeFormSchema } from "@/src/lib/validations/retiree.schema"
+import * as ProposalRepository from "./proposalRepository"
+import { ProposalSchema } from "@/src/lib/validations/proposal.schema"
 
 export async function fetchHydratedFormState(tableName: string, recordId: string) {
     switch (tableName) {
@@ -16,10 +17,14 @@ export async function fetchHydratedFormState(tableName: string, recordId: string
             return retireeFormSchema.parse(retirees)
         }
 
+        case 'project_proposals': {
+            const proposal = await ProposalRepository.getProjectProposalById(recordId)
+            return ProposalSchema.parse(proposal)
+        }
+
         default: {
             console.warn(`No hydration for table ${tableName}`)
-            const table = db.dynamic.table(tableName)
-            return await db.selectFrom(table).selectAll().where('id', '=', recordId).executeTakeFirst()
+            return {}
         }
     }
 }

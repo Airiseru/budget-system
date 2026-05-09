@@ -174,12 +174,16 @@ interface ProjectProposalPayload {
 
 type ProposalPrerequisite = ProjectProposalPayload["pap_prerequisites"][number];
 type ArrayFieldKey = {
-    [K in keyof ProjectProposalPayload]: ProjectProposalPayload[K] extends unknown[]
+    [K in keyof ProjectProposalPayload]: ProjectProposalPayload[K] extends any[]
         ? K
         : never;
-}[keyof ProjectProposalPayload];
-type ArrayItem<K extends ArrayFieldKey> =
-    ProjectProposalPayload[K] extends (infer U)[] ? U : never;
+}[keyof ProjectProposalPayload] &
+    keyof ProjectProposalPayload;
+type ArrayItem<K extends ArrayFieldKey> = K extends keyof ProjectProposalPayload
+    ? ProjectProposalPayload[K] extends (infer U)[]
+        ? U
+        : never
+    : never;
 type NonArrayFieldKey = Exclude<keyof ProjectProposalPayload, ArrayFieldKey>;
 type ExpenseMatrixFieldKey =
     | "cost_by_components"
@@ -199,15 +203,23 @@ type ProposalFormProject = Partial<ProjectProposalPayload> & {
 interface PrerequisiteRowProps {
     pre: ProposalPrerequisite;
     index: number;
-    updateRow: <K extends ArrayFieldKey>(
+    updateRow: <K extends ArrayFieldKey & keyof ProjectProposalPayload>(
         field: K,
         index: number,
         value: Partial<ArrayItem<K>>,
     ) => void;
-    removeRow: <K extends ArrayFieldKey>(field: K, index: number) => void;
+    removeRow: <K extends ArrayFieldKey & keyof ProjectProposalPayload>(
+        field: K,
+        index: number,
+    ) => void;
 }
 
-const PrerequisiteRow = ({ pre, index, updateRow, removeRow }: PrerequisiteRowProps) => (
+const PrerequisiteRow = ({
+    pre,
+    index,
+    updateRow,
+    removeRow,
+}: PrerequisiteRowProps) => (
     <tr className="border-b border-muted-100 last:border-0 hover:bg-muted-50/30 transition-colors">
         <td className="py-3 px-4 text-sm text-muted-700 font-medium border-r bg-background">
             <input
@@ -313,10 +325,6 @@ export default function ProposalForm({
         "draft" | "pending_budget"
     >("draft");
 
-    if (project) {
-        console.log("THIS IS THE PROJECT PROP: ", project);
-    }
-
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         title: project?.title || "",
         proposal_year:
@@ -339,9 +347,11 @@ export default function ProposalForm({
         pap_prerequisites: project?.pap_prerequisites || DEFAULT_PREREQUISITES,
         cost_by_components: project?.cost_by_components || [],
 
-        local_locations:
-            project?.local_locations?.length ?
-            (project?.local_locations?.length > 0 ? project?.local_locations : []) : [],
+        local_locations: project?.local_locations?.length
+            ? project?.local_locations?.length > 0
+                ? project?.local_locations
+                : []
+            : [],
 
         local_financial_attributions:
             project?.local_financial_attributions || [],
@@ -404,7 +414,10 @@ export default function ProposalForm({
     ) => {
         setPayload((prev) => ({
             ...prev,
-            [field]: [...(prev[field] as Array<typeof defaultValue>), defaultValue],
+            [field]: [
+                ...(prev[field] as Array<typeof defaultValue>),
+                defaultValue,
+            ],
         }));
     };
 
@@ -436,7 +449,10 @@ export default function ProposalForm({
                 const updatedArray = [...currentArray];
                 updatedArray[index] =
                     typeof value === "object" && value !== null
-                        ? { ...updatedArray[index], ...(value as Record<string, unknown>) }
+                        ? {
+                              ...updatedArray[index],
+                              ...(value as Record<string, unknown>),
+                          }
                         : updatedArray[index];
                 return { ...prev, [field]: updatedArray };
             }
@@ -445,12 +461,10 @@ export default function ProposalForm({
         });
     }
 
-    const removeRow = <K extends keyof ProjectProposalPayload>(
-        field: K,
-        index: number,
-    ) => {
+    const removeRow = <K extends ArrayFieldKey>(field: K, index: number) => {
         setPayload((prev) => {
-            const currentArray = prev[field];
+            // We cast to any[] here because we know K is an ArrayFieldKey
+            const currentArray = prev[field] as any[];
             if (Array.isArray(currentArray)) {
                 return {
                     ...prev,
@@ -509,8 +523,6 @@ export default function ProposalForm({
         };
 
         const result = ProposalSchema.safeParse(finalPayload);
-        console.log("FINAL PAYLOAD SENT TO VALIDATION:");
-        console.log(finalPayload);
 
         if (!result.success) {
             const formattedErrors: Record<string, string> = {};
@@ -901,7 +913,11 @@ export default function ProposalForm({
                                 className="w-5 h-5 rounded border-muted-300 text-blue-600 focus:ring-blue-500"
                                 checked={payload.for_ict ?? false}
                                 onChange={(e) =>
-                                    updateRow("for_ict", undefined, e.target.checked)
+                                    updateRow(
+                                        "for_ict",
+                                        undefined,
+                                        e.target.checked,
+                                    )
                                 }
                             />
                             <span className="text-sm font-medium text-muted-700 group-hover:text-blue-600 transition-colors">
@@ -965,7 +981,7 @@ export default function ProposalForm({
                                 >
                                     Approving Authorities
                                 </td>
-                                <td className="" colSpan={2}>
+                                <td className="flex flex-row-reverse" colSpan={2}>
                                     <button
                                         type="button"
                                         onClick={() =>
@@ -976,7 +992,7 @@ export default function ProposalForm({
                                                 remarks: "",
                                             })
                                         }
-                                        className="text-secondary-foreground-600 text-sm font-bold hover:underline py-2 px-4 text-right"
+                                        className="text-secondary-foreground-600 text-sm font-bold hover:underline py-2 px-4"
                                     >
                                         + ADD APPROVING AUTHORITY
                                     </button>
@@ -1564,7 +1580,7 @@ export default function ProposalForm({
                                                                                                 ) =>
                                                                                                     e.expense_class ===
                                                                                                     ec,
-                                                                                            ) // Added ?. here
+                                                                                            )
                                                                                             ?.amount ||
                                                                                             0,
                                                                                     );
@@ -1849,7 +1865,8 @@ export default function ProposalForm({
                                     0 && (
                                     <div className="p-8 text-center text-muted-400 text-sm italic">
                                         No Local Financial Attributions added.
-                                        Click &quot;+ ADD ATTRIBUTION&quot; to begin.
+                                        Click &quot;+ ADD ATTRIBUTION&quot; to
+                                        begin.
                                     </div>
                                 )}
                             </div>
@@ -2035,7 +2052,7 @@ export default function ProposalForm({
 
                     <div className="space-y-2">
                         <div
-                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
+                            className={`bg-background rounded-xl border shadow-sm overflow-hidden pb-2 ${
                                 errors.local_physical_targets
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
@@ -2059,7 +2076,7 @@ export default function ProposalForm({
                                 </button>
                             </div>
                             {payload.local_physical_targets.map((target, i) => (
-                                <div key={i} className="flex gap-4 mb-3 p-4">
+                                <div key={i} className="flex gap-4 p-4">
                                     <input
                                         className="flex-1 border-b text-sm"
                                         placeholder="Target Description"

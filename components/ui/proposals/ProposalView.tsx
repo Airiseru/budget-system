@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { Badge } from "@/components/ui/badge";
 import { SignSection } from "@/components/ui/digital-signatures/SignSection";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
@@ -138,11 +139,11 @@ const CostBreakdownColumns = ({ item }: { item: ProposalCostedItem }) => {
 const getStatusStyles = (status: string) => {
     switch (status) {
         case "True":
-            return "text-green-700 hover:bg-green-100 border-green-200";
+            return "text-green-700 hover:bg-green-100 border-green-700";
         case "False":
-            return "text-red-700 hover:bg-red-100 border-red-200";
+            return "text-destructive hover:bg-destructive/10 border-destructive";
         case "Not Applicable":
-            return "text-muted-500 hover:text-foreground/50 hover:bg-muted-foreground/20 border-muted-200";
+            return "text-muted-500 hover:text-foreground hover:bg-muted-foreground/10 border-muted-200";
         default:
             return "text-muted-500 hover:bg-black";
     }
@@ -372,7 +373,7 @@ export default function ProposalView({
                                                           : "Not Applicable"}
                                                 </Badge>
                                             </div>
-                                            <p className="text-sm text-muted-500 mt-1 italic">
+                                            <p className="text-sm text-muted-500 mt-1 italic whitespace-normal break-words">
                                                 Remarks: {pre.remarks}
                                             </p>
                                         </div>

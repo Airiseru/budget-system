@@ -1,66 +1,73 @@
 import { test, expect } from '@playwright/test'
 
-const uniqueId = Date.now().toString()
+const globalPassword = 'T#st1234T#st1234'
 
-test('successful_signup', async ({ page, browserName }) => {
-    await page.goto('http://localhost:3000/')
+test.describe.serial('Signup Flow', () => {
+    const uniqueId = Date.now().toString()
 
-    // Click signup button
-    await page.click('text=Sign Up')
+    test('successful_signup', async ({ page, browserName }) => {
+        await test.step('Signup', async () => {
+            await page.goto('http://localhost:3000/')
 
-    // Expect url to be signup
-    await expect(page).toHaveURL('http://localhost:3000/signup')
+            await page.click('text=Sign Up')
+            await expect(page).toHaveURL('http://localhost:3000/signup')
+            await expect(page.getByRole('heading', { name: 'Sign Up' })).toBeVisible()
 
-    // Expect to have signup heading
-    await expect(page.getByRole('heading', { name: 'Sign Up' })).toBeVisible()
+            await page.getByLabel('name').fill(`John Doe ${browserName}`)
+            await page.click('text=Select your Entity')
+            await page.getByText('Department of Agrarian Reform').nth(1).click()
+            await page.getByLabel('email').fill(`test-${browserName}-${uniqueId}@dar.com`)
+            await page.getByLabel('position').fill('Personnel Officer')
+            await page.getByLabel('password').first().fill(globalPassword)
 
-    // Enter details
-    await page.getByLabel('name').fill(`John Doe ${browserName}`)
-    await page.click('text=Select your Entity')
-    await page.getByText('Department of Agrarian Reform').nth(1).click()
-    await page.getByLabel('email').fill(`test-${browserName}-${uniqueId}@dar.com`)
-    await page.getByLabel('position').fill('Personnel Officer')
-    await page.getByLabel('password').first().fill('T#st1234T#st1234')
+            await page.getByRole('button', { name: 'Sign Up' }).click()
+            await expect(page).toHaveURL('http://localhost:3000/login')
+        })
 
-    // Click signup button
-    await page.getByRole('button', { name: 'Sign Up' }).click()
+        await test.step('Admin reject user', async () => {
+            await page.goto('http://localhost:3000/')
 
-    // Expect URL to be login
-    await expect(page).toHaveURL('http://localhost:3000/login')
-})
+            await page.click('text=Login')
+            await page.getByLabel('email').fill('dar-test@dar.com')
+            await page.getByLabel('password').first().fill(globalPassword)
+            await page.getByRole('button', { name: 'Login' }).click()
 
-test('unsuccessful_signup', async ({ page }) => {
-    await page.goto('http://localhost:3000/')
+            await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible()
 
-    // Click signup button
-    await page.click('text=Sign Up')
+            await page.getByRole('button', { name: 'Pending Approvals' }).click()
 
-    // Expect url to be signup
-    await expect(page).toHaveURL('http://localhost:3000/signup')
+            page.once('dialog', dialog => dialog.accept())
+            await page.getByRole('button', { name: 'Deny & Delete' }).click()
 
-    // Expect to have signup heading
-    await expect(page.getByRole('heading', { name: 'Sign Up' })).toBeVisible()
+            await expect(page.getByText('No pending users require approval at this time.')).toBeVisible()
+        })
+    })
 
-    // Enter details
-    await page.getByLabel('name').fill('A')
-    await page.click('text=Select your Entity')
-    await page.getByText('Department of Agrarian Reform').nth(1).click()
-    await page.getByLabel('email').fill('a@b')
-    await page.getByLabel('position').fill('A')
-    await page.getByLabel('password').first().fill('A')
+    test('unsuccessful_signup', async ({ page }) => {
+        await page.goto('http://localhost:3000/')
 
-    // Click signup button
-    await page.getByRole('button', { name: 'Sign Up' }).click()
+        await page.click('text=Sign Up')
+        await expect(page).toHaveURL('http://localhost:3000/signup')
+        await expect(page.getByRole('heading', { name: 'Sign Up' })).toBeVisible()
 
-    // Expect error message
-    await test.step('Expect error messages', async () => {
-        await expect(page.getByText('Name must be at least 2 characters')).toBeVisible()
-        await expect(page.getByText('Position must be at least 2 characters')).toBeVisible()
-        await expect(page.getByText('Please enter a valid email.')).toBeVisible()
-        await expect(page.getByText('Password must:')).toBeVisible()
-        await expect(page.getByText('Be at least 16 characters long')).toBeVisible()
-        await expect(page.getByText('Contain at least one lowercase letter')).toBeVisible()
-        await expect(page.getByText('Contain at least one number')).toBeVisible()
-        await expect(page.getByText('Contain at least one special character')).toBeVisible()
+        await page.getByLabel('name').fill('A')
+        await page.click('text=Select your Entity')
+        await page.getByText('Department of Agrarian Reform').nth(1).click()
+        await page.getByLabel('email').fill('a@b')
+        await page.getByLabel('position').fill('A')
+        await page.getByLabel('password').first().fill('A')
+
+        await page.getByRole('button', { name: 'Sign Up' }).click()
+
+        await test.step('Expect error messages', async () => {
+            await expect(page.getByText('Name must be at least 2 characters')).toBeVisible()
+            await expect(page.getByText('Position must be at least 2 characters')).toBeVisible()
+            await expect(page.getByText('Please enter a valid email.')).toBeVisible()
+            await expect(page.getByText('Password must:')).toBeVisible()
+            await expect(page.getByText('Be at least 16 characters long')).toBeVisible()
+            await expect(page.getByText('Contain at least one lowercase letter')).toBeVisible()
+            await expect(page.getByText('Contain at least one number')).toBeVisible()
+            await expect(page.getByText('Contain at least one special character')).toBeVisible()
+        })
     })
 })

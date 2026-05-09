@@ -112,10 +112,10 @@ export const ProposalSchema = z.discriminatedUnion("type", [
             .array(
                 z.object({
                     year: z.number(),
-                    lp_imprest: z.number().min(0),
-                    lp_direct: z.number().min(0),
-                    grant: z.number().min(0),
-                    gop: z.number().min(0),
+                    lp_imprest: z.coerce.number().min(0),
+                    lp_direct: z.coerce.number().min(0),
+                    grant: z.coerce.number().min(0),
+                    gop: z.coerce.number().min(0),
                 }),
             )
             .min(1, "Please add at least one foreign financial target"),
