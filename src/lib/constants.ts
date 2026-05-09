@@ -14,6 +14,10 @@ export const FORM_TYPES: Record<string, string> = {
     all: 'All',
     bp_staffing: 'BP Form 204',
     bp_retiree: 'BP Form 205',
+    bp_local_proposal_new: 'BP Form 202 (New)',
+    bp_local_proposal_expanded: 'BP Form 202 (Expanded)',
+    bp_foreign_proposal_new: 'BP Form 203 (New)',
+    bp_foreign_proposal_expanded: 'BP Form 203 (Expanded)',
 }
 
 export const FORM_ROUTE_MAP: Record<string, string> = {
@@ -24,6 +28,10 @@ export const FORM_ROUTE_MAP: Record<string, string> = {
 export const FORM_NAMES: Record<string, string> = {
     bp_staffing: 'Staffing Summary',
     bp_retiree: 'List of Retirees',
+    bp_local_proposal_new: 'New Local Proposal',
+    bp_local_proposal_expanded: 'Expanded Local Proposal',
+    bp_foreign_proposal_new: 'New Foreign Proposal',
+    bp_foreign_proposal_expanded: 'Expanded Foreign Proposal',
 }
 
 export const STATUS_LABELS: Record<string, string> = {
