@@ -180,12 +180,14 @@ export function TierOneAllocationManager({
 
     const getFilterPapLabel = (id: string) => {
         if (!id || id === 'all') return 'All PAPs'
-        return sortedPapFilters.find((pap) => pap.id === id)?.title ?? 'All PAPs'
+        const pap = sortedPapFilters.find((entry) => entry.id === id)
+        if (!pap) return 'All PAPs'
+        return pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`
     }
 
     const [selectedYear, setSelectedYear] = useState(viewingYear ? String(viewingYear) : '')
     const [selectedFilterEntityId, setSelectedFilterEntityId] = useState(selectedEntityId || 'all')
-    const [selectedFilterEntityMode, setSelectedFilterEntityMode] = useState<'exact' | 'hierarchical'>(selectedEntityMode)
+    const [selectedFilterMode, setSelectedFilterMode] = useState<'exact' | 'hierarchical'>(selectedEntityMode)
     const [selectedFilterPapCode, setSelectedFilterPapCode] = useState(selectedPapCode || 'all')
     const [filtersOpen, setFiltersOpen] = useState(true)
     const readOnlyMode = mode === 'create' && isViewingOnly
@@ -193,7 +195,7 @@ export function TierOneAllocationManager({
     const filteredPapOptions = (() => {
         if (selectedFilterEntityId === 'all') return sortedPapFilters
 
-        if (selectedFilterEntityMode === 'exact') {
+        if (selectedFilterMode === 'exact') {
             return sortedPapFilters.filter(
                 (pap) => pap.entity_id === null || pap.entity_id === selectedFilterEntityId
             )
@@ -251,7 +253,7 @@ export function TierOneAllocationManager({
         const params = new URLSearchParams()
         const nextYear = overrides.year ?? selectedYear
         const nextEntityId = overrides.entityId ?? selectedFilterEntityId
-        const nextEntityMode = overrides.entityMode ?? selectedFilterEntityMode
+        const nextEntityMode = overrides.entityMode ?? selectedFilterMode
         const nextPapCode = overrides.papCode ?? selectedFilterPapCode
         const nextPage = overrides.page ?? String(page)
 
@@ -329,7 +331,7 @@ export function TierOneAllocationManager({
                                     router.push(getFilterLink({
                                         year: selectedYear,
                                         entityId: selectedFilterEntityId,
-                                        entityMode: selectedFilterEntityMode,
+                                        entityMode: selectedFilterMode,
                                         papCode: selectedFilterPapCode,
                                         page: '1',
                                     }))
@@ -415,15 +417,15 @@ export function TierOneAllocationManager({
                                         </Select>
                                     </div>
                                     <div className="space-y-2 w-full sm:w-[220px] lg:flex-1 lg:min-w-[200px] lg:max-w-[260px]">
-                                        <p className="font-medium">Entity Match</p>
+                                        <p className="font-medium">Match Type</p>
                                         <Select
-                                            value={selectedFilterEntityMode}
-                                            onValueChange={(value) => setSelectedFilterEntityMode((value ?? 'exact') as 'exact' | 'hierarchical')}
+                                            value={selectedFilterMode}
+                                            onValueChange={(value) => setSelectedFilterMode((value ?? 'exact') as 'exact' | 'hierarchical')}
                                             disabled={selectedFilterEntityId === 'all'}
                                         >
                                             <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
                                                 <SelectValue placeholder="Select match mode">
-                                                    {selectedFilterEntityMode === 'hierarchical' ? 'Hierarchical' : 'Exact'}
+                                                    {selectedFilterMode === 'hierarchical' ? 'Hierarchical' : 'Exact'}
                                                 </SelectValue>
                                             </SelectTrigger>
                                             <SelectContent>
@@ -442,12 +444,12 @@ export function TierOneAllocationManager({
                                             </SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="all">All PAPs</SelectItem>
-                                                {filteredPapOptions.map((pap) => (
-                                                    <SelectItem key={pap.id} value={pap.id}>
-                                                        {pap.title}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
+                                            {filteredPapOptions.map((pap) => (
+                                                <SelectItem key={pap.id} value={pap.id}>
+                                                    {pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
                                         </Select>
                                     </div>
                                 </div>

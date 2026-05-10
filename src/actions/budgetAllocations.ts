@@ -156,6 +156,26 @@ async function getTierOneEntityFilterIds(
     return [entityId]
 }
 
+function getTierOnePapFilterIds(
+    paps: Awaited<ReturnType<typeof PapRepository.getPapOptions>>,
+    papCode: string | undefined,
+    entityFilterMode: EntityFilterMode,
+    entityIds?: string[]
+) {
+    if (!papCode) return undefined
+    if (entityFilterMode === 'exact' || !entityIds?.length) return [papCode]
+
+    const selectedPap = paps.find((pap) => pap.id === papCode)
+    if (!selectedPap) return [papCode]
+
+    return paps
+        .filter((pap) =>
+            pap.title === selectedPap.title &&
+            (pap.entity_id === null || entityIds.includes(pap.entity_id))
+        )
+        .map((pap) => pap.id)
+}
+
 export async function loadTierOneDashboard() {
     await requireDbm()
 
@@ -189,21 +209,23 @@ export async function loadTierOneDashboardForYear({
     const isViewingOnly = !activeCycle || !['preparation', 'dbm_review'].includes(activeCycle.current_phase)
     const safePage = Number.isFinite(page) && page > 0 ? page : 1
     const entityIds = await getTierOneEntityFilterIds(selectedEntityId, selectedEntityMode)
-    const [entitySegments, paps, items, fundingSources, totalCount] = await Promise.all([
+    const [entitySegments, paps, items, fundingSources] = await Promise.all([
         EntityRepository.getAllEntitySegments(true),
         PapRepository.getPapOptions(),
         ItemRepository.listAllItemCatalog(),
         UacsRepository.listFundingSources(),
-        viewingYear
-            ? BudgetAllocationRepository.countBudgetAllocationsByYear({
-                year: viewingYear,
-                tier: 1,
-                entityId: selectedEntityId,
-                entityIds,
-                papCode: selectedPapCode,
-            })
-            : Promise.resolve(0),
     ])
+    const papCodes = getTierOnePapFilterIds(paps, selectedPapCode, selectedEntityMode, entityIds)
+    const totalCount = viewingYear
+        ? await BudgetAllocationRepository.countBudgetAllocationsByYear({
+            year: viewingYear,
+            tier: 1,
+            entityId: selectedEntityId,
+            entityIds,
+            papCode: selectedPapCode,
+            papCodes,
+        })
+        : 0
     const totalPages = viewingYear ? Math.max(1, Math.ceil(Number(totalCount) / VIEW_PAGE_SIZE)) : 1
     const currentPage = Math.min(safePage, totalPages)
     const offset = (currentPage - 1) * VIEW_PAGE_SIZE
@@ -214,6 +236,7 @@ export async function loadTierOneDashboardForYear({
             entityId: selectedEntityId,
             entityIds,
             papCode: selectedPapCode,
+            papCodes,
             limit: VIEW_PAGE_SIZE,
             offset,
         })

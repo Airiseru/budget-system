@@ -39,6 +39,7 @@ type ListBudgetAllocationsByYearOptions = {
     entityId?: string
     entityIds?: string[]
     papCode?: string
+    papCodes?: string[]
     limit?: number
     offset?: number
 }
@@ -114,6 +115,7 @@ export async function listBudgetAllocationsByYear({
     entityId,
     entityIds,
     papCode,
+    papCodes,
     limit,
     offset,
 }: ListBudgetAllocationsByYearOptions) {
@@ -142,7 +144,9 @@ export async function listBudgetAllocationsByYear({
         query = query.where('budget_allocations.entity_id', '=', entityId)
     }
 
-    if (papCode) {
+    if (papCodes && papCodes.length > 0) {
+        query = query.where('budget_allocations.pap_code', 'in', papCodes)
+    } else if (papCode) {
         query = query.where('budget_allocations.pap_code', '=', papCode)
     }
 
@@ -166,6 +170,7 @@ export async function countBudgetAllocationsByYear({
     entityId,
     entityIds,
     papCode,
+    papCodes,
 }: Omit<ListBudgetAllocationsByYearOptions, 'limit' | 'offset'>) {
     let query = db
         .selectFrom('budget_allocations')
@@ -179,7 +184,9 @@ export async function countBudgetAllocationsByYear({
         query = query.where('budget_allocations.entity_id', '=', entityId)
     }
 
-    if (papCode) {
+    if (papCodes && papCodes.length > 0) {
+        query = query.where('budget_allocations.pap_code', 'in', papCodes)
+    } else if (papCode) {
         query = query.where('budget_allocations.pap_code', '=', papCode)
     }
 
