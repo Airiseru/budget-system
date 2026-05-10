@@ -22,8 +22,9 @@ export default async function NewStaffingPage() {
 
     const activeCycle = await getActiveBudgetPrepCycle()
     const components = []
+    const canCreate = activeCycle?.current_phase === 'preparation'
 
-    if (!activeCycle) {
+    if (!canCreate) {
         components.push(<BudgetPrepClosedBanner key="budget-cycle-closed" />)
     }
 
@@ -35,7 +36,7 @@ export default async function NewStaffingPage() {
 
     if (!schedule) components.push(<p key="no-schedule">There is no salary schedule for this year.</p>)
     
-    else if (activeCycle) {
+    else if (canCreate && activeCycle) {
         const compensationRules = await SalaryRepository.getLatestCompensationRules()
         const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
 

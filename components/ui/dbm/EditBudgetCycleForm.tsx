@@ -10,12 +10,20 @@ import {
 } from "@/components/ui/select"
 import { Button } from '@/components/ui/button'
 import { editBudgetCycleAction } from '@/src/actions/budgetSettings'
-import { BudgetCycle } from '@/src/types/budget_settings'
+import { BudgetCycle, BudgetCyclePhase } from '@/src/types/budget_settings'
 
 const PREP_STATUS_OPTIONS = [
     { value: 'closed', label: 'Closed' },
     { value: 'active', label: 'Active' },
     { value: 'locked', label: 'Locked' },
+]
+
+const PHASE_OPTIONS: { value: BudgetCyclePhase; label: string }[] = [
+    { value: 'preparation', label: 'Preparation' },
+    { value: 'dbm_review', label: 'DBM Review' },
+    { value: 'presidential_approval', label: 'Presidential Approval' },
+    { value: 'legislative_deliberation', label: 'Legislative Deliberation' },
+    { value: 'enacted_gaa', label: 'Enacted GAA' },
 ]
 
 const PREP_STATUS_LABELS: Record<BudgetCycle['prep_status'], string> = {
@@ -27,9 +35,17 @@ const PREP_STATUS_LABELS: Record<BudgetCycle['prep_status'], string> = {
 export function EditBudgetCycleForm({ cycle }: { cycle: BudgetCycle }) {
     const [state, action, pending] = useActionState(editBudgetCycleAction, undefined)
     const [selectedPrepStatus, setSelectedPrepStatus] = useState(state?.values?.prep_status ?? cycle.prep_status)
+    const [selectedPhase, setSelectedPhase] = useState(state?.values?.current_phase ?? cycle.current_phase)
 
     const handlePrepStatusChange = (value: string | null) => {
-        setSelectedPrepStatus(value ?? 'closed')
+        const nextStatus = value ?? 'closed'
+        setSelectedPrepStatus(nextStatus)
+
+        if (nextStatus === 'closed') {
+            setSelectedPhase('preparation')
+        } else if (nextStatus === 'locked') {
+            setSelectedPhase('enacted_gaa')
+        }
     }
 
     return (
@@ -73,6 +89,37 @@ export function EditBudgetCycleForm({ cycle }: { cycle: BudgetCycle }) {
                 </Select>
                 {state?.fieldErrors?.prep_status?.[0] && (
                     <p className="text-sm text-red-500 italic">{state.fieldErrors.prep_status[0]}</p>
+                )}
+            </div>
+
+            <div className="space-y-2">
+                <label htmlFor="current_phase" className="font-medium">Current Phase</label>
+                <input id="current_phase" name="current_phase" type="hidden" value={selectedPhase} />
+                <Select
+                    value={selectedPhase}
+                    onValueChange={(value) => setSelectedPhase(value ?? 'preparation')}
+                    disabled={selectedPrepStatus !== 'active'}
+                >
+                    <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base">
+                        <SelectValue placeholder="Select a current phase">
+                            {PHASE_OPTIONS.find((option) => option.value === selectedPhase)?.label}
+                        </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                        {PHASE_OPTIONS.filter((option) => option.value !== 'enacted_gaa').map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                {state?.fieldErrors?.current_phase?.[0] && (
+                    <p className="text-sm text-red-500 italic">{state.fieldErrors.current_phase[0]}</p>
+                )}
+                {selectedPrepStatus !== 'active' && (
+                    <p className="text-xs text-muted-foreground">
+                        Closed cycles reset to Preparation. Locked cycles are treated as Enacted GAA.
+                    </p>
                 )}
             </div>
 

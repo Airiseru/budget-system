@@ -24,7 +24,8 @@ export default async function StaffingPage() {
 
     try {
         const activeCycle = await getActiveBudgetPrepCycle()
-        const canCreate = session?.user.access_level === 'encode' && !!activeCycle
+        const canCreate = session?.user.access_level === 'encode' && activeCycle?.current_phase === 'preparation'
+        const shouldShowBudgetPrepBanner = session?.user.access_level === 'encode' && !canCreate
         const data = await StaffingRepo.getAllStaffingSummaries(
             session.user_entity.entity_type ?? '',
             session.user.role ?? '',
@@ -63,7 +64,7 @@ export default async function StaffingPage() {
                         </ButtonGroup>
                         )}
                     </ButtonGroup>
-                    {!activeCycle && <BudgetPrepClosedBanner />}
+                    {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
                     <h1 className="text-xl opacity-50">No Staffing Forms submitted yet.</h1>
                 </div>
             )
@@ -87,7 +88,7 @@ export default async function StaffingPage() {
                     )}
                 </ButtonGroup>
 
-                {!activeCycle && <BudgetPrepClosedBanner />}
+                {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
 
                 <h1 className="text-2xl font-bold mb-6">Staffing Submissions</h1>
                 <div className="grid gap-4">

@@ -136,7 +136,9 @@ export default function RetireeView({
         ((data.auth_status === "draft" &&
             session.user.access_level === "encode" &&
             !budgetPrepClosedForEntityActions) ||
-            (data.auth_status === "pending_dbm" && isDbmEvaluator));
+            (data.auth_status === "pending_dbm" &&
+                isDbmEvaluator &&
+                allowClosedCycleActions));
     const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign;
     const signSectionStatusMessage =
         budgetPrepClosedForEntityActions

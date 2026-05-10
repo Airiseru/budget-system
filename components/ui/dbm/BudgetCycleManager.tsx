@@ -4,14 +4,41 @@ import Link from 'next/link'
 import { useActionState, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { startBudgetCycleAction, lockActiveBudgetCycleAction } from '@/src/actions/budgetSettings'
-import { BudgetCycle } from '@/src/types/budget_settings'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import {
+    startBudgetCycleAction,
+    lockActiveBudgetCycleAction,
+    editBudgetCycleAction,
+} from '@/src/actions/budgetSettings'
+import { BudgetCycle, BudgetCyclePhase } from '@/src/types/budget_settings'
 
 const STATUS_STYLES: Record<BudgetCycle['prep_status'], string> = {
     closed: 'bg-slate-100 text-slate-700',
     active: 'bg-emerald-600 text-white',
     locked: 'bg-amber-600 text-white',
 }
+
+const PHASE_LABELS: Record<BudgetCyclePhase, string> = {
+    preparation: 'Preparation',
+    dbm_review: 'DBM Review',
+    presidential_approval: 'Presidential Approval',
+    legislative_deliberation: 'Legislative Deliberation',
+    enacted_gaa: 'Enacted GAA',
+}
+
+const ACTIVE_PHASE_OPTIONS: { value: BudgetCyclePhase; label: string }[] = [
+    { value: 'preparation', label: 'Preparation' },
+    { value: 'dbm_review', label: 'DBM Review' },
+    { value: 'presidential_approval', label: 'Presidential Approval' },
+    { value: 'legislative_deliberation', label: 'Legislative Deliberation' },
+    { value: 'enacted_gaa', label: 'Enacted GAA' },
+]
 
 export function BudgetCycleManager({
     cycles,
@@ -24,7 +51,9 @@ export function BudgetCycleManager({
 }) {
     const [startState, startAction, startPending] = useActionState(startBudgetCycleAction, undefined)
     const [lockState, lockAction, lockPending] = useActionState(lockActiveBudgetCycleAction, undefined)
+    const [phaseState, phaseAction, phasePending] = useActionState(editBudgetCycleAction, undefined)
     const [historyOpen, setHistoryOpen] = useState(false)
+    const [selectedPhase, setSelectedPhase] = useState(activeCycle?.current_phase ?? 'preparation')
 
     return (
         <div className="space-y-6">
@@ -33,7 +62,7 @@ export function BudgetCycleManager({
                     <div>
                         <h2 className="text-lg font-semibold">Start Budget Cycle</h2>
                         <p className="text-sm text-muted-foreground">
-                            Start a fiscal year preparation phase when there is no other active cycle.
+                            Start a fiscal year cycle in the preparation phase when there is no other active cycle.
                         </p>
                     </div>
 
@@ -98,6 +127,10 @@ export function BudgetCycleManager({
                         <p className="text-sm text-red-500 italic">{lockState.formErrors[0]}</p>
                     )}
 
+                    {phaseState?.formErrors?.[0] && (
+                        <p className="text-sm text-red-500 italic">{phaseState.formErrors[0]}</p>
+                    )}
+
                     {activeCycle ? (
                         <div className="rounded-lg border border-border p-4 space-y-2">
                             <div className="flex items-center gap-3">
@@ -110,8 +143,54 @@ export function BudgetCycleManager({
                                 Opened: {activeCycle.prep_opened_at ? new Date(activeCycle.prep_opened_at).toLocaleString() : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground">
+                                Current phase: {PHASE_LABELS[activeCycle.current_phase]}
+                            </p>
+                            <p className="text-sm text-muted-foreground">
                                 Legal basis: {activeCycle.legal_basis_ref || '—'}
                             </p>
+
+                            {canManage && (
+                                <form action={phaseAction} className="pt-4 space-y-3 border-t border-border">
+                                    <input type="hidden" name="fiscal_year" value={activeCycle.fiscal_year} />
+                                    <input type="hidden" name="prep_status" value="active" />
+                                    <input type="hidden" name="legal_basis_ref" value={activeCycle.legal_basis_ref ?? ''} />
+                                    <input type="hidden" name="current_phase" value={selectedPhase} />
+
+                                    <div className="space-y-2">
+                                        <label htmlFor="current_phase_select" className="font-medium">
+                                            Change Current Phase
+                                        </label>
+                                        <Select
+                                            value={selectedPhase}
+                                            onValueChange={(value) => setSelectedPhase((value ?? 'preparation') as BudgetCyclePhase)}
+                                        >
+                                            <SelectTrigger id="current_phase_select" className="w-full border-border py-5 text-base">
+                                                <SelectValue placeholder="Select a phase">
+                                                    {PHASE_LABELS[selectedPhase]}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {ACTIVE_PHASE_OPTIONS.map((option) => (
+                                                    <SelectItem key={option.value} value={option.value}>
+                                                        {option.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {phaseState?.fieldErrors?.current_phase?.[0] && (
+                                            <p className="text-sm text-red-500 italic">{phaseState.fieldErrors.current_phase[0]}</p>
+                                        )}
+                                    </div>
+
+                                    <Button
+                                        type="submit"
+                                        disabled={phasePending || selectedPhase === activeCycle.current_phase}
+                                        className="w-full bg-accent-foreground text-white hover:bg-accent-foreground/90 text-md py-5"
+                                    >
+                                        {phasePending ? 'Updating phase...' : 'Update Current Phase'}
+                                    </Button>
+                                </form>
+                            )}
                         </div>
                     ) : (
                         <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
@@ -149,6 +228,9 @@ export function BudgetCycleManager({
                                         </div>
                                         <p className="text-sm text-muted-foreground">
                                             Opened: {cycle.prep_opened_at ? new Date(cycle.prep_opened_at).toLocaleString() : '—'}
+                                        </p>
+                                        <p className="text-sm text-muted-foreground">
+                                            Phase: {PHASE_LABELS[cycle.current_phase]}
                                         </p>
                                         <p className="text-sm text-muted-foreground">
                                             Locked: {cycle.prep_locked_at ? new Date(cycle.prep_locked_at).toLocaleString() : '—'}

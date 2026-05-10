@@ -20,6 +20,7 @@ import {
     TierOneAllocationSchema,
 } from '../lib/validations/budgetAllocations'
 import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '../lib/constants'
+import type { BudgetCyclePhase } from '../types/budget_settings'
 
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -49,6 +50,72 @@ function flattenRemarkState(error: z.ZodError, values: Record<string, string | u
 }
 
 const DBM_REVIEW_STAGE: BUDGET_PREP_WORKFLOW_STAGES_TYPE = 'dbm_review'
+
+function toAmountDiffers(currentValue: number | string | null | undefined, nextValue: number) {
+    return Number(currentValue ?? 0) !== Number(nextValue)
+}
+
+function getPhaseRestrictionMessage(phase: BudgetCyclePhase) {
+    switch (phase) {
+        case 'preparation':
+            return 'Only the proposed amount and DBM recommended amount may be changed during the preparation phase.'
+        case 'dbm_review':
+            return 'Only the proposed amount and DBM recommended amount may be changed during DBM review.'
+        case 'presidential_approval':
+            return 'Only the NEP amount may be changed during presidential approval.'
+        case 'legislative_deliberation':
+            return 'Only the GAA amount may be changed during legislative deliberation.'
+        case 'enacted_gaa':
+            return 'This budget cycle is already enacted. Allocation updates are locked unless routed through an administrative override.'
+    }
+}
+
+function validateAmountChangesForPhase(
+    phase: BudgetCyclePhase,
+    nextValues: {
+        proposed_amt: number
+        dbm_rec_amt: number
+        nep_amt: number
+        gaa_amt: number
+    },
+    existing?: {
+        proposed_amt: number
+        dbm_rec_amt: number
+        nep_amt: number
+        gaa_amt: number
+    } | null
+) {
+    const proposedChanged = existing
+        ? toAmountDiffers(existing.proposed_amt, nextValues.proposed_amt)
+        : nextValues.proposed_amt !== 0
+    const dbmChanged = existing
+        ? toAmountDiffers(existing.dbm_rec_amt, nextValues.dbm_rec_amt)
+        : nextValues.dbm_rec_amt !== 0
+    const nepChanged = existing
+        ? toAmountDiffers(existing.nep_amt, nextValues.nep_amt)
+        : nextValues.nep_amt !== 0
+    const gaaChanged = existing
+        ? toAmountDiffers(existing.gaa_amt, nextValues.gaa_amt)
+        : nextValues.gaa_amt !== 0
+
+    if (phase === 'preparation') {
+        return !nepChanged && !gaaChanged
+    }
+
+    if (phase === 'dbm_review') {
+        return !nepChanged && !gaaChanged
+    }
+
+    if (phase === 'presidential_approval') {
+        return !proposedChanged && !dbmChanged && !gaaChanged
+    }
+
+    if (phase === 'legislative_deliberation') {
+        return !proposedChanged && !dbmChanged && !nepChanged
+    }
+
+    return false
+}
 
 export async function loadTierOneDashboard() {
     await requireDbm()
@@ -126,6 +193,12 @@ export async function createTierOneAllocationAction(
         }
     }
 
+    if (!['preparation', 'dbm_review'].includes(activeCycle.current_phase)) {
+        return {
+            formErrors: [getPhaseRestrictionMessage(activeCycle.current_phase)],
+        }
+    }
+
     const values = {
         entity_id: emptyToUndefined(formData.get('entity_id')) ?? '',
         pap_code: emptyToUndefined(formData.get('pap_code')) ?? '',
@@ -148,6 +221,13 @@ export async function createTierOneAllocationAction(
         return flattenState(parsed.error, values)
     }
 
+    if (!validateAmountChangesForPhase(activeCycle.current_phase, parsed.data)) {
+        return {
+            formErrors: [getPhaseRestrictionMessage(activeCycle.current_phase)],
+            values,
+        }
+    }
+
     try {
         const created = await BudgetAllocationRepository.createBudgetAllocation({
             entity_id: parsed.data.entity_id,
@@ -159,6 +239,8 @@ export async function createTierOneAllocationAction(
             specific_description: parsed.data.specific_description,
             quantity: parsed.data.quantity,
             currency: parsed.data.currency,
+            release_classification: 'unclassified',
+            origin_tag: 'dbm_insertion',
             proposed_amt: parsed.data.proposed_amt,
             dbm_rec_amt: parsed.data.dbm_rec_amt,
             nep_amt: parsed.data.nep_amt,
@@ -264,6 +346,28 @@ export async function updateTierOneAllocationAction(
             }
         }
 
+        const cycle = await BudgetSettingsRepository.getBudgetCycleByYear(existing.budget_cycle_year)
+        if (!cycle) {
+            return {
+                formErrors: ['Budget cycle not found for this allocation.'],
+                values,
+            }
+        }
+
+        if (cycle.current_phase === 'enacted_gaa' || cycle.prep_status === 'locked') {
+            return {
+                formErrors: [getPhaseRestrictionMessage('enacted_gaa')],
+                values,
+            }
+        }
+
+        if (!validateAmountChangesForPhase(cycle.current_phase, parsed.data, existing)) {
+            return {
+                formErrors: [getPhaseRestrictionMessage(cycle.current_phase)],
+                values,
+            }
+        }
+
         await BudgetAllocationRepository.updateBudgetAllocation(id, {
             entity_id: parsed.data.entity_id,
             pap_code: parsed.data.pap_code,
@@ -284,7 +388,7 @@ export async function updateTierOneAllocationAction(
         if (session?.user?.id) {
             await BudgetAllocationRepository.createAllocationWorkflowLog({
                 allocation_id: id,
-                workflow_stage: DBM_REVIEW_STAGE,
+                workflow_stage: parsedRemarks.data.workflow_stage,
                 remarks: parsedRemarks.data.remarks,
                 amt_before: existing.dbm_rec_amt,
                 amt_after: parsed.data.dbm_rec_amt,

@@ -6,7 +6,7 @@ import { sessionWithEntity } from "@/src/actions/auth"
 import { redirect, notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import StaffingView from "@/components/ui/staff/StaffingView"
-import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle"
+import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle"
 
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -15,6 +15,15 @@ const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const AuditRepo = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 const AdministrativeOverrideRepo = createAdministrativeOverrideRepository(process.env.DATABASE_TYPE || 'postgres')
 const EntityRepo = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
+
+async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle()
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === 'preparation' ||
+            activeCycle.current_phase === 'dbm_review')
+    )
+}
 
 export default async function StaffingFormPage({ params }: { params: Promise<{ id: string }> }) {
     const { id } = await params
@@ -68,7 +77,8 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const allowClosedCycleActions =
         session.user.role === 'dbm' &&
         isActingAsEvaluator &&
-        backUrl === '/dbm/forms'
+        backUrl === '/dbm/forms' &&
+        await canDbmActOnFormForFiscalYear(summary.fiscal_year)
     const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(summary.fiscal_year)
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForYear && !allowClosedCycleActions

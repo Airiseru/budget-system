@@ -18,7 +18,7 @@ import { submitForm } from "@/src/actions/form";
 import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import { revalidatePath } from "next/cache";
 import RetireeView from "@/components/ui/retiree/RetireeView";
-import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const RetireeRepo = createRetireeRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -32,6 +32,15 @@ const AdministrativeOverrideRepo = createAdministrativeOverrideRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const EntityRepo = createEntityRepository(process.env.DATABASE_TYPE || "postgres");
+
+async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle();
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === "preparation" ||
+            activeCycle.current_phase === "dbm_review")
+    );
+}
 
 export default async function RetireeDetailsPage({
     params,
@@ -112,7 +121,8 @@ export default async function RetireeDetailsPage({
     const allowClosedCycleActions =
         session.user.role === "dbm" &&
         isActingAsEvaluator &&
-        backUrl === "/dbm/forms";
+        backUrl === "/dbm/forms" &&
+        await canDbmActOnFormForFiscalYear(data.fiscal_year);
     const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(
         data.fiscal_year,
     );

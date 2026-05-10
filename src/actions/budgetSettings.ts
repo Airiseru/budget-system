@@ -104,6 +104,7 @@ export async function editBudgetCycleAction(
     const values = {
         fiscal_year: String(formData.get('fiscal_year') ?? ''),
         prep_status: String(formData.get('prep_status') ?? ''),
+        current_phase: String(formData.get('current_phase') ?? ''),
         legal_basis_ref: String(formData.get('legal_basis_ref') ?? ''),
     }
 
@@ -119,6 +120,7 @@ export async function editBudgetCycleAction(
         await BudgetSettingsRepository.editBudgetCycle(
             parsed.data.fiscal_year,
             parsed.data.prep_status,
+            parsed.data.current_phase,
             session.user.id,
             parsed.data.legal_basis_ref || null
         )

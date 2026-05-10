@@ -23,12 +23,18 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('dbm_rec_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
         .addColumn('nep_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
         .addColumn('gaa_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
+
+        // Classification
+        .addColumn('release_classification', 'varchar', (col) => col.notNull().defaultTo('unclassified'))
+
+        // Set origin of when allocation was made (e.g., entity_proposed, dbm_insertion, legislative_insertion)
+        .addColumn('origin_tag', 'varchar', (col) => col.notNull().defaultTo('entity_proposed'))
         
         // Validity dates
         .addColumn('valid_from', 'date')
         .addColumn('valid_until', 'date')
 
-        .addColumn('auth_status', 'varchar', (col) => col.notNull().defaultTo('draft')) // draft, proposed, dbm_approved, gaa_approved, rejected
+        .addColumn('auth_status', 'varchar', (col) => col.notNull().defaultTo('draft')) // draft, proposed, dbm_approved, nep_approved, gaa_approved, rejected
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .execute()

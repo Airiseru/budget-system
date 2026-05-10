@@ -1,10 +1,23 @@
 import { createStaffingRepository, createFormRepository } from '@/src/db/factory'
 import { NextResponse } from 'next/server'
 import { logNewForm, logSaveFormEdits, logSubmitForm, logFormOverwrite } from '@/src/actions/audit'
-import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle'
+import {
+    getActiveBudgetPrepCycle,
+    getBudgetPrepClosedError,
+    isBudgetPrepActiveForYear,
+} from '@/src/lib/budget-cycle'
 export const dynamic = 'force-dynamic';
 const StaffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
+
+async function canDbmOverwriteForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle()
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === 'preparation' ||
+            activeCycle.current_phase === 'dbm_review')
+    )
+}
 
 export async function GET(
     request: Request,
@@ -70,6 +83,16 @@ export async function PUT(
 
     const canEditDraft = existing.auth_status === 'draft'
     const canEditPendingDbm = isDbm && existing.auth_status === 'pending_dbm'
+
+    if (
+        canEditPendingDbm &&
+        !(await canDbmOverwriteForFiscalYear(staffingBody.summary.fiscal_year))
+    ) {
+        return NextResponse.json(
+            { error: 'DBM can only overwrite forms during the Preparation or DBM Review phases.' },
+            { status: 403 }
+        )
+    }
 
     if (canEditPendingDbm && !overrideRemarks) {
         return NextResponse.json(

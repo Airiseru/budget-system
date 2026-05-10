@@ -33,7 +33,8 @@ export default async function RetireesPage() {
 
     try {
         const activeCycle = await getActiveBudgetPrepCycle()
-        const canCreate = session?.user.access_level === 'encode' && !!activeCycle
+        const canCreate = session?.user.access_level === 'encode' && activeCycle?.current_phase === 'preparation'
+        const shouldShowBudgetPrepBanner = session?.user.access_level === 'encode' && !canCreate
         // Fetching all retiree list submissions
         const data = await RetireeRepo.getAllRetireeSubmissions(
             session.user_entity.entity_type ?? '',
@@ -75,7 +76,7 @@ export default async function RetireesPage() {
                         </ButtonGroup>
                         )}
                     </ButtonGroup>
-                    {!activeCycle && <BudgetPrepClosedBanner />}
+                    {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
                     <h1 className="text-xl opacity-50 font-medium">No BP Form 205 submissions found for your entity.</h1>
                 </div>
             )
@@ -99,7 +100,7 @@ export default async function RetireesPage() {
                     )}
                 </ButtonGroup>
 
-                {!activeCycle && <BudgetPrepClosedBanner />}
+                {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
 
                 <div className="mb-8">
                     <h1 className="text-2xl font-bold">BP Form 205: List of Retirees</h1>

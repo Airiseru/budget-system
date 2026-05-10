@@ -174,22 +174,22 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
 
   const addRow = () => {
     setRetirees([...retirees, { 
-      id: crypto.randomUUID(), 
-      name: "", 
-      is_gsis_member: true, 
-      retirement_law: "RA 8291", 
-      position: "", 
-      salary_grade: 1,
-      step: 1,
-      date_of_birth: "",
-      original_appointment: "",
-      retirement_effectivity: "", 
-      highest_monthly_salary: 0,
-      number_vacation_leave: 0,
-      number_sick_leave: 0,
-      total_credible_service: 0,
-      number_gratuity_months: 0,
-      rg_amount: 0
+        id: crypto.randomUUID(), 
+        name: "", 
+        is_gsis_member: true, 
+        retirement_law: "RA 8291", 
+        position: "", 
+        salary_grade: 1,
+        step: 1,
+        date_of_birth: "",
+        original_appointment: "",
+        retirement_effectivity: "", 
+        highest_monthly_salary: 0,
+        number_vacation_leave: 0,
+        number_sick_leave: 0,
+        total_credible_service: 0,
+        number_gratuity_months: 0,
+        rg_amount: 0
     }]);
   };
 
@@ -370,51 +370,51 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
                   </td>
                   <td className="p-1 border-r">
                     <input 
-                      type="number"
-                      min="0"
-                      step="0.001"
-                      value={row.number_vacation_leave} 
-                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
-                      onChange={(e) => handleInputChange(row.id, 'number_vacation_leave', e.target.value)} 
-                    />
-                  </td>
-                  <td className="p-1 border-r">
-                    <input 
-                      type="number" 
-                      min="0"
-                      step="0.001"
-                      value={row.number_sick_leave} 
-                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
-                      onChange={(e) => handleInputChange(row.id, 'number_sick_leave', e.target.value)} 
-                    />
-                  </td>
-                  <td className="p-1 border-r">
-                    <input 
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={row.total_credible_service} 
-                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
-                      onChange={(e) => handleInputChange(row.id, 'total_credible_service', e.target.value)} 
+                        type="number"
+                        min="0"
+                        step="0.001"
+                        value={row.number_vacation_leave} 
+                        className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                        onChange={(e) => handleInputChange(row.id, 'number_vacation_leave', e.target.value)} 
                     />
                   </td>
                   <td className="p-1 border-r">
                     <input
-                      type="number"
-                      min="0"
-                      value={row.number_gratuity_months} 
-                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
-                      onChange={(e) => handleInputChange(row.id, 'number_gratuity_months', e.target.value)} 
+                        type="number" 
+                        min="0"
+                        step="1"
+                        value={row.number_sick_leave} 
+                        className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                        onChange={(e) => handleInputChange(row.id, 'number_sick_leave', e.target.value)} 
                     />
                   </td>
                   <td className="p-1 border-r">
                     <input 
-                      type="number"
-                      min="0"
-                      step="0.1"
-                      value={row.rg_amount} 
-                      className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
-                      onChange={(e) => handleInputChange(row.id, 'rg_amount', e.target.value)} 
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        value={row.total_credible_service} 
+                        className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                        onChange={(e) => handleInputChange(row.id, 'total_credible_service', e.target.value)} 
+                    />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input
+                        type="number"
+                        min="0"
+                        value={row.number_gratuity_months} 
+                        className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                        onChange={(e) => handleInputChange(row.id, 'number_gratuity_months', e.target.value)} 
+                    />
+                  </td>
+                  <td className="p-1 border-r">
+                    <input 
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.rg_amount} 
+                        className="w-full p-1.5 text-center focus:bg-card focus:outline-none" 
+                        onChange={(e) => handleInputChange(row.id, 'rg_amount', e.target.value)} 
                     />
                   </td>
                   <td className="p-1 text-center">
@@ -422,9 +422,9 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
                         type="button" // Important to prevent form submission
                         onClick={() => removeRow(row.id)}
                         className="text-muted-300 hover:text-red-500 transition-colors p-1"
-                      >
+                    >
                         <Trash2 size={16} />
-                      </button>
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -6,9 +6,18 @@ import {
     Updateable
 } from 'kysely'
 
+export type BudgetCyclePrepStatus = 'closed' | 'active' | 'locked'
+export type BudgetCyclePhase =
+    | 'preparation'
+    | 'dbm_review'
+    | 'presidential_approval'
+    | 'legislative_deliberation'
+    | 'enacted_gaa'
+
 export interface BudgetCycleTable {
     fiscal_year: number
-    prep_status: 'closed' | 'active' | 'locked'
+    prep_status: BudgetCyclePrepStatus
+    current_phase: BudgetCyclePhase
     prep_opened_at: Date | null
     prep_locked_at: Date | null
     status_changed_by: string | null

@@ -10,6 +10,8 @@ import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '../lib/constants'
 export type ItemCatalogScope = 'global' | 'entity' | 'pap'
 export type ExpenseClassCode = '1' | '2' | '3' | '6'
 export type ExpenseClass = 'PS' | 'MOOE' | 'CO' | 'FINEX'
+export type AllocationReleaseClassification = 'unclassified' | 'FLR' | 'FCR'
+export type AllocationOriginTag = 'agency_proposed' | 'dbm_insertion' | 'legislative_insertion'
 
 export interface ItemCatalogTable {
     id: Generated<string>
@@ -41,13 +43,15 @@ export interface BudgetAllocationTable {
     specific_description: string | null
     quantity: number
     currency: string
+    release_classification: AllocationReleaseClassification
+    origin_tag: AllocationOriginTag
     proposed_amt: number
     dbm_rec_amt: number
     nep_amt: number
     gaa_amt: number
     valid_from: Date | null
     valid_until: Date | null
-    auth_status: 'draft' | 'proposed' | 'dbm_approved' | 'gaa_approved' | 'rejected'
+    auth_status: 'draft' | 'proposed' | 'dbm_approved' | 'nep_approved' | 'gaa_approved' | 'rejected'
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }

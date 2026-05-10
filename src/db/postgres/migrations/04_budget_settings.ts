@@ -7,6 +7,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         
         // Preparation Phase (BP Forms, NEP formulation)
         .addColumn('prep_status', 'text', (col) => col.notNull().defaultTo('closed')) // 'closed', 'active', 'locked'
+        .addColumn('current_phase', 'text', (col) => col.notNull().defaultTo('preparation'))
         
         // Audit logic
         .addColumn('prep_opened_at', 'timestamptz')
@@ -20,6 +21,14 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
         .execute()
+
+    await sql`
+        UPDATE budget_cycles
+        SET current_phase = CASE
+            WHEN prep_status = 'locked' THEN 'enacted_gaa'
+            ELSE 'preparation'
+        END
+    `.execute(db)
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {

@@ -12,7 +12,11 @@ import { sha256, buildSignaturePayload } from '../lib/audit-hash'
 import { canonicalStringify } from '../lib/canonical'
 import { cleanDataBasedOnTable } from '../lib/validations'
 import { createProposalRepository, createRetireeRepository, createStaffingRepository } from '../db/factory'
-import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '../lib/budget-cycle'
+import {
+    getBudgetPrepClosedError,
+    getActiveBudgetPrepCycle,
+    isBudgetPrepActiveForYear,
+} from '../lib/budget-cycle'
 
 const entityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 const keyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -21,6 +25,15 @@ const auditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'post
 const staffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const retireeRepository = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
 const proposalRepository = createProposalRepository(process.env.DATABASE_TYPE || 'postgres')
+
+async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle()
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === 'preparation' ||
+            activeCycle.current_phase === 'dbm_review')
+    )
+}
 
 async function getFormFiscalYear(tableName: string, formId: string): Promise<number | null> {
     if (tableName === 'staffing_summaries') {
@@ -153,7 +166,9 @@ export async function verifyAndSubmitSignature(
         const canBypassClosedCycle =
             allowClosedCycleAction &&
             session.user.role === 'dbm' &&
-            session.user.workflow_role === 'dbm'
+            session.user.workflow_role === 'dbm' &&
+            fiscalYear !== null &&
+            await canDbmActOnFormForFiscalYear(fiscalYear)
 
         if (
             fiscalYear !== null &&
@@ -240,7 +255,9 @@ export async function verifyAndRejectSignature(
         const canBypassClosedCycle =
             allowClosedCycleAction &&
             session.user.role === 'dbm' &&
-            session.user.workflow_role === 'dbm'
+            session.user.workflow_role === 'dbm' &&
+            fiscalYear !== null &&
+            await canDbmActOnFormForFiscalYear(fiscalYear)
 
         if (
             fiscalYear !== null &&

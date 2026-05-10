@@ -9,7 +9,7 @@ import {
     createSalaryRepository,
     createEntityRepository,
 } from "@/src/db/factory";
-import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 import { notFound, redirect } from "next/navigation";
 
 const FormRepository = createFormRepository(
@@ -20,6 +20,15 @@ const RetireeRepo = createRetireeRepository(
 );
 const SalaryRepository = createSalaryRepository("postgres");
 const EntityRepository = createEntityRepository("postgres");
+
+async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle();
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === "preparation" ||
+            activeCycle.current_phase === "dbm_review")
+    );
+}
 
 export default async function EditRetireePage({
     params,
@@ -51,7 +60,10 @@ export default async function EditRetireePage({
     const isDbmEvaluator = session.user.workflow_role === "dbm";
     const isPendingDbm = retireeData.auth_status === "pending_dbm";
     const allowClosedCycleActions =
-        session.user.role === "dbm" && isDbmEvaluator && isPendingDbm;
+        session.user.role === "dbm" &&
+        isDbmEvaluator &&
+        isPendingDbm &&
+        await canDbmActOnFormForFiscalYear(retireeData.fiscal_year);
     const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(
         retireeData.fiscal_year,
     );

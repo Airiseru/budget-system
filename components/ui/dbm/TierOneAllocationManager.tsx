@@ -60,6 +60,14 @@ const REMARK_STAGE_OPTIONS: { value: BUDGET_PREP_WORKFLOW_STAGES_TYPE; label: st
     { value: 'dbm_appeal', label: 'DBM Appeal' },
 ]
 
+const PHASE_LABELS = {
+    preparation: 'Preparation',
+    dbm_review: 'DBM Review',
+    presidential_approval: 'Presidential Approval',
+    legislative_deliberation: 'Legislative Deliberation',
+    enacted_gaa: 'Enacted GAA',
+} as const
+
 type Props = {
     activeCycle: BudgetCycle | null
     viewingYear: number | null
@@ -99,6 +107,13 @@ export function TierOneAllocationManager({
     const [workflowStage, setWorkflowStage] = useState<BUDGET_PREP_WORKFLOW_STAGES_TYPE>(
         ((state?.values?.workflow_stage ?? 'dbm_review') as BUDGET_PREP_WORKFLOW_STAGES_TYPE)
     )
+    const currentPhase = activeCycle?.current_phase ?? null
+    const canCreateAllocation = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditStructure = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditProposedAmount = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditDbmAmount = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditNepAmount = currentPhase === 'presidential_approval'
+    const canEditGaaAmount = currentPhase === 'legislative_deliberation'
 
     const departments = useMemo(
         () => entities
@@ -158,7 +173,7 @@ export function TierOneAllocationManager({
                     <div className="text-center">
                         <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">Tier One Allocations</h1>
                         <p className="text-muted-foreground text-sm mt-1">
-                            {activeCycle ? 'Create Tier One budget allocations for the current active fiscal year.' : 'View Tier One budget allocations for past fiscal years.'}
+                            {activeCycle ? 'Create or adjust Tier One budget allocations based on the current cycle phase.' : 'View Tier One budget allocations for past fiscal years.'}
                         </p>
                     </div>
                     <div className="w-[73px]" />
@@ -171,6 +186,9 @@ export function TierOneAllocationManager({
                 {activeCycle ? (
                     <div className="rounded-lg border border-border bg-accent/30 px-4 py-3 text-sm text-secondary-foreground">
                         Creating allocations for Fiscal Year <span className="font-bold">{activeCycle.fiscal_year}</span>.
+                        <div className="mt-1 text-xs text-muted-foreground">
+                            Current phase: <span className="font-semibold text-secondary-foreground">{PHASE_LABELS[activeCycle.current_phase]}</span>
+                        </div>
                     </div>
                 ) : availableYears.length > 0 ? (
                     <div className="rounded-lg border border-border bg-background px-4 py-4">
@@ -208,8 +226,14 @@ export function TierOneAllocationManager({
                     </div>
                 )}
 
+                {activeCycle && !canCreateAllocation && mode === 'create' && (
+                    <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
+                        New Tier One allocations can only be created during the Preparation or DBM Review phases. You can still review existing allocations below.
+                    </div>
+                )}
+
                 <div className={`grid gap-8 ${isViewingOnly && mode === 'create' ? '' : 'xl:grid-cols-[420px_1fr]'}`}>
-                    {!isViewingOnly && (
+                    {!isViewingOnly && (mode === 'edit' || canCreateAllocation) && (
                     <form action={action} className="space-y-5 rounded-xl border border-border bg-background p-6">
                         {mode === 'edit' && (
                             <input type="hidden" name="id" value={initialValues?.id ?? ''} />
@@ -241,7 +265,7 @@ export function TierOneAllocationManager({
                                 setEntityId(value ?? '')
                                 setPapCode('')
                                 setItemCatalogId('')
-                            }}>
+                            }} disabled={!canEditStructure}>
                                 <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
                                     <SelectValue placeholder="Select entity">
                                         {entityId ? getEntityName(entityId) : 'Select entity'}
@@ -296,7 +320,7 @@ export function TierOneAllocationManager({
                             <Select value={papCode} onValueChange={(value) => {
                                 setPapCode(value ?? '')
                                 setItemCatalogId('')
-                            }}>
+                            }} disabled={!canEditStructure}>
                                 <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
                                     <SelectValue placeholder="Select PAP">
                                         {papCode ? availablePaps.find((pap) => pap.id === papCode)?.title : 'Select PAP'}
@@ -315,7 +339,7 @@ export function TierOneAllocationManager({
 
                         <div className="space-y-2">
                             <label className="font-medium">Item Catalog</label>
-                            <Select value={itemCatalogId} onValueChange={(value) => setItemCatalogId(value ?? '')}>
+                            <Select value={itemCatalogId} onValueChange={(value) => setItemCatalogId(value ?? '')} disabled={!canEditStructure}>
                                 <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
                                     <SelectValue placeholder="Select item catalog">
                                         {itemCatalogId ? availableItems.find((item) => item.id === itemCatalogId)?.name : 'Select item catalog'}
@@ -334,7 +358,7 @@ export function TierOneAllocationManager({
 
                         <div className="space-y-2">
                             <label className="font-medium">Fund Source</label>
-                            <Select value={fundCode} onValueChange={(value) => setFundCode(value ?? '')}>
+                            <Select value={fundCode} onValueChange={(value) => setFundCode(value ?? '')} disabled={!canEditStructure}>
                                 <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
                                     <SelectValue placeholder="Select fund source">
                                         {fundCode ? fundingSources.find((source) => source.code === fundCode)?.description : 'Select fund source'}
@@ -359,38 +383,39 @@ export function TierOneAllocationManager({
                                 defaultValue={state?.values?.specific_description ?? initialValues?.specific_description ?? ''}
                                 className="min-h-24 w-full rounded border border-border bg-background px-3 py-2"
                                 placeholder="Optional context for this allocation."
+                                disabled={!canEditStructure}
                             />
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="quantity">Quantity</label>
-                                <input id="quantity" name="quantity" type="number" min="1" defaultValue={state?.values?.quantity ?? String(initialValues?.quantity ?? 1)} className="w-full rounded border border-border bg-background px-3 py-2" />
+                                <input id="quantity" name="quantity" type="number" min="1" defaultValue={state?.values?.quantity ?? String(initialValues?.quantity ?? 1)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
                                 {state?.fieldErrors?.quantity?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.quantity[0]}</p>}
                             </div>
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="currency">Currency</label>
-                                <input id="currency" name="currency" defaultValue={state?.values?.currency ?? initialValues?.currency ?? 'PHP'} className="w-full rounded border border-border bg-background px-3 py-2" />
+                                <input id="currency" name="currency" defaultValue={state?.values?.currency ?? initialValues?.currency ?? 'PHP'} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
                             </div>
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="proposed_amt">Proposed Amount</label>
-                                <input id="proposed_amt" name="proposed_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.proposed_amt ?? String(initialValues?.proposed_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" />
+                                <input id="proposed_amt" name="proposed_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.proposed_amt ?? String(initialValues?.proposed_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditProposedAmount} />
                             </div>
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="dbm_rec_amt">DBM Amount</label>
-                                <input id="dbm_rec_amt" name="dbm_rec_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.dbm_rec_amt ?? String(initialValues?.dbm_rec_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" />
+                                <input id="dbm_rec_amt" name="dbm_rec_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.dbm_rec_amt ?? String(initialValues?.dbm_rec_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditDbmAmount} />
                             </div>
-                            {/* <div className="space-y-2">
+                            <div className="space-y-2">
                                 <label className="font-medium" htmlFor="nep_amt">NEP Amount</label>
-                                <input id="nep_amt" name="nep_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.nep_amt ?? String(initialValues?.nep_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" />
+                                <input id="nep_amt" name="nep_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.nep_amt ?? String(initialValues?.nep_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditNepAmount} />
                             </div>
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="gaa_amt">GAA Amount</label>
-                                <input id="gaa_amt" name="gaa_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.gaa_amt ?? String(initialValues?.gaa_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" />
-                            </div> */}
+                                <input id="gaa_amt" name="gaa_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.gaa_amt ?? String(initialValues?.gaa_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditGaaAmount} />
+                            </div>
                         </div>
 
                         <div className="space-y-2">
@@ -427,18 +452,18 @@ export function TierOneAllocationManager({
                         <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="valid_from">Valid From</label>
-                                <input id="valid_from" name="valid_from" type="date" defaultValue={state?.values?.valid_from ?? (initialValues?.valid_from ? new Date(initialValues.valid_from).toISOString().split('T')[0] : '')} className="w-full rounded border border-border bg-background px-3 py-2" />
+                                <input id="valid_from" name="valid_from" type="date" defaultValue={state?.values?.valid_from ?? (initialValues?.valid_from ? new Date(initialValues.valid_from).toISOString().split('T')[0] : '')} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
                             </div>
                             <div className="space-y-2">
                                 <label className="font-medium" htmlFor="valid_until">Valid Until</label>
-                                <input id="valid_until" name="valid_until" type="date" defaultValue={state?.values?.valid_until ?? (initialValues?.valid_until ? new Date(initialValues.valid_until).toISOString().split('T')[0] : '')} className="w-full rounded border border-border bg-background px-3 py-2" />
+                                <input id="valid_until" name="valid_until" type="date" defaultValue={state?.values?.valid_until ?? (initialValues?.valid_until ? new Date(initialValues.valid_until).toISOString().split('T')[0] : '')} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
                             </div>
                         </div>
 
                         <div className={`flex gap-3 ${mode === 'edit' ? '' : 'flex-col'}`}>
                             <Button
                                 type="submit"
-                                disabled={!activeCycle || pending}
+                                disabled={!activeCycle || pending || (mode === 'create' && !canCreateAllocation)}
                                 className={`${mode === 'edit' ? 'w-1/2' : 'w-full'} bg-accent-foreground py-5 text-md text-white hover:bg-accent-foreground/90`}
                                 >
                                 {pending ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Allocation' : 'Create Tier One Allocation')}

@@ -16,7 +16,7 @@ import { submitForm } from "@/src/actions/form";
 import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
 import { revalidatePath } from "next/cache";
 import ProposalView from "@/components/ui/proposals/ProposalView";
-import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -26,6 +26,15 @@ const FormRepo = createFormRepository(process.env.DATABASE_TYPE || "postgres");
 const AuditRepo = createAuditRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
+
+async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle();
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === "preparation" ||
+            activeCycle.current_phase === "dbm_review")
+    );
+}
 
 export default async function ProposalDetailsPage({
     params,
@@ -77,7 +86,6 @@ export default async function ProposalDetailsPage({
     const isBudgetPrepOpenForProposalYear = await isBudgetPrepActiveForYear(
         data.proposal_year,
     )
-    const entityActionsLockedByBudgetCycle = !isBudgetPrepOpenForProposalYear;
     const pastSignatures = await KeyRepo.getPastSignatoriesByFormId(
         data.id ?? "",
     )
@@ -99,6 +107,14 @@ export default async function ProposalDetailsPage({
             backUrl = "/dbm/forms"
         }
     }
+
+    const allowClosedCycleActions =
+        session.user.role === "dbm" &&
+        isActingAsEvaluator &&
+        backUrl === "/dbm/forms" &&
+        await canDbmActOnFormForFiscalYear(data.proposal_year)
+    const entityActionsLockedByBudgetCycle =
+        !isBudgetPrepOpenForProposalYear && !allowClosedCycleActions;
 
     // 5. Server Actions
     const updateAuthStatus = async () => {

@@ -115,7 +115,7 @@ export default function StaffingView({
         !familyHasApprovedVersion &&
         (
             (summary.auth_status === 'draft' && session.user.access_level === 'encode' && !budgetPrepClosedForEntityActions) ||
-            (summary.auth_status === 'pending_dbm' && isDbmEvaluator)
+            (summary.auth_status === 'pending_dbm' && isDbmEvaluator && allowClosedCycleActions)
         )
     const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign
     const signSectionStatusMessage =

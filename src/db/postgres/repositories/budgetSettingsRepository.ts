@@ -2,6 +2,30 @@ import { sql } from 'kysely'
 import { db } from '../database'
 import { BudgetCycle, NewBudgetCycle, BudgetCycleUpdate } from '@/src/types/budget_settings'
 
+function normalizeCycleState(
+    prepStatus: BudgetCycle['prep_status'],
+    currentPhase: BudgetCycle['current_phase']
+) {
+    if (prepStatus === 'closed') {
+        return {
+            prep_status: 'closed' as const,
+            current_phase: 'preparation' as const,
+        }
+    }
+
+    if (prepStatus === 'locked' || currentPhase === 'enacted_gaa') {
+        return {
+            prep_status: 'locked' as const,
+            current_phase: 'enacted_gaa' as const,
+        }
+    }
+
+    return {
+        prep_status: 'active' as const,
+        current_phase: currentPhase,
+    }
+}
+
 export async function listBudgetCycles(): Promise<BudgetCycle[]> {
     return await db
         .selectFrom('budget_cycles')
@@ -49,6 +73,7 @@ export async function updateBudgetCycle(fiscalYear: number, values: BudgetCycleU
 export async function editBudgetCycle(
     fiscalYear: number,
     nextStatus: BudgetCycle['prep_status'],
+    nextPhase: BudgetCycle['current_phase'],
     changedBy: string,
     legalBasisRef?: string | null
 ): Promise<BudgetCycle> {
@@ -63,7 +88,9 @@ export async function editBudgetCycle(
             throw new Error(`Fiscal year ${fiscalYear} does not exist.`)
         }
 
-        if (nextStatus === 'active') {
+        const normalizedState = normalizeCycleState(nextStatus, nextPhase)
+
+        if (normalizedState.prep_status === 'active') {
             const activeCycle = await trx
                 .selectFrom('budget_cycles')
                 .selectAll()
@@ -78,13 +105,14 @@ export async function editBudgetCycle(
         return await trx
             .updateTable('budget_cycles')
             .set({
-                prep_status: nextStatus,
-                prep_opened_at: nextStatus === 'active'
+                prep_status: normalizedState.prep_status,
+                current_phase: normalizedState.current_phase,
+                prep_opened_at: normalizedState.prep_status === 'active'
                     ? new Date()
                     : existingCycle.prep_opened_at,
-                prep_locked_at: nextStatus === 'locked'
+                prep_locked_at: normalizedState.prep_status === 'locked'
                     ? new Date()
-                    : nextStatus === 'active'
+                    : normalizedState.prep_status === 'active'
                         ? null
                         : existingCycle.prep_locked_at,
                 status_changed_by: changedBy,
@@ -128,6 +156,7 @@ export async function startBudgetCycle(fiscalYear: number, changedBy: string, le
                 .updateTable('budget_cycles')
                 .set({
                     prep_status: 'active',
+                    current_phase: 'preparation',
                     prep_opened_at: new Date(),
                     prep_locked_at: null,
                     status_changed_by: changedBy,
@@ -144,6 +173,7 @@ export async function startBudgetCycle(fiscalYear: number, changedBy: string, le
             .values({
                 fiscal_year: fiscalYear,
                 prep_status: 'active',
+                current_phase: 'preparation',
                 prep_opened_at: new Date(),
                 prep_locked_at: null,
                 status_changed_by: changedBy,
@@ -170,6 +200,7 @@ export async function lockActiveBudgetCycle(changedBy: string): Promise<BudgetCy
             .updateTable('budget_cycles')
             .set({
                 prep_status: 'locked',
+                current_phase: 'enacted_gaa',
                 prep_locked_at: new Date(),
                 status_changed_by: changedBy,
                 updated_at: sql`now()`,

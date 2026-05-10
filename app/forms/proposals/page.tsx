@@ -47,7 +47,10 @@ export default async function ProposalsPage() {
     try {
         const activeCycle = await getActiveBudgetPrepCycle();
         const canCreate =
-            session?.user.access_level === "encode" && !!activeCycle;
+            session?.user.access_level === "encode" &&
+            activeCycle?.current_phase === "preparation";
+        const shouldShowBudgetPrepBanner =
+            session?.user.access_level === "encode" && !canCreate;
         // Fetching proposal summaries (assuming a similar method to staffing)
         const data = await ProposalRepo.getAllProposalSummaries(
             session.user.id ?? "",
@@ -89,7 +92,7 @@ export default async function ProposalsPage() {
             return (
                 <div className="m-4">
                     {renderHeader()}
-                    {!activeCycle && <BudgetPrepClosedBanner />}
+                    {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
                     <h1 className="text-xl opacity-50">
                         No Project Proposals found.
                     </h1>
@@ -100,7 +103,7 @@ export default async function ProposalsPage() {
         return (
             <div className="m-4">
                 {renderHeader()}
-                {!activeCycle && <BudgetPrepClosedBanner />}
+                {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
 
                 <h1 className="text-2xl font-bold mb-6">
                     Budget Proposals (BP 202/203)

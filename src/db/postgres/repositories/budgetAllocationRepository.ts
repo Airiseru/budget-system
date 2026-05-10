@@ -2,6 +2,28 @@ import { db } from '../database'
 import { NewAllocationWorkflowLog, NewBudgetAllocation, BudgetAllocation, BudgetAllocationUpdate } from '@/src/types/line_items'
 import { sql } from 'kysely'
 
+const ALLOCATION_STATUS_ORDER = [
+    'draft',
+    'proposed',
+    'dbm_approved',
+    'nep_approved',
+    'gaa_approved',
+] as const
+
+function isValidAllocationStatusTransition(
+    currentStatus: BudgetAllocation['auth_status'],
+    nextStatus: BudgetAllocation['auth_status']
+) {
+    if (currentStatus === nextStatus) return true
+    if (nextStatus === 'rejected') return true
+    if (currentStatus === 'rejected') return nextStatus === 'draft'
+
+    const currentIndex = ALLOCATION_STATUS_ORDER.indexOf(currentStatus as (typeof ALLOCATION_STATUS_ORDER)[number])
+    const nextIndex = ALLOCATION_STATUS_ORDER.indexOf(nextStatus as (typeof ALLOCATION_STATUS_ORDER)[number])
+
+    return currentIndex !== -1 && nextIndex === currentIndex + 1
+}
+
 export type BudgetAllocationListItem = BudgetAllocation & {
     entity_name: string | null
     pap_title: string | null
@@ -32,6 +54,18 @@ export async function createBudgetAllocation(values: NewBudgetAllocation) {
 }
 
 export async function updateBudgetAllocation(id: string, values: BudgetAllocationUpdate) {
+    if (values.auth_status) {
+        const existing = await db
+            .selectFrom('budget_allocations')
+            .select(['auth_status'])
+            .where('id', '=', id)
+            .executeTakeFirstOrThrow()
+
+        if (!isValidAllocationStatusTransition(existing.auth_status, values.auth_status)) {
+            throw new Error(`Invalid allocation status transition from ${existing.auth_status} to ${values.auth_status}.`)
+        }
+    }
+
     return await db
         .updateTable('budget_allocations')
         .set({

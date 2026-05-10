@@ -8,10 +8,23 @@ import {
 import { BP205Schema } from '@/src/lib/validations/retiree.schema'; 
 import { logNewForm, logSaveFormEdits, logSubmitForm, logFormOverwrite } from '@/src/actions/audit';
 import { createFormRepository } from '@/src/db/factory'
-import { getBudgetPrepClosedError, isBudgetPrepActiveForYear } from '@/src/lib/budget-cycle';
+import {
+    getActiveBudgetPrepCycle,
+    getBudgetPrepClosedError,
+    isBudgetPrepActiveForYear,
+} from '@/src/lib/budget-cycle';
 import { NewRetireeRecord } from '@/src/types/retirees';
 
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
+
+async function canDbmOverwriteForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle();
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === 'preparation' ||
+            activeCycle.current_phase === 'dbm_review')
+    );
+}
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
@@ -41,6 +54,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 
         const canEditDraft = current.auth_status === 'draft'
         const canEditPendingDbm = isDbm && current.auth_status === 'pending_dbm'
+
+        if (
+            canEditPendingDbm &&
+            !(await canDbmOverwriteForFiscalYear(current.fiscal_year))
+        ) {
+            return NextResponse.json(
+                { error: "DBM can only overwrite forms during the Preparation or DBM Review phases." },
+                { status: 403 }
+            );
+        }
 
         if (canEditPendingDbm && !overrideRemarks) {
             return NextResponse.json(

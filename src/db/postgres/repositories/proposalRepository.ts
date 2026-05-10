@@ -3,6 +3,7 @@ import { FullProjectProposal } from "../../../types/project_proposals";
 import { sql } from "kysely";
 import { Transaction } from "kysely";
 import { Database } from "@/src/types";
+import { getOperatingUnitDescendantIds } from "./entityRepository";
 
 type ProposalExpenseClass = {
     amount: number | string;
@@ -490,17 +491,61 @@ export async function getAllProposalSummaries(
             "pp.title",
         ]);
 
-    // If an entityId is provided, filter the results (Security Gate)
-    if (entityId) {
-        query = query.where("f.entity_id", "=", entityId);
+    if (entityType === "national") {
+        return await query
+            .orderBy("pp.proposal_year", "desc")
+            .orderBy("pp.priority_rank", "asc")
+            .execute();
     }
 
-    if (entityType !== "admin") {
-        // Use the explicit table name in the where clause
-        query = query.where("f.entity_id", "=", entityId);
+    if (entityType === "department") {
+        return await query
+            .leftJoin("agencies", "agencies.id", "f.entity_id")
+            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
+            .where(({ eb, or }) =>
+                or([
+                    eb("f.entity_id", "=", entityId),
+                    eb("agencies.department_id", "=", entityId),
+                    eb(
+                        "operating_units.agency_id",
+                        "in",
+                        db
+                            .selectFrom("agencies")
+                            .where("department_id", "=", entityId)
+                            .select("id"),
+                    ),
+                ]),
+            )
+            .orderBy("pp.proposal_year", "desc")
+            .orderBy("pp.priority_rank", "asc")
+            .execute();
+    }
+
+    if (entityType === "agency") {
+        return await query
+            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
+            .where(({ eb, or }) =>
+                or([
+                    eb("f.entity_id", "=", entityId),
+                    eb("operating_units.agency_id", "=", entityId),
+                ]),
+            )
+            .orderBy("pp.proposal_year", "desc")
+            .orderBy("pp.priority_rank", "asc")
+            .execute();
+    }
+
+    if (entityType === "operating_unit") {
+        const descendantOuIds = await getOperatingUnitDescendantIds(entityId);
+        return await query
+            .where("f.entity_id", "in", [entityId, ...descendantOuIds])
+            .orderBy("pp.proposal_year", "desc")
+            .orderBy("pp.priority_rank", "asc")
+            .execute();
     }
 
     return await query
+        .where("f.entity_id", "=", entityId)
         .orderBy("pp.proposal_year", "desc")
         .orderBy("pp.priority_rank", "asc")
         .execute();

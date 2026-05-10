@@ -18,8 +18,9 @@ export default async function NewRetireeFormPage() {
 
     const activeCycle = await getActiveBudgetPrepCycle()
     const components = []
+    const canCreate = activeCycle?.current_phase === 'preparation'
 
-    if (!activeCycle) {
+    if (!canCreate) {
         components.push(<BudgetPrepClosedBanner key="budget-cycle-closed" />)
     }
 
@@ -28,7 +29,7 @@ export default async function NewRetireeFormPage() {
 
     if (!schedule) components.push(<p key="no-schedule">There is no salary schedule for this year.</p>)
 
-    else if (activeCycle) {
+    else if (canCreate && activeCycle) {
         const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
         components.push(
             <div key="retiree-form">
