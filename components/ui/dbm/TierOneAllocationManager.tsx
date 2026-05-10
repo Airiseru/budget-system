@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useMemo, useState } from 'react'
+import { useActionState, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
@@ -20,7 +20,7 @@ import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '@/src/lib/constants'
 import type { BudgetCycle } from '@/src/types/budget_settings'
 import type { ItemCatalogScope } from '@/src/types/line_items'
 import type { AllocationWorkflowLogEntry, BudgetAllocationListItem } from '@/src/db/postgres/repositories/budgetAllocationRepository'
-import { Pencil } from 'lucide-react'
+import { ChevronDown, Pencil } from 'lucide-react'
 import CollapsibleRemarksSection from '@/components/ui/remarks/CollapsibleRemarksSection'
 
 type EntityOption = {
@@ -73,6 +73,11 @@ type Props = {
     viewingYear: number | null
     availableYears: number[]
     isViewingOnly: boolean
+    page: number
+    totalPages: number
+    selectedEntityId: string
+    selectedEntityMode: 'exact' | 'hierarchical'
+    selectedPapCode: string
     entities: EntityOption[]
     paps: PapOption[]
     items: ItemOption[]
@@ -88,6 +93,11 @@ export function TierOneAllocationManager({
     viewingYear,
     availableYears,
     isViewingOnly,
+    page,
+    totalPages,
+    selectedEntityId,
+    selectedEntityMode,
+    selectedPapCode,
     entities,
     paps,
     items,
@@ -115,40 +125,24 @@ export function TierOneAllocationManager({
     const canEditNepAmount = currentPhase === 'presidential_approval'
     const canEditGaaAmount = currentPhase === 'legislative_deliberation'
 
-    const departments = useMemo(
-        () => entities
-            .filter((entity) => entity.entity_type === 'department')
-            .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? '')),
-        [entities]
-    )
-    const agencies = useMemo(
-        () => entities
-            .filter((entity) => entity.entity_type === 'agency')
-            .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? '')),
-        [entities]
-    )
-    const operatingUnits = useMemo(
-        () => entities
-            .filter((entity) => entity.entity_type === 'operating_unit')
-            .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? '')),
-        [entities]
-    )
-    const independentAgencies = useMemo(
-        () => agencies.filter((agency) => agency.department_id == null),
-        [agencies]
-    )
+    const departments = entities
+        .filter((entity) => entity.entity_type === 'department')
+        .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
+    const agencies = entities
+        .filter((entity) => entity.entity_type === 'agency')
+        .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
+    const operatingUnits = entities
+        .filter((entity) => entity.entity_type === 'operating_unit')
+        .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
+    const independentAgencies = agencies.filter((agency) => agency.department_id == null)
 
-    const availablePaps = useMemo(() => {
-        return paps.filter((pap) => pap.entity_id == null || pap.entity_id === entityId)
-    }, [entityId, paps])
+    const availablePaps = paps.filter((pap) => pap.entity_id == null || pap.entity_id === entityId)
 
-    const availableItems = useMemo(() => {
-        return items.filter((item) => {
-            if (item.scope === 'global') return true
-            if (item.scope === 'entity') return item.entity_id === entityId
-            return !!papCode && item.pap_code === papCode
-        })
-    }, [entityId, items, papCode])
+    const availableItems = items.filter((item) => {
+        if (item.scope === 'global') return true
+        if (item.scope === 'entity') return item.entity_id === entityId
+        return !!papCode && item.pap_code === papCode
+    })
 
     const getEntityName = (id: string) => {
         const department = departments.find((entity) => entity.id === id)
@@ -163,7 +157,119 @@ export function TierOneAllocationManager({
         return ''
     }
 
+    const getFilterEntityLabel = (id: string) => {
+        if (!id || id === 'all') return 'All entities'
+
+        const department = departments.find((entity) => entity.id === id)
+        if (department) {
+            return `${department.uacs_code ?? '—'} • ${department.name} (Central Office)`
+        }
+
+        const agency = agencies.find((entity) => entity.id === id)
+        if (agency) {
+            return `${agency.uacs_code ?? '—'} • ${agency.name}`
+        }
+
+        const operatingUnit = operatingUnits.find((entity) => entity.id === id)
+        if (operatingUnit) {
+            return `${operatingUnit.uacs_code ?? '—'} • ${operatingUnit.name}`
+        }
+
+        return 'All entities'
+    }
+
+    const getFilterPapLabel = (id: string) => {
+        if (!id || id === 'all') return 'All PAPs'
+        return sortedPapFilters.find((pap) => pap.id === id)?.title ?? 'All PAPs'
+    }
+
     const [selectedYear, setSelectedYear] = useState(viewingYear ? String(viewingYear) : '')
+    const [selectedFilterEntityId, setSelectedFilterEntityId] = useState(selectedEntityId || 'all')
+    const [selectedFilterEntityMode, setSelectedFilterEntityMode] = useState<'exact' | 'hierarchical'>(selectedEntityMode)
+    const [selectedFilterPapCode, setSelectedFilterPapCode] = useState(selectedPapCode || 'all')
+    const [filtersOpen, setFiltersOpen] = useState(true)
+    const readOnlyMode = mode === 'create' && isViewingOnly
+    const sortedPapFilters = [...paps].sort((a, b) => a.title.localeCompare(b.title))
+    const filteredPapOptions = (() => {
+        if (selectedFilterEntityId === 'all') return sortedPapFilters
+
+        if (selectedFilterEntityMode === 'exact') {
+            return sortedPapFilters.filter(
+                (pap) => pap.entity_id === null || pap.entity_id === selectedFilterEntityId
+            )
+        }
+
+        const selectedEntity = entities.find((entity) => entity.id === selectedFilterEntityId)
+        if (!selectedEntity) return sortedPapFilters
+
+        if (selectedEntity.entity_type === 'department') {
+            const departmentAgencyIds = agencies
+                .filter((agency) => agency.department_id === selectedFilterEntityId)
+                .map((agency) => agency.id)
+            const departmentOperatingUnitIds = operatingUnits
+                .filter((operatingUnit) => departmentAgencyIds.includes(operatingUnit.agency_id ?? ''))
+                .map((operatingUnit) => operatingUnit.id)
+
+            return sortedPapFilters.filter((pap) =>
+                pap.entity_id === null ||
+                pap.entity_id === selectedFilterEntityId ||
+                departmentAgencyIds.includes(pap.entity_id ?? '') ||
+                departmentOperatingUnitIds.includes(pap.entity_id ?? '')
+            )
+        }
+
+        if (selectedEntity.entity_type === 'agency') {
+            const agencyOperatingUnitIds = operatingUnits
+                .filter((operatingUnit) => operatingUnit.agency_id === selectedFilterEntityId)
+                .map((operatingUnit) => operatingUnit.id)
+
+            return sortedPapFilters.filter((pap) =>
+                pap.entity_id === null ||
+                pap.entity_id === selectedFilterEntityId ||
+                agencyOperatingUnitIds.includes(pap.entity_id ?? '')
+            )
+        }
+
+        const descendantOperatingUnitIds = operatingUnits
+            .filter((operatingUnit) => operatingUnit.parent_ou_id === selectedFilterEntityId)
+            .map((operatingUnit) => operatingUnit.id)
+
+        return sortedPapFilters.filter((pap) =>
+            pap.entity_id === null ||
+            pap.entity_id === selectedFilterEntityId ||
+            descendantOperatingUnitIds.includes(pap.entity_id ?? '')
+        )
+    })()
+
+    const getFilterLink = (overrides: {
+        year?: string
+        entityId?: string
+        entityMode?: string
+        papCode?: string
+        page?: string
+    } = {}) => {
+        const params = new URLSearchParams()
+        const nextYear = overrides.year ?? selectedYear
+        const nextEntityId = overrides.entityId ?? selectedFilterEntityId
+        const nextEntityMode = overrides.entityMode ?? selectedFilterEntityMode
+        const nextPapCode = overrides.papCode ?? selectedFilterPapCode
+        const nextPage = overrides.page ?? String(page)
+
+        if (nextYear) params.set('year', nextYear)
+        if (nextEntityId && nextEntityId !== 'all') params.set('entityId', nextEntityId)
+        if (nextEntityId && nextEntityId !== 'all' && nextEntityMode !== 'exact') params.set('entityMode', nextEntityMode)
+        if (nextPapCode && nextPapCode !== 'all') params.set('papCode', nextPapCode)
+        if (nextPage && nextPage !== '1') params.set('page', nextPage)
+
+        return `/dbm/tier-one?${params.toString()}`
+    }
+
+    const generatePageNumbers = (currentPage: number, totalPages: number) => {
+        if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1)
+        if (currentPage <= 3) return [1, 2, 3, '...', totalPages]
+        if (currentPage >= totalPages - 2) return [1, '...', totalPages - 2, totalPages - 1, totalPages]
+        return [1, '...', currentPage, '...', totalPages]
+    }
 
     return (
         <main className="min-h-screen bg-background">
@@ -173,17 +279,23 @@ export function TierOneAllocationManager({
                     <div className="text-center">
                         <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">Tier One Allocations</h1>
                         <p className="text-muted-foreground text-sm mt-1">
-                            {activeCycle ? 'Create or adjust Tier One budget allocations based on the current cycle phase.' : 'View Tier One budget allocations for past fiscal years.'}
+                            {(!readOnlyMode) ? 'Create or adjust Tier One budget allocations based on the current cycle phase.' : 'View Tier One budget allocations for past fiscal years.'}
                         </p>
                     </div>
                     <div className="w-[73px]" />
                 </div>
 
-                {!activeCycle && (
-                    <BudgetPrepClosedBanner message="There is no active budget cycle. Select a fiscal year below to view Tier One allocations." />
+                {readOnlyMode && (
+                    <BudgetPrepClosedBanner
+                        message={
+                            activeCycle
+                                ? `The current budget cycle is in the ${PHASE_LABELS[activeCycle.current_phase]} phase. Tier One allocations are view-only right now.`
+                                : 'There is no active budget cycle. Select a fiscal year below to view Tier One allocations.'
+                        }
+                    />
                 )}
 
-                {activeCycle ? (
+                {activeCycle && !readOnlyMode ? (
                     <div className="rounded-lg border border-border bg-accent/30 px-4 py-3 text-sm text-secondary-foreground">
                         Creating allocations for Fiscal Year <span className="font-bold">{activeCycle.fiscal_year}</span>.
                         <div className="mt-1 text-xs text-muted-foreground">
@@ -191,34 +303,166 @@ export function TierOneAllocationManager({
                         </div>
                     </div>
                 ) : availableYears.length > 0 ? (
-                    <div className="rounded-lg border border-border bg-background px-4 py-4">
-                        <form
-                            onSubmit={(event) => {
-                                event.preventDefault()
-                                if (!selectedYear) return
-                                router.push(`/dbm/tier-one?year=${selectedYear}`)
-                            }}
-                            className="flex flex-wrap items-end gap-4"
+                    <div className="rounded-lg border border-border bg-background overflow-hidden">
+                        <button
+                            type="button"
+                            onClick={() => setFiltersOpen((open) => !open)}
+                            className={`w-full px-4 py-4 flex items-center justify-between text-left ${filtersOpen ? 'border-b border-border' : ''}`}
                         >
-                            <div className="space-y-2 min-w-[220px]">
-                                <p className="font-medium">Fiscal Year</p>
-                                <Select value={selectedYear} onValueChange={(value) => setSelectedYear(value ?? '')}>
-                                    <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
-                                        <SelectValue placeholder="Select fiscal year" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {availableYears.map((year) => (
-                                            <SelectItem key={year} value={String(year)}>
-                                                FY {year}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                            <div>
+                                <h2 className="text-lg font-semibold text-secondary-foreground">Filters</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    Narrow the Tier One allocations shown in view-only mode.
+                                </p>
                             </div>
-                            <Button type="submit" className="bg-accent-foreground text-white hover:bg-accent-foreground/90">
-                                View Allocations
-                            </Button>
-                        </form>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>{filtersOpen ? 'Hide' : 'Show'}</span>
+                                <ChevronDown className={`h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+                            </div>
+                        </button>
+
+                        {filtersOpen && (
+                            <form
+                                onSubmit={(event) => {
+                                    event.preventDefault()
+                                    if (!selectedYear) return
+                                    router.push(getFilterLink({
+                                        year: selectedYear,
+                                        entityId: selectedFilterEntityId,
+                                        entityMode: selectedFilterEntityMode,
+                                        papCode: selectedFilterPapCode,
+                                        page: '1',
+                                    }))
+                                }}
+                                className="px-4 py-4 flex flex-col gap-4"
+                            >
+                                <div className="flex flex-row gap-4 flex-wrap 2xl:flex-nowrap">
+                                    <div className="space-y-2 w-full sm:w-[220px] lg:flex-1 lg:min-w-[200px] lg:max-w-[260px]">
+                                        <p className="font-medium">Fiscal Year</p>
+                                        <Select value={selectedYear} onValueChange={(value) => setSelectedYear(value ?? '')}>
+                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
+                                                <SelectValue placeholder="Select fiscal year">
+                                                    {selectedYear ? `FY ${selectedYear}` : 'Select fiscal year'}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availableYears.map((year) => (
+                                                    <SelectItem key={year} value={String(year)}>
+                                                        FY {year}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 w-full lg:flex-[1.4] lg:min-w-[280px] lg:max-w-[440px]">
+                                        <p className="font-medium">Entity</p>
+                                        <Select value={selectedFilterEntityId} onValueChange={(value) => {
+                                            setSelectedFilterEntityId(value ?? 'all')
+                                            setSelectedFilterPapCode('all')
+                                        }}>
+                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
+                                                <SelectValue placeholder="All entities">
+                                                    {getFilterEntityLabel(selectedFilterEntityId)}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All entities</SelectItem>
+                                                {departments.map((department) => {
+                                                    const childAgencies = agencies.filter((agency) => agency.department_id === department.id)
+                                                    return (
+                                                        <SelectGroup key={department.id}>
+                                                            <SelectLabel className="bg-muted/50">{department.name}</SelectLabel>
+                                                            <SelectItem value={department.id}>
+                                                                {`${department.uacs_code ?? '—'} • ${department.name} (Central Office)`}
+                                                            </SelectItem>
+                                                            {childAgencies.map((agency) => (
+                                                                <div key={agency.id}>
+                                                                    <SelectItem value={agency.id}>
+                                                                        {`${agency.uacs_code ?? '—'} • ${agency.name}`}
+                                                                    </SelectItem>
+                                                                    {operatingUnits
+                                                                        .filter((operatingUnit) => operatingUnit.agency_id === agency.id)
+                                                                        .map((operatingUnit) => (
+                                                                            <SelectItem key={operatingUnit.id} value={operatingUnit.id}>
+                                                                                {`${operatingUnit.uacs_code ?? '—'} • ↳ ${operatingUnit.name}`}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                </div>
+                                                            ))}
+                                                        </SelectGroup>
+                                                    )
+                                                })}
+                                                {independentAgencies.length > 0 && (
+                                                    <SelectGroup>
+                                                        <SelectLabel className="bg-muted/50">Independent Agencies & SUCs</SelectLabel>
+                                                        {independentAgencies.map((agency) => (
+                                                            <div key={agency.id}>
+                                                                <SelectItem value={agency.id}>
+                                                                    {`${agency.uacs_code ?? '—'} • ${agency.name}`}
+                                                                </SelectItem>
+                                                                {operatingUnits
+                                                                    .filter((operatingUnit) => operatingUnit.agency_id === agency.id)
+                                                                    .map((operatingUnit) => (
+                                                                        <SelectItem key={operatingUnit.id} value={operatingUnit.id}>
+                                                                            {`${operatingUnit.uacs_code ?? '—'} • ↳ ${operatingUnit.name}`}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                            </div>
+                                                        ))}
+                                                    </SelectGroup>
+                                                )}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 w-full sm:w-[220px] lg:flex-1 lg:min-w-[200px] lg:max-w-[260px]">
+                                        <p className="font-medium">Entity Match</p>
+                                        <Select
+                                            value={selectedFilterEntityMode}
+                                            onValueChange={(value) => setSelectedFilterEntityMode((value ?? 'exact') as 'exact' | 'hierarchical')}
+                                            disabled={selectedFilterEntityId === 'all'}
+                                        >
+                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
+                                                <SelectValue placeholder="Select match mode">
+                                                    {selectedFilterEntityMode === 'hierarchical' ? 'Hierarchical' : 'Exact'}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="exact">Exact</SelectItem>
+                                                <SelectItem value="hierarchical">Hierarchical</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 w-full lg:flex-[1.2] lg:min-w-[260px] lg:max-w-[380px]">
+                                        <p className="font-medium">PAP</p>
+                                        <Select value={selectedFilterPapCode} onValueChange={(value) => setSelectedFilterPapCode(value ?? 'all')}>
+                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
+                                                <SelectValue placeholder="All PAPs">
+                                                    {getFilterPapLabel(selectedFilterPapCode)}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All PAPs</SelectItem>
+                                                {filteredPapOptions.map((pap) => (
+                                                    <SelectItem key={pap.id} value={pap.id}>
+                                                        {pap.title}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-4">
+                                    <Button type="submit" className="bg-accent-foreground text-white hover:bg-accent-foreground/90 w-full sm:w-auto sm:px-6">
+                                        Apply Filters
+                                    </Button>
+                                    {(selectedEntityId || selectedPapCode || selectedEntityMode !== 'exact') && (
+                                        <Link href={getFilterLink({ entityId: 'all', entityMode: 'exact', papCode: 'all', page: '1' })} className="text-sm text-muted-foreground hover:text-secondary-foreground underline underline-offset-2 h-[38px] flex items-center">
+                                            Clear
+                                        </Link>
+                                    )}
+                                </div>
+                            </form>
+                        )}
                     </div>
                 ) : (
                     <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
@@ -226,14 +470,8 @@ export function TierOneAllocationManager({
                     </div>
                 )}
 
-                {activeCycle && !canCreateAllocation && mode === 'create' && (
-                    <div className="rounded-lg border border-border bg-background px-4 py-3 text-sm text-muted-foreground">
-                        New Tier One allocations can only be created during the Preparation or DBM Review phases. You can still review existing allocations below.
-                    </div>
-                )}
-
-                <div className={`grid gap-8 ${isViewingOnly && mode === 'create' ? '' : 'xl:grid-cols-[420px_1fr]'}`}>
-                    {!isViewingOnly && (mode === 'edit' || canCreateAllocation) && (
+                <div className={`grid gap-8 ${readOnlyMode ? '' : 'xl:grid-cols-[420px_1fr]'}`}>
+                    {!readOnlyMode && (
                     <form action={action} className="space-y-5 rounded-xl border border-border bg-background p-6">
                         {mode === 'edit' && (
                             <input type="hidden" name="id" value={initialValues?.id ?? ''} />
@@ -532,13 +770,13 @@ export function TierOneAllocationManager({
                                         <th className="px-4 py-3">Item</th>
                                         <th className="px-4 py-3">Fund</th>
                                         <th className="px-4 py-3 text-right">DBM Rec</th>
-                                        {!isViewingOnly && <th className="px-4 py-3 text-right">Action</th>}
+                                {!readOnlyMode && <th className="px-4 py-3 text-right">Action</th>}
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/20">
                                     {allocations.length === 0 ? (
                                         <tr>
-                                            <td colSpan={isViewingOnly ? 5 : 6} className="px-4 py-10 text-center text-muted-foreground">
+                                            <td colSpan={readOnlyMode ? 5 : 6} className="px-4 py-10 text-center text-muted-foreground">
                                                 {viewingYear
                                                     ? `No Tier One allocations found for fiscal year ${viewingYear}.`
                                                     : 'No Tier One allocations found.'}
@@ -551,7 +789,7 @@ export function TierOneAllocationManager({
                                             <td className="px-4 py-3">{allocation.item_name}</td>
                                             <td className="px-4 py-3">{allocation.fund_description || allocation.fund_code || 'No fund source'}</td>
                                             <td className="px-4 py-3 text-right font-mono">{allocation.currency} {Number(allocation.dbm_rec_amt).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                            {!isViewingOnly && <td className="px-4 py-3 text-right">
+                                            {!readOnlyMode && <td className="px-4 py-3 text-right">
                                                 <Link
                                                     href={`/dbm/tier-one/${allocation.id}/edit`}
                                                     className="inline-flex items-center justify-center gap-1 rounded-md border border-border/50 bg-accent px-3 py-1.5 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary"
@@ -563,6 +801,46 @@ export function TierOneAllocationManager({
                                     ))}
                                 </tbody>
                             </table>
+                        </div>
+                        <div className="border-t border-border/30 p-4 flex items-center justify-between">
+                            <p className="text-sm text-muted-foreground">
+                                Showing page <span className="font-bold">{page}</span> of <span className="font-bold">{totalPages !== 0 ? totalPages : 1}</span>
+                            </p>
+                            <div className="flex gap-1 items-center">
+                                <Link
+                                    href={page > 1 ? getFilterLink({ page: String(page - 1) }) : '#'}
+                                    className={`px-2.5 py-1.5 rounded text-sm font-bold transition-colors ${page > 1 ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'bg-accent/50 text-muted-foreground/40 pointer-events-none'}`}
+                                    aria-disabled={page <= 1}
+                                >
+                                    &lt;
+                                </Link>
+                                {generatePageNumbers(page, totalPages).map((current, index) => (
+                                    current === '...' ? (
+                                        <span key={`ellipsis-${index}`} className="px-2 py-1.5 text-muted-foreground text-sm font-bold">
+                                            ...
+                                        </span>
+                                    ) : (
+                                        <Link
+                                            key={`page-${current}`}
+                                            href={getFilterLink({ page: String(current) })}
+                                            className={`px-3 py-1.5 border-b rounded text-sm font-bold transition-colors ${
+                                                current === page
+                                                    ? 'bg-secondary-foreground text-accent border-secondary-foreground'
+                                                    : 'border-border/50 bg-accent text-secondary-foreground hover:bg-secondary'
+                                            }`}
+                                        >
+                                            {current}
+                                        </Link>
+                                    )
+                                ))}
+                                <Link
+                                    href={page < totalPages ? getFilterLink({ page: String(page + 1) }) : '#'}
+                                    className={`px-2.5 py-1.5 rounded text-sm font-bold transition-colors ${page < totalPages ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'bg-accent/50 text-muted-foreground/40 pointer-events-none'}`}
+                                    aria-disabled={page >= totalPages}
+                                >
+                                    &gt;
+                                </Link>
+                            </div>
                         </div>
                     </div>
                 </div>

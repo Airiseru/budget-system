@@ -33,6 +33,16 @@ export type BudgetAllocationListItem = BudgetAllocation & {
 
 export type BudgetAllocationRecord = BudgetAllocationListItem
 
+type ListBudgetAllocationsByYearOptions = {
+    year: number
+    tier?: 1 | 2
+    entityId?: string
+    entityIds?: string[]
+    papCode?: string
+    limit?: number
+    offset?: number
+}
+
 export type AllocationWorkflowLogEntry = {
     id: string
     allocation_id: string
@@ -98,8 +108,16 @@ export async function getBudgetAllocationById(id: string) {
         .executeTakeFirst() as BudgetAllocationRecord | undefined
 }
 
-export async function listBudgetAllocationsByYear(year: number, tier: 1 | 2 = 1) {
-    return await db
+export async function listBudgetAllocationsByYear({
+    year,
+    tier = 1,
+    entityId,
+    entityIds,
+    papCode,
+    limit,
+    offset,
+}: ListBudgetAllocationsByYearOptions) {
+    let query = db
         .selectFrom('budget_allocations')
         .leftJoin('entities', 'entities.id', 'budget_allocations.entity_id')
         .leftJoin('departments', 'departments.id', 'entities.id')
@@ -117,8 +135,56 @@ export async function listBudgetAllocationsByYear(year: number, tier: 1 | 2 = 1)
         ])
         .where('budget_allocations.budget_cycle_year', '=', year)
         .where('budget_allocations.tier', '=', tier)
+
+    if (entityIds && entityIds.length > 0) {
+        query = query.where('budget_allocations.entity_id', 'in', entityIds)
+    } else if (entityId) {
+        query = query.where('budget_allocations.entity_id', '=', entityId)
+    }
+
+    if (papCode) {
+        query = query.where('budget_allocations.pap_code', '=', papCode)
+    }
+
+    query = query
         .orderBy('budget_allocations.updated_at', 'desc')
-        .execute() as BudgetAllocationListItem[]
+
+    if (typeof limit === 'number') {
+        query = query.limit(limit)
+    }
+
+    if (typeof offset === 'number') {
+        query = query.offset(offset)
+    }
+
+    return await query.execute() as BudgetAllocationListItem[]
+}
+
+export async function countBudgetAllocationsByYear({
+    year,
+    tier = 1,
+    entityId,
+    entityIds,
+    papCode,
+}: Omit<ListBudgetAllocationsByYearOptions, 'limit' | 'offset'>) {
+    let query = db
+        .selectFrom('budget_allocations')
+        .select(({ fn }) => fn.count<string>('budget_allocations.id').as('count'))
+        .where('budget_allocations.budget_cycle_year', '=', year)
+        .where('budget_allocations.tier', '=', tier)
+
+    if (entityIds && entityIds.length > 0) {
+        query = query.where('budget_allocations.entity_id', 'in', entityIds)
+    } else if (entityId) {
+        query = query.where('budget_allocations.entity_id', '=', entityId)
+    }
+
+    if (papCode) {
+        query = query.where('budget_allocations.pap_code', '=', papCode)
+    }
+
+    const result = await query.executeTakeFirst()
+    return Number(result?.count ?? 0)
 }
 
 export async function listAllocationWorkflowLogs(allocationId: string) {

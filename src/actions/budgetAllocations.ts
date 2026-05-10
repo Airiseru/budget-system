@@ -28,6 +28,8 @@ const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'po
 const ItemRepository = createItemRepository(process.env.DATABASE_TYPE || 'postgres')
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 const UacsRepository = createUacsRepository(process.env.DATABASE_TYPE || 'postgres')
+const VIEW_PAGE_SIZE = 15
+type EntityFilterMode = 'exact' | 'hierarchical'
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
     if (typeof value !== 'string') return undefined
@@ -117,6 +119,43 @@ function validateAmountChangesForPhase(
     return false
 }
 
+async function getTierOneEntityFilterIds(
+    entityId: string | undefined,
+    entityFilterMode: EntityFilterMode
+) {
+    if (!entityId) return undefined
+    if (entityFilterMode === 'exact') return [entityId]
+
+    const entity = await EntityRepository.getEntityById(entityId).catch(() => null)
+    if (!entity) return [entityId]
+
+    if (entity.type === 'department') {
+        const agencies = await EntityRepository.getAllAgenciesByDepartmentId(entityId)
+        const agencyIds = agencies.map((agency) => agency.id)
+        const operatingUnits = await Promise.all(
+            agencyIds.map((agencyId) => EntityRepository.getAllOperatingUnitsByAgencyId(agencyId))
+        )
+
+        return [
+            entityId,
+            ...agencyIds,
+            ...operatingUnits.flat().map((operatingUnit) => operatingUnit.id),
+        ]
+    }
+
+    if (entity.type === 'agency') {
+        const operatingUnits = await EntityRepository.getAllOperatingUnitsByAgencyId(entityId)
+        return [entityId, ...operatingUnits.map((operatingUnit) => operatingUnit.id)]
+    }
+
+    if (entity.type === 'operating_unit') {
+        const descendants = await EntityRepository.getOperatingUnitDescendantIds(entityId)
+        return [entityId, ...descendants]
+    }
+
+    return [entityId]
+}
+
 export async function loadTierOneDashboard() {
     await requireDbm()
 
@@ -124,31 +163,72 @@ export async function loadTierOneDashboard() {
     const cycles = await BudgetSettingsRepository.listBudgetCycles()
     const fallbackYear = cycles[0]?.fiscal_year ?? null
 
-    return await loadTierOneDashboardForYear(activeCycle?.fiscal_year ?? fallbackYear)
+    return await loadTierOneDashboardForYear({
+        selectedYear: activeCycle?.fiscal_year ?? fallbackYear,
+    })
 }
 
-export async function loadTierOneDashboardForYear(selectedYear?: number | null) {
+export async function loadTierOneDashboardForYear({
+    selectedYear,
+    selectedEntityId,
+    selectedEntityMode = 'exact',
+    selectedPapCode,
+    page = 1,
+}: {
+    selectedYear?: number | null
+    selectedEntityId?: string
+    selectedEntityMode?: EntityFilterMode
+    selectedPapCode?: string
+    page?: number
+}) {
     await requireDbm()
 
     const activeCycle = await BudgetSettingsRepository.getActiveBudgetCycle()
     const cycles = await BudgetSettingsRepository.listBudgetCycles()
     const viewingYear = activeCycle?.fiscal_year ?? selectedYear ?? cycles[0]?.fiscal_year ?? null
-
-    const [entitySegments, paps, items, fundingSources, allocations] = await Promise.all([
+    const isViewingOnly = !activeCycle || !['preparation', 'dbm_review'].includes(activeCycle.current_phase)
+    const safePage = Number.isFinite(page) && page > 0 ? page : 1
+    const entityIds = await getTierOneEntityFilterIds(selectedEntityId, selectedEntityMode)
+    const [entitySegments, paps, items, fundingSources, totalCount] = await Promise.all([
         EntityRepository.getAllEntitySegments(true),
         PapRepository.getPapOptions(),
         ItemRepository.listAllItemCatalog(),
         UacsRepository.listFundingSources(),
         viewingYear
-            ? BudgetAllocationRepository.listBudgetAllocationsByYear(viewingYear, 1)
-            : Promise.resolve([]),
+            ? BudgetAllocationRepository.countBudgetAllocationsByYear({
+                year: viewingYear,
+                tier: 1,
+                entityId: selectedEntityId,
+                entityIds,
+                papCode: selectedPapCode,
+            })
+            : Promise.resolve(0),
     ])
+    const totalPages = viewingYear ? Math.max(1, Math.ceil(Number(totalCount) / VIEW_PAGE_SIZE)) : 1
+    const currentPage = Math.min(safePage, totalPages)
+    const offset = (currentPage - 1) * VIEW_PAGE_SIZE
+    const allocations = viewingYear
+        ? await BudgetAllocationRepository.listBudgetAllocationsByYear({
+            year: viewingYear,
+            tier: 1,
+            entityId: selectedEntityId,
+            entityIds,
+            papCode: selectedPapCode,
+            limit: VIEW_PAGE_SIZE,
+            offset,
+        })
+        : []
 
     return {
         activeCycle,
         viewingYear,
         availableYears: cycles.map((cycle) => cycle.fiscal_year),
-        isViewingOnly: !activeCycle,
+        isViewingOnly,
+        page: currentPage,
+        totalPages,
+        selectedEntityId: selectedEntityId ?? '',
+        selectedEntityMode,
+        selectedPapCode: selectedPapCode ?? '',
         entities: [
             ...entitySegments.departments,
             ...entitySegments.agencies,

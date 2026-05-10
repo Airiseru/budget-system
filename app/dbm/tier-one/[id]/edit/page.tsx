@@ -22,6 +22,11 @@ export default async function EditTierOneAllocationPage({
             viewingYear={dashboard.viewingYear}
             availableYears={dashboard.availableYears}
             isViewingOnly={dashboard.isViewingOnly}
+            page={dashboard.page}
+            totalPages={dashboard.totalPages}
+            selectedEntityId={dashboard.selectedEntityId}
+            selectedEntityMode={dashboard.selectedEntityMode}
+            selectedPapCode={dashboard.selectedPapCode}
             entities={dashboard.entities}
             paps={dashboard.paps}
             items={dashboard.items}
