@@ -35,7 +35,7 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
 
     const getEntityName = (id: string) => {
         const dept = departments.find(d => d.id === id)
-        if (dept) return `${dept.name} (Central Office)`
+        if (dept) return dept.name
         const agency = agencies.find(a => a.id === id)
         if (agency) return agency.name
         const operatingUnit = operatingUnits.find(ou => ou.id === id)

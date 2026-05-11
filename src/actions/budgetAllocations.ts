@@ -4,12 +4,14 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { requireDbm } from './admin'
-import { sessionDetails } from './auth'
+import { sessionDetails, sessionWithEntity } from './auth'
 import {
     createBudgetAllocationRepository,
     createBudgetSettingsRepository,
     createEntityRepository,
+    createFormRepository,
     createItemRepository,
+    createKeyRepository,
     createPapRepository,
     createUacsRepository,
 } from '../db/factory'
@@ -19,16 +21,22 @@ import {
     TierOneAllocationFormState,
     TierOneAllocationSchema,
 } from '../lib/validations/budgetAllocations'
+import { getCurrentSignatoryRole, getWorkflow } from '../lib/workflows'
+import { logNewForm } from './audit'
 import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '../lib/constants'
 import type { BudgetCyclePhase } from '../types/budget_settings'
+import type { ExpenseClass } from '../types/line_items'
 
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
+const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const ItemRepository = createItemRepository(process.env.DATABASE_TYPE || 'postgres')
+const KeyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 const UacsRepository = createUacsRepository(process.env.DATABASE_TYPE || 'postgres')
 const VIEW_PAGE_SIZE = 15
+const ALLOCATION_DASHBOARD_PAGE_SIZE = 25
 type EntityFilterMode = 'exact' | 'hierarchical'
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
@@ -176,6 +184,61 @@ function getTierOnePapFilterIds(
         .map((pap) => pap.id)
 }
 
+type AllocationSignoffType = 'nep' | 'gaa'
+
+function getAllocationSignoffTypeForPhase(phase: BudgetCyclePhase | null | undefined): AllocationSignoffType | null {
+    if (phase === 'presidential_approval') return 'nep'
+    if (phase === 'legislative_deliberation') return 'gaa'
+    return null
+}
+
+function getAllocationSignoffCodename(type: AllocationSignoffType, fiscalYear: number) {
+    return `${type.toUpperCase()} Sign-Off FY ${fiscalYear}`
+}
+
+async function ensurePhaseDefaults(fiscalYear: number, phase: BudgetCyclePhase | null | undefined) {
+    if (!phase || !['presidential_approval', 'legislative_deliberation'].includes(phase)) {
+        return
+    }
+
+    await BudgetAllocationRepository.seedAllocationPhaseDefaults(fiscalYear, phase)
+}
+
+async function getOrCreateAllocationSignoffForm(
+    type: AllocationSignoffType,
+    fiscalYear: number,
+    entityId: string,
+    userId: string
+) {
+    const existing = await FormRepository.getLatestFormByTypeAndFiscalYear(type, fiscalYear)
+    if (existing) return existing
+
+    const created = await FormRepository.createForm({
+        entity_id: entityId,
+        type,
+        fiscal_year: fiscalYear,
+        parent_form_id: null,
+        version: 1,
+        codename: getAllocationSignoffCodename(type, fiscalYear),
+        auth_status: 'pending_dbm',
+    })
+
+    await logNewForm(
+        userId,
+        entityId,
+        'budget_allocations',
+        created.id,
+        {
+            fiscal_year: fiscalYear,
+            signoff_type: type,
+            auth_status: 'pending_dbm',
+        },
+        created.created_at
+    )
+
+    return created
+}
+
 export async function loadTierOneDashboard() {
     await requireDbm()
 
@@ -186,6 +249,184 @@ export async function loadTierOneDashboard() {
     return await loadTierOneDashboardForYear({
         selectedYear: activeCycle?.fiscal_year ?? fallbackYear,
     })
+}
+
+export async function loadDbmAllocationDashboard({
+    selectedYear,
+    selectedDepartmentId,
+    selectedPapId,
+    selectedExpenseClass,
+    search = '',
+    page = 1,
+}: {
+    selectedYear?: number | null
+    selectedDepartmentId?: string
+    selectedPapId?: string
+    selectedExpenseClass?: ExpenseClass | ''
+    search?: string
+    page?: number
+}) {
+    const session = await sessionWithEntity()
+    if (!session || session.user.role !== 'dbm') {
+        redirect('/home')
+    }
+
+    const activeCycle = await BudgetSettingsRepository.getActiveBudgetCycle()
+    const cycles = await BudgetSettingsRepository.listBudgetCycles()
+    if (activeCycle) {
+        await ensurePhaseDefaults(activeCycle.fiscal_year, activeCycle.current_phase)
+    }
+
+    const latestYear = cycles[0]?.fiscal_year ?? null
+    const viewingYear =
+        activeCycle?.current_phase === 'preparation'
+            ? activeCycle.fiscal_year
+            : activeCycle?.fiscal_year ?? selectedYear ?? latestYear
+    const safePage = Number.isFinite(page) && page > 0 ? page : 1
+
+    const [departments, paps, entitySegments, items, fundingSources, totalCount, filteredTotals, overallTotals, signoffSummary] = await Promise.all([
+        EntityRepository.getAllDepartments(),
+        PapRepository.getPapOptions(),
+        EntityRepository.getAllEntitySegments(true),
+        ItemRepository.listAllItemCatalog(),
+        UacsRepository.listFundingSources(),
+        viewingYear
+            ? BudgetAllocationRepository.countAllocationDashboardRows({
+                fiscalYear: viewingYear,
+                departmentId: selectedDepartmentId,
+                papId: selectedPapId,
+                expenseClass: selectedExpenseClass,
+                search: search.trim() || undefined,
+            })
+            : Promise.resolve(0),
+        viewingYear
+            ? BudgetAllocationRepository.getAllocationDashboardTotals({
+                fiscalYear: viewingYear,
+                departmentId: selectedDepartmentId,
+                papId: selectedPapId,
+                expenseClass: selectedExpenseClass,
+                search: search.trim() || undefined,
+            })
+            : Promise.resolve({
+                proposed_total: 0,
+                dbm_rec_total: 0,
+                nep_total: 0,
+                gaa_total: 0,
+            }),
+        viewingYear
+            ? BudgetAllocationRepository.getAllocationDashboardTotals({
+                fiscalYear: viewingYear,
+            })
+            : Promise.resolve({
+                proposed_total: 0,
+                dbm_rec_total: 0,
+                nep_total: 0,
+                gaa_total: 0,
+            }),
+        viewingYear
+            ? BudgetAllocationRepository.getAllocationSignoffSummary(viewingYear)
+            : Promise.resolve({
+                allocation_count: 0,
+                dbm_rec_total: 0,
+                nep_total: 0,
+                gaa_total: 0,
+                last_updated_at: null,
+            }),
+    ])
+
+    const totalPages = viewingYear ? Math.max(1, Math.ceil(totalCount / ALLOCATION_DASHBOARD_PAGE_SIZE)) : 1
+    const currentPage = Math.min(safePage, totalPages)
+    const offset = (currentPage - 1) * ALLOCATION_DASHBOARD_PAGE_SIZE
+
+    const rows = viewingYear
+        ? await BudgetAllocationRepository.getAllocationDashboardRows({
+            fiscalYear: viewingYear,
+            departmentId: selectedDepartmentId,
+            papId: selectedPapId,
+            expenseClass: selectedExpenseClass,
+            search: search.trim() || undefined,
+            limit: ALLOCATION_DASHBOARD_PAGE_SIZE,
+            offset,
+        })
+        : []
+
+    const signoffType = activeCycle && viewingYear === activeCycle.fiscal_year
+        ? getAllocationSignoffTypeForPhase(activeCycle.current_phase)
+        : null
+
+    const signoffForm = signoffType
+        ? await getOrCreateAllocationSignoffForm(
+            signoffType,
+            viewingYear!,
+            session.user.entity_id,
+            session.user.id
+        )
+        : null
+
+    const signoffWorkflow = signoffForm ? getWorkflow(signoffForm.type) : null
+    const signoffCurrentRole = signoffForm && signoffWorkflow
+        ? getCurrentSignatoryRole(signoffForm.auth_status ?? '', signoffWorkflow)
+        : null
+    const signoffSignatories = signoffForm
+        ? await KeyRepository.getSignatoriesByFormId(signoffForm.id)
+        : []
+    const signoffAlreadySigned = signoffForm
+        ? await KeyRepository.getSignatoryByFormIdAndUserId(signoffForm.id, session.user.id)
+        : null
+
+    const signoffData = signoffForm && signoffWorkflow && signoffCurrentRole
+        ? {
+            formId: signoffForm.id,
+            entityId: signoffForm.entity_id,
+            authStatus: signoffForm.auth_status ?? '',
+            signatoryRole: signoffCurrentRole,
+            userId: session.user.id,
+            codename: signoffForm.codename,
+            formData: {
+                fiscal_year: viewingYear,
+                signoff_type: signoffForm.type,
+                totals: signoffSummary,
+            },
+            signatories: signoffSignatories,
+            alreadySigned: !!signoffAlreadySigned,
+            userCanSign:
+                signoffForm.auth_status === 'pending_dbm' &&
+                session.user.access_level === 'approve' &&
+                session.user.workflow_role === 'dbm',
+        }
+        : null
+
+    return {
+        activeCycle,
+        viewingYear,
+        page: currentPage,
+        totalPages,
+        rows,
+        overallTotals,
+        filteredTotals,
+        departments,
+        paps,
+        entities: [
+            ...entitySegments.departments,
+            ...entitySegments.agencies,
+            ...entitySegments.operatingUnits,
+        ],
+        items,
+        fundingSources: fundingSources.filter((source) => source.status === 'active'),
+        selectedDepartmentId: selectedDepartmentId ?? '',
+        selectedPapId: selectedPapId ?? '',
+        selectedExpenseClass: selectedExpenseClass ?? '',
+        search,
+        isFiltered: Boolean(
+            selectedDepartmentId ||
+            selectedPapId ||
+            selectedExpenseClass ||
+            search.trim()
+        ),
+        yearLockedToActivePreparation: activeCycle?.current_phase === 'preparation',
+        availableYears: cycles.map((cycle) => cycle.fiscal_year),
+        signoff: signoffData,
+    }
 }
 
 export async function loadTierOneDashboardForYear({
@@ -348,6 +589,7 @@ export async function createTierOneAllocationAction(
             dbm_rec_amt: parsed.data.dbm_rec_amt,
             nep_amt: parsed.data.nep_amt,
             gaa_amt: parsed.data.gaa_amt,
+            prev_year_gaa_amt: 0,
             valid_from: parsed.data.valid_from ? new Date(parsed.data.valid_from) : null,
             valid_until: parsed.data.valid_until ? new Date(parsed.data.valid_until) : null,
             auth_status: 'draft',

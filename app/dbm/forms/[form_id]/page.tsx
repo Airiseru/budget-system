@@ -12,12 +12,15 @@ export default async function DBMFormRouter({ params }: { params: Promise<{ form
 
     const { form_id } = await params;
 
-    // Fetch form type
-    const form = await FormRepository.getFormTypeById(form_id)
+    const form = await FormRepository.getFormById(form_id)
     
     if (!form) return notFound()
 
     // Retrieve correct path
+    if (form.type === 'nep' || form.type === 'gaa') {
+        redirect(`/dbm/allocations?year=${form.fiscal_year}`)
+    }
+
     const basePath = FORM_ROUTE_MAP[form.type]
     
     if (!basePath) {

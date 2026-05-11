@@ -20,8 +20,8 @@ export default async function HomePage() {
     
     return (
         <main className="m-4">
-            <h1></h1>
-            <div className="flex gap-2">
+            <h1>DBM Modules</h1>
+            <div className="flex gap-2 flex-wrap">
                 <GeneralButton
                     url='/dbm/salary'
                     label='Salary Schedules and Compensations'
@@ -37,6 +37,10 @@ export default async function HomePage() {
                 <GeneralButton
                     url='/dbm/tier-one'
                     label='Tier One Allocations'
+                />
+                <GeneralButton
+                    url='/dbm/allocations'
+                    label='NEP and GAA Dashboard'
                 />
                 <GeneralButton
                     url='/dbm/entities'

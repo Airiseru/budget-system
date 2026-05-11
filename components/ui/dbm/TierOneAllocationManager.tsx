@@ -146,7 +146,7 @@ export function TierOneAllocationManager({
 
     const getEntityName = (id: string) => {
         const department = departments.find((entity) => entity.id === id)
-        if (department) return `${department.name} (Central Office)`
+        if (department) return department.name
 
         const agency = agencies.find((entity) => entity.id === id)
         if (agency) return agency.name
@@ -162,7 +162,7 @@ export function TierOneAllocationManager({
 
         const department = departments.find((entity) => entity.id === id)
         if (department) {
-            return `${department.uacs_code ?? '—'} • ${department.name} (Central Office)`
+            return `${department.uacs_code ?? '—'} • ${department.name}`
         }
 
         const agency = agencies.find((entity) => entity.id === id)
@@ -375,7 +375,7 @@ export function TierOneAllocationManager({
                                                         <SelectGroup key={department.id}>
                                                             <SelectLabel className="bg-muted/50">{department.name}</SelectLabel>
                                                             <SelectItem value={department.id}>
-                                                                {`${department.uacs_code ?? '—'} • ${department.name} (Central Office)`}
+                                                                {`${department.uacs_code ?? '—'} • ${department.name}`}
                                                             </SelectItem>
                                                             {childAgencies.map((agency) => (
                                                                 <div key={agency.id}>
@@ -517,7 +517,7 @@ export function TierOneAllocationManager({
                                         return (
                                             <SelectGroup key={department.id}>
                                                 <SelectLabel className="bg-muted/50">{department.name}</SelectLabel>
-                                                <SelectItem value={department.id}>{department.name} (Central Office)</SelectItem>
+                                                <SelectItem value={department.id}>{department.name}</SelectItem>
                                                 {childAgencies.map((agency) => (
                                                     <div key={agency.id}>
                                                         <SelectItem value={agency.id}>{agency.name}</SelectItem>

@@ -1,6 +1,8 @@
 import { db } from '../database'
 import { NewAllocationWorkflowLog, NewBudgetAllocation, BudgetAllocation, BudgetAllocationUpdate } from '@/src/types/line_items'
 import { sql } from 'kysely'
+import type { BudgetCyclePhase } from '@/src/types/budget_settings'
+import type { ExpenseClass } from '@/src/types/line_items'
 
 const ALLOCATION_STATUS_ORDER = [
     'draft',
@@ -54,6 +56,65 @@ export type AllocationWorkflowLogEntry = {
     performed_by: string
     performed_by_name: string | null
     created_at: Date
+}
+
+export type AllocationDashboardFilters = {
+    fiscalYear: number
+    departmentId?: string
+    papId?: string
+    expenseClass?: string
+    search?: string
+    limit?: number
+    offset?: number
+}
+
+export type AllocationDashboardRow = BudgetAllocation & {
+    department_id: string | null
+    department_name: string | null
+    department_uacs_code: string | null
+    agency_id: string | null
+    agency_name: string | null
+    agency_uacs_code: string | null
+    operating_unit_id: string | null
+    operating_unit_name: string | null
+    operating_unit_uacs_code: string | null
+    pap_title: string | null
+    pap_project_type: string | null
+    pap_uacs_code: string | null
+    fund_description: string | null
+    item_name: string
+    expense_class: string
+    expense_class_code: string
+    object_code: string
+}
+
+export type AllocationDashboardTotals = {
+    proposed_total: number
+    dbm_rec_total: number
+    nep_total: number
+    gaa_total: number
+}
+
+export type AllocationSignoffSummary = {
+    allocation_count: number
+    dbm_rec_total: number
+    nep_total: number
+    gaa_total: number
+    last_updated_at: Date | null
+}
+
+export type BulkValidityUpdateOptions = {
+    fiscalYear: number
+    expenseClass?: ExpenseClass
+    tier?: 1 | 2
+    validFrom: Date | null
+    validUntil: Date | null
+}
+
+export type AllocationValidityTarget = {
+    id: string
+    valid_from: Date | null
+    valid_until: Date | null
 }
 
 export async function createBudgetAllocation(values: NewBudgetAllocation) {
@@ -220,4 +281,298 @@ export async function createAllocationWorkflowLog(values: NewAllocationWorkflowL
         .values(values)
         .returningAll()
         .executeTakeFirstOrThrow()
+}
+
+export async function createAllocationWorkflowLogs(values: NewAllocationWorkflowLog[]) {
+    if (values.length === 0) return []
+
+    return await db
+        .insertInto('allocation_workflow_logs')
+        .values(values)
+        .returningAll()
+        .execute()
+}
+
+export async function seedAllocationPhaseDefaults(
+    fiscalYear: number,
+    phase: BudgetCyclePhase
+) {
+    if (phase === 'presidential_approval') {
+        await db.transaction().execute(async (trx) => {
+            await trx
+                .updateTable('budget_allocations')
+                .set({
+                    nep_amt: sql`budget_allocations.dbm_rec_amt`,
+                    updated_at: sql`now()`,
+                })
+                .where('budget_cycle_year', '=', fiscalYear)
+                .where('nep_amt', '=', 0)
+                .execute()
+
+            await trx
+                .updateTable('budget_allocations')
+                .set({
+                    auth_status: 'dbm_approved',
+                    updated_at: sql`now()`,
+                })
+                .where('budget_cycle_year', '=', fiscalYear)
+                .where('auth_status', '=', 'proposed')
+                .execute()
+
+            await trx
+                .updateTable('budget_allocations')
+                .set({
+                    auth_status: 'dbm_approved',
+                    updated_at: sql`now()`,
+                })
+                .where('budget_cycle_year', '=', fiscalYear)
+                .where('tier', '=', 1)
+                .where('auth_status', '=', 'draft')
+                .execute()
+        })
+    }
+
+    if (phase === 'legislative_deliberation') {
+        await db
+            .updateTable('budget_allocations')
+            .set({
+                gaa_amt: sql`budget_allocations.nep_amt`,
+                updated_at: sql`now()`,
+            })
+            .where('budget_cycle_year', '=', fiscalYear)
+            .where('gaa_amt', '=', 0)
+            .execute()
+    }
+}
+
+export async function updateAllocationStatusForYear(
+    fiscalYear: number,
+    fromStatuses: BudgetAllocation['auth_status'][],
+    toStatus: BudgetAllocation['auth_status']
+) {
+    if (fromStatuses.length === 0) return
+
+    await db
+        .updateTable('budget_allocations')
+        .set({
+            auth_status: toStatus,
+            updated_at: sql`now()`,
+        })
+        .where('budget_cycle_year', '=', fiscalYear)
+        .where('auth_status', 'in', fromStatuses)
+        .execute()
+}
+
+export async function getAllocationSignoffSummary(fiscalYear: number) {
+    const summary = await db
+        .selectFrom('budget_allocations')
+        .select(({ fn }) => [
+            fn.count<string>('id').as('allocation_count'),
+            fn.sum<number>('dbm_rec_amt').as('dbm_rec_total'),
+            fn.sum<number>('nep_amt').as('nep_total'),
+            fn.sum<number>('gaa_amt').as('gaa_total'),
+            fn.max<Date>('updated_at').as('last_updated_at'),
+        ])
+        .where('budget_cycle_year', '=', fiscalYear)
+        .executeTakeFirst()
+
+    return {
+        allocation_count: Number(summary?.allocation_count ?? 0),
+        dbm_rec_total: Number(summary?.dbm_rec_total ?? 0),
+        nep_total: Number(summary?.nep_total ?? 0),
+        gaa_total: Number(summary?.gaa_total ?? 0),
+        last_updated_at: summary?.last_updated_at ?? null,
+    } as AllocationSignoffSummary
+}
+
+export async function bulkUpdateAllocationValidity({
+    fiscalYear,
+    expenseClass,
+    tier,
+    validFrom,
+    validUntil,
+}: BulkValidityUpdateOptions) {
+    let query = db
+        .updateTable('budget_allocations')
+        .set({
+            valid_from: validFrom,
+            valid_until: validUntil,
+            updated_at: sql`now()`,
+        })
+        .where('budget_allocations.budget_cycle_year', '=', fiscalYear)
+
+    if (expenseClass) {
+        query = query.where('budget_allocations.item_catalog_id', 'in', (eb) =>
+            eb
+                .selectFrom('item_catalog')
+                .select('item_catalog.id')
+                .where('item_catalog.expense_class', '=', expenseClass)
+        )
+    }
+
+    if (tier) {
+        query = query.where('budget_allocations.tier', '=', tier)
+    }
+
+    return await query.executeTakeFirst()
+}
+
+export async function listAllocationsForValidityUpdate(
+    fiscalYear: number,
+    expenseClass?: ExpenseClass,
+    tier?: 1 | 2
+) {
+    let query = db
+        .selectFrom('budget_allocations')
+        .select(['id', 'valid_from', 'valid_until'])
+        .where('budget_cycle_year', '=', fiscalYear)
+
+    if (expenseClass) {
+        query = query.where('item_catalog_id', 'in', (eb) =>
+            eb
+                .selectFrom('item_catalog')
+                .select('item_catalog.id')
+                .where('item_catalog.expense_class', '=', expenseClass)
+        )
+    }
+
+    if (tier) {
+        query = query.where('tier', '=', tier)
+    }
+
+    return await query.execute() as AllocationValidityTarget[]
+}
+
+function buildAllocationDashboardBaseQuery(filters: AllocationDashboardFilters) {
+    const departmentId = filters.departmentId
+    const papId = filters.papId
+    const expenseClass = filters.expenseClass
+    const search = filters.search
+    let query = db
+        .selectFrom('budget_allocations')
+        .leftJoin('entities', 'entities.id', 'budget_allocations.entity_id')
+        .leftJoin('departments', 'departments.id', 'entities.id')
+        .leftJoin('agencies', 'agencies.id', 'entities.id')
+        .leftJoin('operating_units', 'operating_units.id', 'entities.id')
+        .leftJoin('agencies as parent_agencies', 'parent_agencies.id', 'operating_units.agency_id')
+        .leftJoin('departments as agency_departments', 'agency_departments.id', 'agencies.department_id')
+        .leftJoin('departments as parent_agency_departments', 'parent_agency_departments.id', 'parent_agencies.department_id')
+        .leftJoin('operating_units as parent_operating_units', 'parent_operating_units.id', 'operating_units.parent_ou_id')
+        .leftJoin('paps', 'paps.id', 'budget_allocations.pap_code')
+        .innerJoin('item_catalog', 'item_catalog.id', 'budget_allocations.item_catalog_id')
+        .leftJoin('uacs_funding_sources', 'uacs_funding_sources.code', 'budget_allocations.fund_code')
+        .where('budget_allocations.budget_cycle_year', '=', filters.fiscalYear)
+
+    if (departmentId) {
+        query = query.where(({ eb, or }) =>
+            or([
+                eb('departments.id', '=', departmentId),
+                eb('agency_departments.id', '=', departmentId),
+                eb('parent_agency_departments.id', '=', departmentId),
+            ])
+        )
+    }
+
+    if (papId) {
+        query = query.where('budget_allocations.pap_code', '=', papId)
+    }
+
+    if (expenseClass) {
+        query = query.where('item_catalog.expense_class', '=', expenseClass as 'PS' | 'MOOE' | 'CO' | 'FINEX')
+    }
+
+    if (search) {
+        query = query.where('item_catalog.name', 'ilike', `%${search}%`)
+    }
+
+    return query
+}
+
+export async function getAllocationDashboardRows(filters: AllocationDashboardFilters) {
+    let query = buildAllocationDashboardBaseQuery(filters)
+        .selectAll('budget_allocations')
+        .select([
+            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as('department_id'),
+            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as('department_name'),
+            sql<string | null>`COALESCE(departments.uacs_code, agency_departments.uacs_code, parent_agency_departments.uacs_code)`.as('department_uacs_code'),
+            sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as('agency_id'),
+            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as('agency_name'),
+            sql<string | null>`COALESCE(agencies.uacs_code, parent_agencies.uacs_code)`.as('agency_uacs_code'),
+            sql<string | null>`operating_units.id`.as('operating_unit_id'),
+            sql<string | null>`CASE
+                WHEN operating_units.id IS NULL THEN NULL
+                WHEN operating_units.parent_ou_id IS NULL THEN operating_units.name
+                ELSE operating_units.name
+            END`.as('operating_unit_name'),
+            sql<string | null>`CASE
+                WHEN operating_units.id IS NULL THEN NULL
+                WHEN operating_units.parent_ou_id IS NULL THEN CONCAT(COALESCE(operating_units.uacs_code, '00'), '00000')
+                ELSE CONCAT(COALESCE(parent_operating_units.uacs_code, '00'), COALESCE(operating_units.uacs_code, '00000'))
+            END`.as('operating_unit_uacs_code'),
+            'paps.title as pap_title',
+            'paps.project_type as pap_project_type',
+            sql<string | null>`CONCAT(
+                COALESCE(paps.cost_structure_code, ''),
+                COALESCE(paps.organizational_outcome_code, ''),
+                COALESCE(paps.program_code, ''),
+                COALESCE(paps.subprogram_code, ''),
+                COALESCE(paps.identifier_code, ''),
+                COALESCE(paps.project_title_code, ''),
+                COALESCE(paps.reserved_codes, '')
+            )`.as('pap_uacs_code'),
+            'uacs_funding_sources.description as fund_description',
+            'item_catalog.name as item_name',
+            'item_catalog.expense_class as expense_class',
+            'item_catalog.expense_class_code as expense_class_code',
+            'item_catalog.uacs_obj_code as object_code',
+        ])
+        .orderBy(sql`COALESCE(departments.uacs_code, agency_departments.uacs_code, parent_agency_departments.uacs_code)`, 'asc')
+        .orderBy(sql`COALESCE(agencies.uacs_code, parent_agencies.uacs_code)`, 'asc')
+        .orderBy(sql`CASE
+            WHEN operating_units.id IS NULL THEN '0000000'
+            WHEN operating_units.parent_ou_id IS NULL THEN CONCAT(COALESCE(operating_units.uacs_code, '00'), '00000')
+            ELSE CONCAT(COALESCE(parent_operating_units.uacs_code, '00'), COALESCE(operating_units.uacs_code, '00000'))
+        END`, 'asc')
+        .orderBy('budget_allocations.fund_code', 'asc')
+        .orderBy('item_catalog.expense_class_code', 'asc')
+        .orderBy('item_catalog.uacs_obj_code', 'asc')
+        .orderBy('paps.project_type', 'asc')
+        .orderBy('paps.title', 'asc')
+        .orderBy('item_catalog.name', 'asc')
+
+    if (typeof filters.limit === 'number') {
+        query = query.limit(filters.limit)
+    }
+
+    if (typeof filters.offset === 'number') {
+        query = query.offset(filters.offset)
+    }
+
+    return await query.execute() as AllocationDashboardRow[]
+}
+
+export async function countAllocationDashboardRows(filters: AllocationDashboardFilters) {
+    const result = await buildAllocationDashboardBaseQuery(filters)
+        .select(({ fn }) => fn.count<string>('budget_allocations.id').as('count'))
+        .executeTakeFirst()
+
+    return Number(result?.count ?? 0)
+}
+
+export async function getAllocationDashboardTotals(filters: Omit<AllocationDashboardFilters, 'limit' | 'offset'>) {
+    const result = await buildAllocationDashboardBaseQuery(filters)
+        .select(({ fn }) => [
+            fn.sum<number>('budget_allocations.proposed_amt').as('proposed_total'),
+            fn.sum<number>('budget_allocations.dbm_rec_amt').as('dbm_rec_total'),
+            fn.sum<number>('budget_allocations.nep_amt').as('nep_total'),
+            fn.sum<number>('budget_allocations.gaa_amt').as('gaa_total'),
+        ])
+        .executeTakeFirst()
+
+    return {
+        proposed_total: Number(result?.proposed_total ?? 0),
+        dbm_rec_total: Number(result?.dbm_rec_total ?? 0),
+        nep_total: Number(result?.nep_total ?? 0),
+        gaa_total: Number(result?.gaa_total ?? 0),
+    } as AllocationDashboardTotals
 }

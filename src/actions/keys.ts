@@ -1,7 +1,7 @@
 'use server'
 
 import bcrypt from 'bcrypt'
-import { createEntityRepository, createKeyRepository, createFormRepository, createAuditRepository } from '../db/factory'
+import { createEntityRepository, createKeyRepository, createFormRepository, createAuditRepository, createBudgetSettingsRepository, createBudgetAllocationRepository } from '../db/factory'
 import { sessionDetails, sessionWithEntity } from './auth'
 import { redirect } from 'next/navigation'
 import { verifySignature } from '../lib/crypto'
@@ -25,6 +25,8 @@ const auditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'post
 const staffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const retireeRepository = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
 const proposalRepository = createProposalRepository(process.env.DATABASE_TYPE || 'postgres')
+const budgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
+const budgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 
 async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
     const activeCycle = await getActiveBudgetPrepCycle()
@@ -33,6 +35,52 @@ async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
         (activeCycle.current_phase === 'preparation' ||
             activeCycle.current_phase === 'dbm_review')
     )
+}
+
+async function validateAllocationSignoffPhase(formType: string, fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle()
+    if (!activeCycle || activeCycle.fiscal_year !== fiscalYear) {
+        throw new Error('This allocation sign-off is not available outside the active fiscal year.')
+    }
+
+    if (formType === 'nep' && activeCycle.current_phase !== 'presidential_approval') {
+        throw new Error('NEP sign-off is only available during the presidential approval phase.')
+    }
+
+    if (formType === 'gaa' && activeCycle.current_phase !== 'legislative_deliberation') {
+        throw new Error('GAA sign-off is only available during legislative deliberation.')
+    }
+}
+
+async function advanceAllocationPhaseAfterApproval(formType: string, fiscalYear: number, changedBy: string) {
+    if (formType === 'nep') {
+        await budgetAllocationRepository.updateAllocationStatusForYear(
+            fiscalYear,
+            ['dbm_approved'],
+            'nep_approved'
+        )
+        await budgetSettingsRepository.editBudgetCycle(
+            fiscalYear,
+            'active',
+            'legislative_deliberation',
+            changedBy
+        )
+        await budgetAllocationRepository.seedAllocationPhaseDefaults(fiscalYear, 'legislative_deliberation')
+    }
+
+    if (formType === 'gaa') {
+        await budgetAllocationRepository.updateAllocationStatusForYear(
+            fiscalYear,
+            ['nep_approved'],
+            'gaa_approved'
+        )
+        await budgetSettingsRepository.editBudgetCycle(
+            fiscalYear,
+            'locked',
+            'enacted_gaa',
+            changedBy
+        )
+    }
 }
 
 async function getFormFiscalYear(tableName: string, formId: string): Promise<number | null> {
@@ -162,7 +210,10 @@ export async function verifyAndSubmitSignature(
     
         // Get form's current status
         const form = await formRepository.getFormAuthStatus(formId)
-        const fiscalYear = await getFormFiscalYear(tableName, formId)
+        const formRecord = ['nep', 'gaa'].includes(form.type)
+            ? await formRepository.getFormById(formId)
+            : null
+        const fiscalYear = formRecord?.fiscal_year ?? await getFormFiscalYear(tableName, formId)
         const canBypassClosedCycle =
             allowClosedCycleAction &&
             session.user.role === 'dbm' &&
@@ -170,7 +221,11 @@ export async function verifyAndSubmitSignature(
             fiscalYear !== null &&
             await canDbmActOnFormForFiscalYear(fiscalYear)
 
-        if (
+        const isAllocationSignoffForm = ['nep', 'gaa'].includes(form.type)
+
+        if (fiscalYear !== null && isAllocationSignoffForm) {
+            await validateAllocationSignoffPhase(form.type, fiscalYear)
+        } else if (
             fiscalYear !== null &&
             !canBypassClosedCycle &&
             !(await isBudgetPrepActiveForYear(fiscalYear))
@@ -197,7 +252,8 @@ export async function verifyAndSubmitSignature(
         })
     
         // Update form status
-        await formRepository.updateFormAuthStatus(formId, getNextStatus(form.auth_status ?? '', workflow, 'approve') ?? '')
+        const nextStatus = getNextStatus(form.auth_status ?? '', workflow, 'approve') ?? ''
+        await formRepository.updateFormAuthStatus(formId, nextStatus)
 
         const stringSignaturePayload = typeof signaturePayload === 'string' ? signaturePayload : canonicalStringify(signaturePayload)
 
@@ -218,7 +274,11 @@ export async function verifyAndSubmitSignature(
         )
     
         if (!logResult.success) throw new Error('Failed to log signature')
-    
+
+        if (fiscalYear !== null && nextStatus === 'approved' && isAllocationSignoffForm) {
+            await advanceAllocationPhaseAfterApproval(form.type, fiscalYear, session.user.id)
+        }
+
         return signatory
     } catch (error) {
         console.error(`Failed to verify and submit signature:`, error)

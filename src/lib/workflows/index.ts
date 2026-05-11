@@ -1,6 +1,7 @@
 import { RETIREE_WORKFLOW } from "./retiree-flow"
 import { STAFFING_WORKFLOW } from "./staffing-flow"
 import { PROPOSAL_WORKFLOW } from "./proposal-flow"
+import { ALLOCATION_SIGNOFF_WORKFLOW } from "./allocation-signoff-flow"
 
 export type WorkflowTransition = {
     required_roles: string[]
@@ -77,6 +78,8 @@ export const WORKFLOWS: Record<string, Workflow> = {
     bp_local_proposal_expanded: PROPOSAL_WORKFLOW,
     bp_foreign_proposal_new: PROPOSAL_WORKFLOW,
     bp_foreign_proposal_expanded: PROPOSAL_WORKFLOW,
+    nep: ALLOCATION_SIGNOFF_WORKFLOW,
+    gaa: ALLOCATION_SIGNOFF_WORKFLOW,
 }
 
 export function getWorkflow(formType: string): Workflow {

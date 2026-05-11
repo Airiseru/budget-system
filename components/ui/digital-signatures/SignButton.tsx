@@ -26,6 +26,8 @@ type Props = {
     toAuthStatus?: string;
     onApproved?: () => void;
     allowClosedCycleAction?: boolean;
+    disabled?: boolean;
+    disabledMessage?: string;
 };
 
 type Step = "idle" | "pin" | "signing" | "signed";
@@ -41,6 +43,8 @@ export function SignButton({
     toAuthStatus,
     onApproved,
     allowClosedCycleAction = false,
+    disabled = false,
+    disabledMessage,
 }: Props) {
     const [step, setStep] = useState<Step>("idle");
     const [pin, setPin] = useState("");
@@ -146,13 +150,19 @@ export function SignButton({
 
     if (step === "idle") {
         return (
-            <Button
-                onClick={() => setStep("pin")}
-                className="gap-2 bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80"
-            >
-                <PenLine className="h-4 w-4" />
-                Sign Document
-            </Button>
+            <div className="space-y-2">
+                <Button
+                    onClick={() => setStep("pin")}
+                    disabled={disabled}
+                    className="gap-2 bg-accent-foreground text-white px-4 py-2 rounded disabled:opacity-50 hover:bg-accent-foreground/80"
+                >
+                    <PenLine className="h-4 w-4" />
+                    Sign Document
+                </Button>
+                {disabled && disabledMessage ? (
+                    <p className="text-xs text-muted-foreground">{disabledMessage}</p>
+                ) : null}
+            </div>
         );
     }
 

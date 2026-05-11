@@ -18,6 +18,16 @@ export async function getFormById(id: string) {
         .executeTakeFirstOrThrow()
 }
 
+export async function getLatestFormByTypeAndFiscalYear(type: string, fiscalYear: number) {
+    return await db
+        .selectFrom('forms')
+        .selectAll()
+        .where('type', '=', type)
+        .where('fiscal_year', '=', fiscalYear)
+        .orderBy('created_at', 'desc')
+        .executeTakeFirst()
+}
+
 export async function findFormsByParentId(id: string) {
     return await db
         .selectFrom('forms')

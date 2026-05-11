@@ -23,6 +23,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('dbm_rec_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
         .addColumn('nep_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
         .addColumn('gaa_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
+        .addColumn('prev_year_gaa_amt', 'numeric(15, 2)', (col) => col.notNull().defaultTo(0))
 
         // Classification
         .addColumn('release_classification', 'varchar', (col) => col.notNull().defaultTo('unclassified'))

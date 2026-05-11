@@ -40,6 +40,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
     }
 
     const familyHasApprovedVersion = await FormRepository.hasApprovedFormInFamily(formId)
+    const formRecord = await FormRepository.getFormById(formId)
 
     const staff = await StaffingRepository.getStaffingById(formId);
     if (!staff) notFound()
@@ -84,7 +85,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
 
     const compensationRules = await SalaryRepository.getLatestCompensationRules()
     const highestSG = schedule.rates[schedule.rates.length - 1].salary_grade
-    const ownerEntityName = await EntityRepository.getFullEntityNameById(staff.entity_id)
+    const ownerEntityName = await EntityRepository.getFullEntityNameById(formRecord.entity_id)
 
     return (
         <main className="m-4">
@@ -103,7 +104,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
                 staff={staff}
                 availablePaps={paps.map(p => ({ id: p.id, title: p.title }))} 
                 userId={session.user.id}
-                entityId={staff.entity_id} 
+                entityId={formRecord.entity_id} 
                 entityName={ownerEntityName || "Unknown Agency"} 
             />
         </main>

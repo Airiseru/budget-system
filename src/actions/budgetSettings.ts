@@ -4,10 +4,11 @@ import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { sessionDetails } from './auth'
-import { createBudgetSettingsRepository } from '../db/factory'
+import { createBudgetSettingsRepository, createBudgetAllocationRepository } from '../db/factory'
 import { StartBudgetCycleSchema, EditBudgetCycleSchema, BudgetCycleFormState } from '../lib/validations/budgetSettings'
 
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
+const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 
 async function requireBudgetCycleManager() {
     const session = await sessionDetails()
@@ -124,6 +125,17 @@ export async function editBudgetCycleAction(
             session.user.id,
             parsed.data.legal_basis_ref || null
         )
+
+        if (
+            parsed.data.prep_status === 'active' &&
+            (parsed.data.current_phase === 'presidential_approval' ||
+                parsed.data.current_phase === 'legislative_deliberation')
+        ) {
+            await BudgetAllocationRepository.seedAllocationPhaseDefaults(
+                parsed.data.fiscal_year,
+                parsed.data.current_phase
+            )
+        }
     } catch (error) {
         return {
             formErrors: [error instanceof Error ? error.message : 'Failed to update budget cycle.'],
