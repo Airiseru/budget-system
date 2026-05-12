@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { auth } from '@/src/lib/auth'
 import { createBudgetAllocationRepository, createBudgetSettingsRepository } from '@/src/db/factory'
+import { parseDateOnlyToUtcNoon } from '@/src/lib/dateOnly'
 
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -70,7 +71,7 @@ export async function PATCH(
     if (action === 'remove_line_item') {
         update = { gaa_amt: 0 }
     } else if (field === 'valid_from' || field === 'valid_until') {
-        update = { [field]: rawValue ? new Date(rawValue) : null }
+        update = { [field]: rawValue ? parseDateOnlyToUtcNoon(rawValue) : null }
     } else if (field) {
         const clampedValue = clampNonNegativeNumber(rawValue!)
         if (!Number.isFinite(clampedValue)) {
@@ -117,4 +118,23 @@ export async function PATCH(
     })
 
     return NextResponse.json({ success: true, allocation: updated })
+}
+
+export async function GET(
+    _request: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    const session = await auth.api.getSession({ headers: await headers() })
+    if (!session || session.user.role !== 'dbm') {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { id } = await params
+    const allocation = await BudgetAllocationRepository.getBudgetAllocationById(id)
+    if (!allocation) {
+        return NextResponse.json({ error: 'Allocation not found' }, { status: 404 })
+    }
+
+    const logs = await BudgetAllocationRepository.listAllocationWorkflowLogs(id)
+    return NextResponse.json({ allocation, logs })
 }

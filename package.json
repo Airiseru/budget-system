@@ -10,7 +10,7 @@
     "migrate": "cross-env NODE_ENV=development tsx src/db/postgres/migrate.ts"
   },
   "dependencies": {
-    "@base-ui/react": "^1.3.0",
+    "@base-ui/react": "^1.4.1",
     "@bedev.io/nextjs-crons": "^1.0.5",
     "@next/env": "^16.2.0",
     "@node-rs/argon2": "^2.0.2",

@@ -50,6 +50,13 @@ async function validateAllocationSignoffPhase(formType: string, fiscalYear: numb
     if (formType === 'gaa' && activeCycle.current_phase !== 'legislative_deliberation') {
         throw new Error('GAA sign-off is only available during legislative deliberation.')
     }
+
+    if (activeCycle.current_phase === 'legislative_deliberation') {
+        const missingValidityCount = await budgetAllocationRepository.countAllocationsMissingValidityByYear(fiscalYear)
+        if (missingValidityCount > 0) {
+            throw new Error('All allocations must have a complete validity period before this stage can be signed.')
+        }
+    }
 }
 
 async function advanceAllocationPhaseAfterApproval(formType: string, fiscalYear: number, changedBy: string) {

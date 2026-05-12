@@ -97,6 +97,7 @@ export type AllocationDashboardTotals = {
 
 export type AllocationSignoffSummary = {
     allocation_count: number
+    missing_validity_count: number
     dbm_rec_total: number
     nep_total: number
     gaa_total: number
@@ -186,6 +187,10 @@ export async function listBudgetAllocationsByYear({
         .leftJoin('departments', 'departments.id', 'entities.id')
         .leftJoin('agencies', 'agencies.id', 'entities.id')
         .leftJoin('operating_units', 'operating_units.id', 'entities.id')
+        .leftJoin('agencies as parent_agencies', 'parent_agencies.id', 'operating_units.agency_id')
+        .leftJoin('departments as agency_departments', 'agency_departments.id', 'agencies.department_id')
+        .leftJoin('departments as parent_agency_departments', 'parent_agency_departments.id', 'parent_agencies.department_id')
+        .leftJoin('operating_units as parent_operating_units', 'parent_operating_units.id', 'operating_units.parent_ou_id')
         .leftJoin('paps', 'paps.id', 'budget_allocations.pap_code')
         .innerJoin('item_catalog', 'item_catalog.id', 'budget_allocations.item_catalog_id')
         .leftJoin('uacs_funding_sources', 'uacs_funding_sources.code', 'budget_allocations.fund_code')
@@ -212,6 +217,30 @@ export async function listBudgetAllocationsByYear({
     }
 
     query = query
+        .orderBy(sql`CONCAT(
+            COALESCE(departments.uacs_code, agency_departments.uacs_code, parent_agency_departments.uacs_code, '00'),
+            COALESCE(agencies.uacs_code, parent_agencies.uacs_code, '000'),
+            CASE
+                WHEN operating_units.id IS NULL THEN '00'
+                WHEN operating_units.parent_ou_id IS NULL THEN COALESCE(operating_units.uacs_code, '00')
+                ELSE COALESCE(parent_operating_units.uacs_code, '00')
+            END,
+            CASE
+                WHEN operating_units.id IS NULL THEN '00000'
+                WHEN operating_units.parent_ou_id IS NULL THEN '00000'
+                ELSE COALESCE(operating_units.uacs_code, '00000')
+            END
+        )`, 'asc')
+        .orderBy(sql`CONCAT(
+            COALESCE(paps.cost_structure_code, ''),
+            COALESCE(paps.organizational_outcome_code, ''),
+            COALESCE(paps.program_code, ''),
+            COALESCE(paps.subprogram_code, ''),
+            COALESCE(paps.identifier_code, ''),
+            COALESCE(paps.project_title_code, ''),
+            COALESCE(paps.reserved_codes, '')
+        )`, 'asc')
+        .orderBy('item_catalog.uacs_obj_code', 'asc')
         .orderBy('budget_allocations.updated_at', 'desc')
 
     if (typeof limit === 'number') {
@@ -307,6 +336,16 @@ export async function seedAllocationPhaseDefaults(
                 })
                 .where('budget_cycle_year', '=', fiscalYear)
                 .where('nep_amt', '=', 0)
+                .where(({ exists, not, selectFrom }) =>
+                    not(
+                        exists(
+                            selectFrom('allocation_workflow_logs')
+                                .select('allocation_workflow_logs.id')
+                                .whereRef('allocation_workflow_logs.allocation_id', '=', 'budget_allocations.id')
+                                .where('allocation_workflow_logs.workflow_stage', '=', 'presidential_review')
+                        )
+                    )
+                )
                 .execute()
 
             await trx
@@ -341,6 +380,16 @@ export async function seedAllocationPhaseDefaults(
             })
             .where('budget_cycle_year', '=', fiscalYear)
             .where('gaa_amt', '=', 0)
+            .where(({ exists, not, selectFrom }) =>
+                not(
+                    exists(
+                        selectFrom('allocation_workflow_logs')
+                            .select('allocation_workflow_logs.id')
+                            .whereRef('allocation_workflow_logs.allocation_id', '=', 'budget_allocations.id')
+                            .where('allocation_workflow_logs.workflow_stage', '=', 'congressional_bicam')
+                    )
+                )
+            )
             .execute()
     }
 }
@@ -368,6 +417,7 @@ export async function getAllocationSignoffSummary(fiscalYear: number) {
         .selectFrom('budget_allocations')
         .select(({ fn }) => [
             fn.count<string>('id').as('allocation_count'),
+            sql<number>`SUM(CASE WHEN valid_from IS NULL OR valid_until IS NULL THEN 1 ELSE 0 END)`.as('missing_validity_count'),
             fn.sum<number>('dbm_rec_amt').as('dbm_rec_total'),
             fn.sum<number>('nep_amt').as('nep_total'),
             fn.sum<number>('gaa_amt').as('gaa_total'),
@@ -378,11 +428,28 @@ export async function getAllocationSignoffSummary(fiscalYear: number) {
 
     return {
         allocation_count: Number(summary?.allocation_count ?? 0),
+        missing_validity_count: Number(summary?.missing_validity_count ?? 0),
         dbm_rec_total: Number(summary?.dbm_rec_total ?? 0),
         nep_total: Number(summary?.nep_total ?? 0),
         gaa_total: Number(summary?.gaa_total ?? 0),
         last_updated_at: summary?.last_updated_at ?? null,
     } as AllocationSignoffSummary
+}
+
+export async function countAllocationsMissingValidityByYear(fiscalYear: number) {
+    const result = await db
+        .selectFrom('budget_allocations')
+        .select(({ fn }) => fn.count<string>('id').as('count'))
+        .where('budget_cycle_year', '=', fiscalYear)
+        .where(({ or, eb }) =>
+            or([
+                eb('valid_from', 'is', null),
+                eb('valid_until', 'is', null),
+            ])
+        )
+        .executeTakeFirst()
+
+    return Number(result?.count ?? 0)
 }
 
 export async function bulkUpdateAllocationValidity({
@@ -533,11 +600,16 @@ export async function getAllocationDashboardRows(filters: AllocationDashboardFil
             WHEN operating_units.parent_ou_id IS NULL THEN CONCAT(COALESCE(operating_units.uacs_code, '00'), '00000')
             ELSE CONCAT(COALESCE(parent_operating_units.uacs_code, '00'), COALESCE(operating_units.uacs_code, '00000'))
         END`, 'asc')
-        .orderBy('budget_allocations.fund_code', 'asc')
-        .orderBy('item_catalog.expense_class_code', 'asc')
+        .orderBy(sql`CONCAT(
+            COALESCE(paps.cost_structure_code, ''),
+            COALESCE(paps.organizational_outcome_code, ''),
+            COALESCE(paps.program_code, ''),
+            COALESCE(paps.subprogram_code, ''),
+            COALESCE(paps.identifier_code, ''),
+            COALESCE(paps.project_title_code, ''),
+            COALESCE(paps.reserved_codes, '')
+        )`, 'asc')
         .orderBy('item_catalog.uacs_obj_code', 'asc')
-        .orderBy('paps.project_type', 'asc')
-        .orderBy('paps.title', 'asc')
         .orderBy('item_catalog.name', 'asc')
 
     if (typeof filters.limit === 'number') {

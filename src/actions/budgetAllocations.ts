@@ -327,6 +327,7 @@ export async function loadDbmAllocationDashboard({
             ? BudgetAllocationRepository.getAllocationSignoffSummary(viewingYear)
             : Promise.resolve({
                 allocation_count: 0,
+                missing_validity_count: 0,
                 dbm_rec_total: 0,
                 nep_total: 0,
                 gaa_total: 0,
@@ -389,6 +390,7 @@ export async function loadDbmAllocationDashboard({
             },
             signatories: signoffSignatories,
             alreadySigned: !!signoffAlreadySigned,
+            missingValidityCount: signoffSummary.missing_validity_count,
             userCanSign:
                 signoffForm.auth_status === 'pending_dbm' &&
                 session.user.access_level === 'approve' &&
@@ -423,7 +425,8 @@ export async function loadDbmAllocationDashboard({
             selectedExpenseClass ||
             search.trim()
         ),
-        yearLockedToActivePreparation: activeCycle?.current_phase === 'preparation',
+        yearLockedToActivePreparation: !!activeCycle &&
+            ['dbm_review', 'presidential_approval', 'legislative_deliberation'].includes(activeCycle.current_phase),
         availableYears: cycles.map((cycle) => cycle.fiscal_year),
         signoff: signoffData,
     }
@@ -446,8 +449,11 @@ export async function loadTierOneDashboardForYear({
 
     const activeCycle = await BudgetSettingsRepository.getActiveBudgetCycle()
     const cycles = await BudgetSettingsRepository.listBudgetCycles()
-    const viewingYear = activeCycle?.fiscal_year ?? selectedYear ?? cycles[0]?.fiscal_year ?? null
-    const isViewingOnly = !activeCycle || !['preparation', 'dbm_review'].includes(activeCycle.current_phase)
+    const isEditablePhase = !!activeCycle && ['preparation', 'dbm_review'].includes(activeCycle.current_phase)
+    const viewingYear = isEditablePhase
+        ? activeCycle.fiscal_year
+        : selectedYear ?? activeCycle?.fiscal_year ?? cycles[0]?.fiscal_year ?? null
+    const isViewingOnly = !isEditablePhase
     const safePage = Number.isFinite(page) && page > 0 ? page : 1
     const entityIds = await getTierOneEntityFilterIds(selectedEntityId, selectedEntityMode)
     const [entitySegments, paps, items, fundingSources] = await Promise.all([

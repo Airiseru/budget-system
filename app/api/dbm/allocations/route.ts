@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import { auth } from '@/src/lib/auth'
 import { createBudgetAllocationRepository, createBudgetSettingsRepository } from '@/src/db/factory'
 import { LegislativeInsertionSchema } from '@/src/lib/validations/budgetAllocations'
+import { parseDateOnlyToUtcNoon } from '@/src/lib/dateOnly'
 
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -56,8 +57,8 @@ export async function POST(request: Request) {
         nep_amt: 0,
         gaa_amt: parsed.data.gaa_amt,
         prev_year_gaa_amt: 0,
-        valid_from: parsed.data.valid_from ? new Date(parsed.data.valid_from) : null,
-        valid_until: parsed.data.valid_until ? new Date(parsed.data.valid_until) : null,
+        valid_from: parsed.data.valid_from ? parseDateOnlyToUtcNoon(parsed.data.valid_from) : null,
+        valid_until: parsed.data.valid_until ? parseDateOnlyToUtcNoon(parsed.data.valid_until) : null,
         auth_status: 'nep_approved',
     })
 

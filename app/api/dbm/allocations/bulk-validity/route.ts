@@ -3,6 +3,7 @@ import { headers } from 'next/headers'
 import { auth } from '@/src/lib/auth'
 import { createBudgetAllocationRepository, createBudgetSettingsRepository } from '@/src/db/factory'
 import { BulkValidityUpdateSchema } from '@/src/lib/validations/budgetAllocations'
+import { parseDateOnlyToUtcNoon } from '@/src/lib/dateOnly'
 
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -40,8 +41,8 @@ export async function PATCH(request: Request) {
         fiscalYear: activeCycle.fiscal_year,
         expenseClass: parsed.data.scope === 'all' ? undefined : parsed.data.expense_class as 'PS' | 'MOOE' | 'CO' | 'FINEX' | undefined,
         tier: parsed.data.scope === 'expense_class_and_tier' ? parsed.data.tier : undefined,
-        validFrom: parsed.data.valid_from ? new Date(parsed.data.valid_from) : null,
-        validUntil: parsed.data.valid_until ? new Date(parsed.data.valid_until) : null,
+        validFrom: parsed.data.valid_from ? parseDateOnlyToUtcNoon(parsed.data.valid_from) : null,
+        validUntil: parsed.data.valid_until ? parseDateOnlyToUtcNoon(parsed.data.valid_until) : null,
     })
 
     await BudgetAllocationRepository.createAllocationWorkflowLogs(

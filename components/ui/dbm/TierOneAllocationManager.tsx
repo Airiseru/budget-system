@@ -6,12 +6,11 @@ import { useRouter } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
 import BudgetPrepClosedBanner from '@/components/ui/BudgetPrepClosedBanner'
 import { Button } from '@/components/ui/button'
+import SearchableComboboxField, { type SearchableComboboxOption } from '@/components/ui/dbm/SearchableComboboxField'
 import {
     Select,
     SelectContent,
-    SelectGroup,
     SelectItem,
-    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
@@ -67,6 +66,60 @@ const PHASE_LABELS = {
     legislative_deliberation: 'Legislative Deliberation',
     enacted_gaa: 'Enacted GAA',
 } as const
+
+const SELECT_TRIGGER_CLASSNAME =
+    "border px-3 py-5 w-full rounded border-border text-base bg-background mb-0 min-h-12 max-w-full overflow-hidden *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate"
+
+const SELECT_CONTENT_CLASSNAME =
+    "min-w-[var(--anchor-width)] w-max max-w-[min(90vw,36rem)] h-auto"
+
+function buildHierarchicalEntityOptions(
+    departments: EntityOption[],
+    agencies: EntityOption[],
+    operatingUnits: EntityOption[]
+): SearchableComboboxOption[] {
+    const ordered: SearchableComboboxOption[] = []
+    const pushOperatingUnits = (agencyId: string, parentOuId: string | null = null) => {
+        const matches = operatingUnits.filter(
+            (entity) => entity.agency_id === agencyId && (entity.parent_ou_id ?? null) === parentOuId
+        )
+
+        for (const entity of matches) {
+            ordered.push({
+                value: entity.id,
+                label: `${entity.uacs_code ?? '—'} • ${entity.name}`,
+            })
+            pushOperatingUnits(agencyId, entity.id)
+        }
+    }
+
+    for (const department of departments) {
+        ordered.push({
+            value: department.id,
+            label: `${department.uacs_code ?? '—'} • ${department.name}`,
+        })
+
+        const departmentAgencies = agencies.filter((agency) => agency.department_id === department.id)
+        for (const agency of departmentAgencies) {
+            ordered.push({
+                value: agency.id,
+                label: `${agency.uacs_code ?? '—'} • ${agency.name}`,
+            })
+            pushOperatingUnits(agency.id)
+        }
+    }
+
+    const independentAgencies = agencies.filter((agency) => agency.department_id == null)
+    for (const agency of independentAgencies) {
+        ordered.push({
+            value: agency.id,
+            label: `${agency.uacs_code ?? '—'} • ${agency.name}`,
+        })
+        pushOperatingUnits(agency.id)
+    }
+
+    return ordered
+}
 
 type Props = {
     activeCycle: BudgetCycle | null
@@ -134,8 +187,6 @@ export function TierOneAllocationManager({
     const operatingUnits = entities
         .filter((entity) => entity.entity_type === 'operating_unit')
         .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
-    const independentAgencies = agencies.filter((agency) => agency.department_id == null)
-
     const availablePaps = paps.filter((pap) => pap.entity_id == null || pap.entity_id === entityId)
 
     const availableItems = items.filter((item) => {
@@ -144,47 +195,6 @@ export function TierOneAllocationManager({
         return !!papCode && item.pap_code === papCode
     })
 
-    const getEntityName = (id: string) => {
-        const department = departments.find((entity) => entity.id === id)
-        if (department) return department.name
-
-        const agency = agencies.find((entity) => entity.id === id)
-        if (agency) return agency.name
-
-        const operatingUnit = operatingUnits.find((entity) => entity.id === id)
-        if (operatingUnit) return operatingUnit.name
-
-        return ''
-    }
-
-    const getFilterEntityLabel = (id: string) => {
-        if (!id || id === 'all') return 'All entities'
-
-        const department = departments.find((entity) => entity.id === id)
-        if (department) {
-            return `${department.uacs_code ?? '—'} • ${department.name}`
-        }
-
-        const agency = agencies.find((entity) => entity.id === id)
-        if (agency) {
-            return `${agency.uacs_code ?? '—'} • ${agency.name}`
-        }
-
-        const operatingUnit = operatingUnits.find((entity) => entity.id === id)
-        if (operatingUnit) {
-            return `${operatingUnit.uacs_code ?? '—'} • ${operatingUnit.name}`
-        }
-
-        return 'All entities'
-    }
-
-    const getFilterPapLabel = (id: string) => {
-        if (!id || id === 'all') return 'All PAPs'
-        const pap = sortedPapFilters.find((entry) => entry.id === id)
-        if (!pap) return 'All PAPs'
-        return pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`
-    }
-
     const [selectedYear, setSelectedYear] = useState(viewingYear ? String(viewingYear) : '')
     const [selectedFilterEntityId, setSelectedFilterEntityId] = useState(selectedEntityId || 'all')
     const [selectedFilterMode, setSelectedFilterMode] = useState<'exact' | 'hierarchical'>(selectedEntityMode)
@@ -192,6 +202,13 @@ export function TierOneAllocationManager({
     const [filtersOpen, setFiltersOpen] = useState(true)
     const readOnlyMode = mode === 'create' && isViewingOnly
     const sortedPapFilters = [...paps].sort((a, b) => a.title.localeCompare(b.title))
+
+    const entityOptions = buildHierarchicalEntityOptions(departments, agencies, operatingUnits)
+
+    const filterEntityOptions: SearchableComboboxOption[] = [
+        { value: 'all', label: 'All entities' },
+        ...entityOptions,
+    ]
     const filteredPapOptions = (() => {
         if (selectedFilterEntityId === 'all') return sortedPapFilters
 
@@ -242,6 +259,29 @@ export function TierOneAllocationManager({
             descendantOperatingUnitIds.includes(pap.entity_id ?? '')
         )
     })()
+
+    const filteredPapComboboxOptions: SearchableComboboxOption[] = [
+        { value: 'all', label: 'All PAPs' },
+        ...filteredPapOptions.map((pap) => ({
+            value: pap.id,
+            label: pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`,
+        })),
+    ]
+
+    const availablePapOptions: SearchableComboboxOption[] = availablePaps.map((pap) => ({
+        value: pap.id,
+        label: pap.entity_id == null ? `${pap.title} (All entities)` : pap.title,
+    }))
+
+    const availableItemOptions: SearchableComboboxOption[] = availableItems.map((item) => ({
+        value: item.id,
+        label: `${item.name} (${item.expense_class})`,
+    }))
+
+    const fundingSourceOptions: SearchableComboboxOption[] = fundingSources.map((source) => ({
+        value: source.code,
+        label: `${source.code} • ${source.description}`,
+    }))
 
     const getFilterLink = (overrides: {
         year?: string
@@ -342,12 +382,12 @@ export function TierOneAllocationManager({
                                     <div className="space-y-2 w-full sm:w-[220px] lg:flex-1 lg:min-w-[200px] lg:max-w-[260px]">
                                         <p className="font-medium">Fiscal Year</p>
                                         <Select value={selectedYear} onValueChange={(value) => setSelectedYear(value ?? '')}>
-                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
+                                            <SelectTrigger className={SELECT_TRIGGER_CLASSNAME}>
                                                 <SelectValue placeholder="Select fiscal year">
                                                     {selectedYear ? `FY ${selectedYear}` : 'Select fiscal year'}
                                                 </SelectValue>
                                             </SelectTrigger>
-                                            <SelectContent>
+                                            <SelectContent className={SELECT_CONTENT_CLASSNAME}>
                                                 {availableYears.map((year) => (
                                                     <SelectItem key={year} value={String(year)}>
                                                         FY {year}
@@ -358,63 +398,17 @@ export function TierOneAllocationManager({
                                     </div>
                                     <div className="space-y-2 w-full lg:flex-[1.4] lg:min-w-[280px] lg:max-w-[440px]">
                                         <p className="font-medium">Entity</p>
-                                        <Select value={selectedFilterEntityId} onValueChange={(value) => {
-                                            setSelectedFilterEntityId(value ?? 'all')
-                                            setSelectedFilterPapCode('all')
-                                        }}>
-                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
-                                                <SelectValue placeholder="All entities">
-                                                    {getFilterEntityLabel(selectedFilterEntityId)}
-                                                </SelectValue>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All entities</SelectItem>
-                                                {departments.map((department) => {
-                                                    const childAgencies = agencies.filter((agency) => agency.department_id === department.id)
-                                                    return (
-                                                        <SelectGroup key={department.id}>
-                                                            <SelectLabel className="bg-muted/50">{department.name}</SelectLabel>
-                                                            <SelectItem value={department.id}>
-                                                                {`${department.uacs_code ?? '—'} • ${department.name}`}
-                                                            </SelectItem>
-                                                            {childAgencies.map((agency) => (
-                                                                <div key={agency.id}>
-                                                                    <SelectItem value={agency.id}>
-                                                                        {`${agency.uacs_code ?? '—'} • ${agency.name}`}
-                                                                    </SelectItem>
-                                                                    {operatingUnits
-                                                                        .filter((operatingUnit) => operatingUnit.agency_id === agency.id)
-                                                                        .map((operatingUnit) => (
-                                                                            <SelectItem key={operatingUnit.id} value={operatingUnit.id}>
-                                                                                {`${operatingUnit.uacs_code ?? '—'} • ↳ ${operatingUnit.name}`}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                </div>
-                                                            ))}
-                                                        </SelectGroup>
-                                                    )
-                                                })}
-                                                {independentAgencies.length > 0 && (
-                                                    <SelectGroup>
-                                                        <SelectLabel className="bg-muted/50">Independent Agencies & SUCs</SelectLabel>
-                                                        {independentAgencies.map((agency) => (
-                                                            <div key={agency.id}>
-                                                                <SelectItem value={agency.id}>
-                                                                    {`${agency.uacs_code ?? '—'} • ${agency.name}`}
-                                                                </SelectItem>
-                                                                {operatingUnits
-                                                                    .filter((operatingUnit) => operatingUnit.agency_id === agency.id)
-                                                                    .map((operatingUnit) => (
-                                                                        <SelectItem key={operatingUnit.id} value={operatingUnit.id}>
-                                                                            {`${operatingUnit.uacs_code ?? '—'} • ↳ ${operatingUnit.name}`}
-                                                                        </SelectItem>
-                                                                    ))}
-                                                            </div>
-                                                        ))}
-                                                    </SelectGroup>
-                                                )}
-                                            </SelectContent>
-                                        </Select>
+                                        <SearchableComboboxField
+                                            items={filterEntityOptions}
+                                            value={selectedFilterEntityId}
+                                            placeholder="All entities"
+                                            searchPlaceholder="Search entities"
+                                            emptyText="No entities found."
+                                            onValueChange={(value) => {
+                                                setSelectedFilterEntityId(value || 'all')
+                                                setSelectedFilterPapCode('all')
+                                            }}
+                                        />
                                     </div>
                                     <div className="space-y-2 w-full sm:w-[220px] lg:flex-1 lg:min-w-[200px] lg:max-w-[260px]">
                                         <p className="font-medium">Match Type</p>
@@ -423,12 +417,12 @@ export function TierOneAllocationManager({
                                             onValueChange={(value) => setSelectedFilterMode((value ?? 'exact') as 'exact' | 'hierarchical')}
                                             disabled={selectedFilterEntityId === 'all'}
                                         >
-                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
+                                            <SelectTrigger className={SELECT_TRIGGER_CLASSNAME}>
                                                 <SelectValue placeholder="Select match mode">
                                                     {selectedFilterMode === 'hierarchical' ? 'Hierarchical' : 'Exact'}
                                                 </SelectValue>
                                             </SelectTrigger>
-                                            <SelectContent>
+                                            <SelectContent className={SELECT_CONTENT_CLASSNAME}>
                                                 <SelectItem value="exact">Exact</SelectItem>
                                                 <SelectItem value="hierarchical">Hierarchical</SelectItem>
                                             </SelectContent>
@@ -436,21 +430,14 @@ export function TierOneAllocationManager({
                                     </div>
                                     <div className="space-y-2 w-full lg:flex-[1.2] lg:min-w-[260px] lg:max-w-[380px]">
                                         <p className="font-medium">PAP</p>
-                                        <Select value={selectedFilterPapCode} onValueChange={(value) => setSelectedFilterPapCode(value ?? 'all')}>
-                                            <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background mb-0">
-                                                <SelectValue placeholder="All PAPs">
-                                                    {getFilterPapLabel(selectedFilterPapCode)}
-                                                </SelectValue>
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All PAPs</SelectItem>
-                                            {filteredPapOptions.map((pap) => (
-                                                <SelectItem key={pap.id} value={pap.id}>
-                                                    {pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                        </Select>
+                                        <SearchableComboboxField
+                                            items={filteredPapComboboxOptions}
+                                            value={selectedFilterPapCode}
+                                            placeholder="All PAPs"
+                                            searchPlaceholder="Search PAPs"
+                                            emptyText="No PAPs found."
+                                            onValueChange={(value) => setSelectedFilterPapCode(value || 'all')}
+                                        />
                                     </div>
                                 </div>
                                 <div className="flex flex-col sm:flex-row gap-4">
@@ -501,117 +488,64 @@ export function TierOneAllocationManager({
 
                         <div className="space-y-2">
                             <label className="font-medium">Entity</label>
-                            <Select value={entityId} onValueChange={(value) => {
-                                setEntityId(value ?? '')
-                                setPapCode('')
-                                setItemCatalogId('')
-                            }} disabled={!canEditStructure}>
-                                <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
-                                    <SelectValue placeholder="Select entity">
-                                        {entityId ? getEntityName(entityId) : 'Select entity'}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map((department) => {
-                                        const childAgencies = agencies.filter((agency) => agency.department_id === department.id)
-                                        return (
-                                            <SelectGroup key={department.id}>
-                                                <SelectLabel className="bg-muted/50">{department.name}</SelectLabel>
-                                                <SelectItem value={department.id}>{department.name}</SelectItem>
-                                                {childAgencies.map((agency) => (
-                                                    <div key={agency.id}>
-                                                        <SelectItem value={agency.id}>{agency.name}</SelectItem>
-                                                        {operatingUnits
-                                                            .filter((operatingUnit) => operatingUnit.agency_id === agency.id)
-                                                            .map((operatingUnit) => (
-                                                                <SelectItem key={operatingUnit.id} value={operatingUnit.id}>
-                                                                    {`↳ ${operatingUnit.name}`}
-                                                                </SelectItem>
-                                                            ))}
-                                                    </div>
-                                                ))}
-                                            </SelectGroup>
-                                        )
-                                    })}
-                                    {independentAgencies.length > 0 && (
-                                        <SelectGroup>
-                                            <SelectLabel className="bg-muted/50">Independent Agencies & SUCs</SelectLabel>
-                                            {independentAgencies.map((agency) => (
-                                                <div key={agency.id}>
-                                                    <SelectItem value={agency.id}>{agency.name}</SelectItem>
-                                                    {operatingUnits
-                                                        .filter((operatingUnit) => operatingUnit.agency_id === agency.id)
-                                                        .map((operatingUnit) => (
-                                                            <SelectItem key={operatingUnit.id} value={operatingUnit.id}>
-                                                                {`↳ ${operatingUnit.name}`}
-                                                            </SelectItem>
-                                                        ))}
-                                                </div>
-                                            ))}
-                                        </SelectGroup>
-                                    )}
-                                </SelectContent>
-                            </Select>
+                            <SearchableComboboxField
+                                items={entityOptions}
+                                value={entityId}
+                                placeholder="Select entity"
+                                searchPlaceholder="Search entities"
+                                emptyText="No entities found."
+                                disabled={!canEditStructure}
+                                onValueChange={(value) => {
+                                    setEntityId(value)
+                                    setPapCode('')
+                                    setItemCatalogId('')
+                                }}
+                            />
                             {state?.fieldErrors?.entity_id?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.entity_id[0]}</p>}
                         </div>
 
                         <div className="space-y-2">
                             <label className="font-medium">PAP</label>
-                            <Select value={papCode} onValueChange={(value) => {
-                                setPapCode(value ?? '')
-                                setItemCatalogId('')
-                            }} disabled={!canEditStructure}>
-                                <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
-                                    <SelectValue placeholder="Select PAP">
-                                        {papCode ? availablePaps.find((pap) => pap.id === papCode)?.title : 'Select PAP'}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availablePaps.map((pap) => (
-                                        <SelectItem key={pap.id} value={pap.id}>
-                                            {pap.entity_id == null ? `${pap.title} (All entities)` : pap.title}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableComboboxField
+                                items={availablePapOptions}
+                                value={papCode}
+                                placeholder="Select PAP"
+                                searchPlaceholder="Search PAPs"
+                                emptyText="No PAPs found."
+                                disabled={!canEditStructure}
+                                onValueChange={(value) => {
+                                    setPapCode(value)
+                                    setItemCatalogId('')
+                                }}
+                            />
                             {state?.fieldErrors?.pap_code?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.pap_code[0]}</p>}
                         </div>
 
                         <div className="space-y-2">
                             <label className="font-medium">Item Catalog</label>
-                            <Select value={itemCatalogId} onValueChange={(value) => setItemCatalogId(value ?? '')} disabled={!canEditStructure}>
-                                <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
-                                    <SelectValue placeholder="Select item catalog">
-                                        {itemCatalogId ? availableItems.find((item) => item.id === itemCatalogId)?.name : 'Select item catalog'}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableItems.map((item) => (
-                                        <SelectItem key={item.id} value={item.id}>
-                                            {item.name} ({item.expense_class})
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableComboboxField
+                                items={availableItemOptions}
+                                value={itemCatalogId}
+                                placeholder="Select item catalog"
+                                searchPlaceholder="Search line items"
+                                emptyText="No line items found."
+                                disabled={!canEditStructure}
+                                onValueChange={setItemCatalogId}
+                            />
                             {state?.fieldErrors?.item_catalog_id?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.item_catalog_id[0]}</p>}
                         </div>
 
                         <div className="space-y-2">
                             <label className="font-medium">Fund Source</label>
-                            <Select value={fundCode} onValueChange={(value) => setFundCode(value ?? '')} disabled={!canEditStructure}>
-                                <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
-                                    <SelectValue placeholder="Select fund source">
-                                        {fundCode ? fundingSources.find((source) => source.code === fundCode)?.description : 'Select fund source'}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {fundingSources.map((source) => (
-                                        <SelectItem key={source.code} value={source.code}>
-                                            {source.code} • {source.description}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableComboboxField
+                                items={fundingSourceOptions}
+                                value={fundCode}
+                                placeholder="Select fund source"
+                                searchPlaceholder="Search fund sources"
+                                emptyText="No fund sources found."
+                                disabled={!canEditStructure}
+                                onValueChange={setFundCode}
+                            />
                             {state?.fieldErrors?.fund_code?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.fund_code[0]}</p>}
                         </div>
 
@@ -661,12 +595,12 @@ export function TierOneAllocationManager({
                         <div className="space-y-2">
                             <label className="font-medium">Remarks For</label>
                             <Select value={workflowStage} onValueChange={(value) => setWorkflowStage((value ?? 'dbm_review') as BUDGET_PREP_WORKFLOW_STAGES_TYPE)}>
-                                <SelectTrigger className="border px-3 py-5 w-full rounded border-border text-base bg-background">
+                                <SelectTrigger className={SELECT_TRIGGER_CLASSNAME}>
                                     <SelectValue placeholder="Select remarks stage">
                                         {workflowStage ? REMARK_STAGE_OPTIONS.find((option) => option.value === workflowStage)?.label : 'Select remarks stage'}
                                     </SelectValue>
                                 </SelectTrigger>
-                                <SelectContent>
+                                <SelectContent className={SELECT_CONTENT_CLASSNAME}>
                                     {REMARK_STAGE_OPTIONS.map((option) => (
                                         <SelectItem key={option.value} value={option.value}>
                                             {option.label}
