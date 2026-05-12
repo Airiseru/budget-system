@@ -118,6 +118,15 @@ export type AllocationValidityTarget = {
     valid_until: Date | null
 }
 
+type PreviousYearGaaLookup = {
+    fiscalYear: number
+    entityId: string
+    papCode: string
+    fundCode: string
+    tier: 1 | 2
+    itemCatalogId: string
+}
+
 export async function createBudgetAllocation(values: NewBudgetAllocation) {
     return await db
         .insertInto('budget_allocations')
@@ -169,6 +178,31 @@ export async function getBudgetAllocationById(id: string) {
         ])
         .where('budget_allocations.id', '=', id)
         .executeTakeFirst() as BudgetAllocationRecord | undefined
+}
+
+export async function findPreviousYearGaaAmount({
+    fiscalYear,
+    entityId,
+    papCode,
+    fundCode,
+    tier,
+    itemCatalogId,
+}: PreviousYearGaaLookup) {
+    const previousYear = fiscalYear - 1
+
+    const match = await db
+        .selectFrom('budget_allocations')
+        .select(['gaa_amt'])
+        .where('budget_cycle_year', '=', previousYear)
+        .where('entity_id', '=', entityId)
+        .where('pap_code', '=', papCode)
+        .where('fund_code', '=', fundCode)
+        .where('tier', '=', tier)
+        .where('item_catalog_id', '=', itemCatalogId)
+        .orderBy('updated_at', 'desc')
+        .executeTakeFirst()
+
+    return Number(match?.gaa_amt ?? 0)
 }
 
 export async function listBudgetAllocationsByYear({

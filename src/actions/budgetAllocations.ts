@@ -196,6 +196,24 @@ function getAllocationSignoffCodename(type: AllocationSignoffType, fiscalYear: n
     return `${type.toUpperCase()} Sign-Off FY ${fiscalYear}`
 }
 
+async function getMatchedPreviousYearGaaAmount(params: {
+    fiscalYear: number
+    entity_id: string
+    pap_code: string
+    fund_code: string
+    tier: 1 | 2
+    item_catalog_id: string
+}) {
+    return await BudgetAllocationRepository.findPreviousYearGaaAmount({
+        fiscalYear: params.fiscalYear,
+        entityId: params.entity_id,
+        papCode: params.pap_code,
+        fundCode: params.fund_code,
+        tier: params.tier,
+        itemCatalogId: params.item_catalog_id,
+    })
+}
+
 async function ensurePhaseDefaults(fiscalYear: number, phase: BudgetCyclePhase | null | undefined) {
     if (!phase || !['presidential_approval', 'legislative_deliberation'].includes(phase)) {
         return
@@ -489,6 +507,20 @@ export async function loadTierOneDashboardForYear({
         })
         : []
 
+    const allocationsWithPreviousYear = await Promise.all(
+        allocations.map(async (allocation) => ({
+            ...allocation,
+            prev_year_gaa_amt: await getMatchedPreviousYearGaaAmount({
+                fiscalYear: allocation.budget_cycle_year,
+                entity_id: allocation.entity_id,
+                pap_code: allocation.pap_code,
+                fund_code: allocation.fund_code,
+                tier: allocation.tier,
+                item_catalog_id: allocation.item_catalog_id,
+            }),
+        }))
+    )
+
     return {
         activeCycle,
         viewingYear,
@@ -507,7 +539,7 @@ export async function loadTierOneDashboardForYear({
         paps,
         items,
         fundingSources: fundingSources.filter((source) => source.status === 'active'),
-        allocations,
+        allocations: allocationsWithPreviousYear,
     }
 }
 
@@ -579,6 +611,15 @@ export async function createTierOneAllocationAction(
     }
 
     try {
+        const prevYearGaaAmount = await getMatchedPreviousYearGaaAmount({
+            fiscalYear: activeCycle.fiscal_year,
+            entity_id: parsed.data.entity_id,
+            pap_code: parsed.data.pap_code,
+            fund_code: parsed.data.fund_code,
+            tier: 1,
+            item_catalog_id: parsed.data.item_catalog_id,
+        })
+
         const created = await BudgetAllocationRepository.createBudgetAllocation({
             entity_id: parsed.data.entity_id,
             budget_cycle_year: activeCycle.fiscal_year,
@@ -595,7 +636,7 @@ export async function createTierOneAllocationAction(
             dbm_rec_amt: parsed.data.dbm_rec_amt,
             nep_amt: parsed.data.nep_amt,
             gaa_amt: parsed.data.gaa_amt,
-            prev_year_gaa_amt: 0,
+            prev_year_gaa_amt: prevYearGaaAmount,
             valid_from: parsed.data.valid_from ? new Date(parsed.data.valid_from) : null,
             valid_until: parsed.data.valid_until ? new Date(parsed.data.valid_until) : null,
             auth_status: 'draft',
@@ -719,6 +760,15 @@ export async function updateTierOneAllocationAction(
             }
         }
 
+        const prevYearGaaAmount = await getMatchedPreviousYearGaaAmount({
+            fiscalYear: existing.budget_cycle_year,
+            entity_id: parsed.data.entity_id,
+            pap_code: parsed.data.pap_code,
+            fund_code: parsed.data.fund_code,
+            tier: existing.tier,
+            item_catalog_id: parsed.data.item_catalog_id,
+        })
+
         await BudgetAllocationRepository.updateBudgetAllocation(id, {
             entity_id: parsed.data.entity_id,
             pap_code: parsed.data.pap_code,
@@ -731,6 +781,7 @@ export async function updateTierOneAllocationAction(
             dbm_rec_amt: parsed.data.dbm_rec_amt,
             nep_amt: parsed.data.nep_amt,
             gaa_amt: parsed.data.gaa_amt,
+            prev_year_gaa_amt: prevYearGaaAmount,
             valid_from: parsed.data.valid_from ? new Date(parsed.data.valid_from) : null,
             valid_until: parsed.data.valid_until ? new Date(parsed.data.valid_until) : null,
         })

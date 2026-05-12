@@ -141,10 +141,11 @@ export default function AllocationTable({
                                     ? Number(row.nep_amt)
                                     : canEditGaa
                                         ? Number(row.gaa_amt)
-                                        : Number(row.dbm_rec_amt)
-                            const percentDiff = Number(row.prev_year_gaa_amt) === 0
-                                ? null
-                                : ((activeAmount - Number(row.prev_year_gaa_amt)) / Number(row.prev_year_gaa_amt)) * 100
+                                        : Number(row.gaa_amt)
+                            const isViewOnlyPhase = !currentPhase || currentPhase === 'enacted_gaa'
+                            const prevYearAmount = Number(row.prev_year_gaa_amt ?? 0)
+                            const prevYearDiffAmount = activeAmount - prevYearAmount
+                            const hasNoPrevYearDiff = Math.abs(prevYearDiffAmount) === 0
                             const nepAmount = Number(row.nep_amt)
                             const gaaAmount = Number(row.gaa_amt)
                             const currentGaaAmount = getNumericInputValue(inputValues, row, 'gaa_amt')
@@ -164,6 +165,7 @@ export default function AllocationTable({
                                 Number(row.proposed_amt) > 0 &&
                                 Number(row.dbm_rec_amt) === 0
                             const vetoedByPresident =
+                                (canEditNep || canEditGaa || isViewOnlyPhase) &&
                                 Number(row.dbm_rec_amt) > 0 &&
                                 Number(row.nep_amt) === 0
                             const groupRows = groupedRows[currentGroupKey] ?? []
@@ -378,12 +380,12 @@ export default function AllocationTable({
                                         ) : null}
 
                                         <td className="px-4 py-3 text-right">
-                                            {percentDiff == null ? (
-                                                <span className="text-muted-foreground">—</span>
+                                            {hasNoPrevYearDiff ? (
+                                                <span className="text-muted-foreground">-</span>
                                             ) : (
-                                                <span className={`inline-flex items-center gap-1 ${percentDiff >= 0 ? 'text-emerald-700' : 'text-red-700'} ${getChangeTone(percentDiff)}`}>
-                                                    {percentDiff >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                                                    {Math.abs(percentDiff).toFixed(1)}%
+                                                <span className={`inline-flex items-center gap-1 ${prevYearDiffAmount >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                                    {prevYearDiffAmount >= 0 ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                                                    PHP {formatAmount(Math.abs(prevYearDiffAmount))}
                                                 </span>
                                             )}
                                         </td>
