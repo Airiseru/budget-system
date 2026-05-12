@@ -513,8 +513,8 @@ export async function loadTierOneDashboardForYear({
             prev_year_gaa_amt: await getMatchedPreviousYearGaaAmount({
                 fiscalYear: allocation.budget_cycle_year,
                 entity_id: allocation.entity_id,
-                pap_code: allocation.pap_code,
-                fund_code: allocation.fund_code,
+                pap_code: allocation.pap_code ?? '',
+                fund_code: allocation.fund_code ?? '',
                 tier: allocation.tier,
                 item_catalog_id: allocation.item_catalog_id,
             }),
