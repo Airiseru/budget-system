@@ -128,6 +128,8 @@ export default async function RetireeDetailsPage({
     );
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForYear && !allowClosedCycleActions;
+    const canVerifyIntegrity =
+        session.user.role === "dbm" || session.user.is_admin === true;
 
     // Server Actions
     const updateAuthStatus = async () => {
@@ -173,6 +175,7 @@ export default async function RetireeDetailsPage({
             overrideHistory={overrideHistory}
             updateAuthStatus={updateAuthStatus}
             deleteFormAction={deleteFormAction}
+            canVerifyIntegrity={canVerifyIntegrity}
         />
     );
 }

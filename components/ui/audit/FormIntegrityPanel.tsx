@@ -5,7 +5,7 @@ import { ShieldCheck, ShieldX, ChevronDown, ChevronUp, Database, Lock, Unlock } 
 import { Badge } from '@/components/ui/badge'
 import { FormProofDetails } from './FormProofDetails'
 
-type IntegrityResult = {
+export type IntegrityResult = {
     isTimelineIntact: boolean
     isSealedRootValid: boolean
     timelineBrokenAt: string | null
@@ -70,7 +70,7 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant={result.isTimelineIntact ? 'default' : 'destructive'} className={result.isTimelineIntact ? 'bg-emerald-600' : ''}>
+                    <Badge variant={result.isTimelineIntact ? 'default' : 'destructive'} className={result.isTimelineIntact ? 'bg-emerald-600 text-white' : ''}>
                         Ledger: {result.isTimelineIntact ? 'Intact' : 'Broken'}
                     </Badge>
                     <Badge variant={result.isDataMatch ? 'outline' : 'destructive'} className={result.isDataMatch ? 'border-emerald-600 text-emerald-700 bg-white' : 'bg-white'}>
@@ -85,14 +85,14 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
             {/* Details & Errors */}
             <div className="p-4 space-y-4 text-sm bg-white">
                 
-                {/* 1. Broken Chain Warning */}
+                {/* Broken Chain Warning */}
                 {!result.isTimelineIntact && result.timelineBrokenAt && (
                     <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs border border-destructive/20">
                         <strong>Chain broken at log ID:</strong> <span className="font-mono">{result.timelineBrokenAt}</span>
                     </div>
                 )}
                 
-                {/* 2. Data State Tampering Warning */}
+                {/* Data State Tampering Warning */}
                 {!result.isDataMatch && result.isTimelineIntact && (
                     <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs border border-destructive/20 flex gap-2">
                         <Database className="h-4 w-4 shrink-0 mt-0.5" />
@@ -100,7 +100,7 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
                     </div>
                 )}
 
-                {/* 3. Rollback Attack Warning */}
+                {/* Rollback Attack Warning */}
                 {!result.isSealedRootValid && (
                     <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs border border-destructive/20 flex gap-2">
                         <ShieldX className="h-4 w-4 shrink-0 mt-0.5" />

@@ -394,9 +394,6 @@ export async function verifyFormSignature(entityId: string, formId: string, tabl
     const cleanFormData = cleanDataBasedOnTable(tableName, formData)
     const form_state_hash = sha256(canonicalStringify(cleanFormData))
 
-    const formIntegrity = await auditRepository.verifyFormIntegrity(tableName, formId)
-    console.log(`formIntegrity:`, formIntegrity)
-
     if (payload.form_state_hash !== form_state_hash) {
         return {
             isValid: false,

@@ -12,6 +12,7 @@ import { VALID_COMPENSATION_NAMES } from "@/src/lib/constants";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import { StaffingSummaryWithPositions } from "@/src/types/staffing";
 import CollapsibleRemarksSection from "@/components/ui/remarks/CollapsibleRemarksSection";
+import VerifyIntegrityDialog from "@/components/ui/audit/VerifyIntegrityDialog";
 
 const staffTypes = ["Casual", "Contractual", "Part-Time", "Substitute"];
 
@@ -90,6 +91,7 @@ interface StaffingViewProps {
         legal_directive_ref: string | null
         created_at: Date
     }[]
+    canVerifyIntegrity?: boolean
 }
 
 export default function StaffingView({
@@ -104,6 +106,7 @@ export default function StaffingView({
     deleteFormAction,
     ownerEntityName,
     overrideHistory,
+    canVerifyIntegrity = false,
     isDbmEvaluator = false,
     budgetPrepClosedForEntityActions = false,
     allowClosedCycleActions = false
@@ -255,8 +258,15 @@ export default function StaffingView({
             )}
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back"></BackButton>
+                <div className="flex flex-row gap-2">
+                {canVerifyIntegrity && (
+                    <VerifyIntegrityDialog
+                        tableName="staffing_summaries"
+                        formId={summary.id ?? ""}
+                    />
+                )}
                 {canEditCurrentVersion && (
-                    <div className="flex flex-row gap-2">
+                    <>
                         <Link 
                             href={`/forms/staff/${formData.id}/edit`}
                             className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
@@ -272,8 +282,9 @@ export default function StaffingView({
                                 </form>
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
+                </div>
             </div>
 
             <div className="justify-center">

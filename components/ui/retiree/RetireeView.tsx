@@ -10,6 +10,7 @@ import BackButton from "../BackButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import CollapsibleRemarksSection from "@/components/ui/remarks/CollapsibleRemarksSection";
+import VerifyIntegrityDialog from "@/components/ui/audit/VerifyIntegrityDialog";
 
 type RetireeRowView = {
     id: string
@@ -100,6 +101,7 @@ interface RetireeViewProps {
     }[];
     updateAuthStatus: () => Promise<void>;
     deleteFormAction: (id: string) => Promise<void>;
+    canVerifyIntegrity?: boolean;
 }
 
 export default function RetireeView({
@@ -122,6 +124,7 @@ export default function RetireeView({
     overrideHistory,
     updateAuthStatus,
     deleteFormAction,
+    canVerifyIntegrity = false,
 }: RetireeViewProps) {
     const formData = {
         id: data.id,
@@ -154,8 +157,15 @@ export default function RetireeView({
             )}
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
+                <div className="flex flex-row gap-2">
+                {canVerifyIntegrity && (
+                    <VerifyIntegrityDialog
+                        tableName="retirees_list"
+                        formId={data.id ?? ""}
+                    />
+                )}
                 {canEditCurrentVersion && (
-                    <div className="flex flex-row gap-2">
+                    <>
                         <Link
                             href={`/forms/retirees/${formData.id}/edit`}
                             className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
@@ -180,8 +190,9 @@ export default function RetireeView({
                                 </form>
                             </div>
                         )}
-                    </div>
+                    </>
                 )}
+                </div>
             </div>
             <div className="justify-center">
                 <div className="text-center">

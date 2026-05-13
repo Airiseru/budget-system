@@ -3,7 +3,9 @@ import {
     sha256,
     computeAuditEntryHash,
     verifyChain,
+    verifyChainSegment,
     buildGlobalMerkleTree,
+    generateMerkleProofForEntry,
 } from "@/src/lib/audit-hash"
 import { verifySignature } from "@/src/lib/crypto"
 import { 
@@ -155,20 +157,18 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         .where('entity_id', '=', firstLog.entity_id)
         .orderBy('changed_at', 'asc')
         .execute()
-    
-    // Verify the internal integrity of the audit chain
-    const chainResult = verifyChain(allEntityLogs)
 
     // Detect rollbacks
     let isSealedRootValid = true // Defaults to true if no seal exists yet
+    const sealedLogCount = lastSeal?.log_count ?? 0
+    const sealedLogs = lastSeal ? allEntityLogs.slice(0, sealedLogCount) : []
+    const postSealLogs = lastSeal ? allEntityLogs.slice(sealedLogCount) : allEntityLogs
     
     if (lastSeal) {
-        if (allEntityLogs.length < lastSeal.log_count) {
+        if (allEntityLogs.length < sealedLogCount) {
             // Someone restored an old backup to delete recent history.
             isSealedRootValid = false
         } else {
-            // Rebuild the tree exactly as it was at the moment of the last seal
-            const sealedLogs = allEntityLogs.slice(0, lastSeal.log_count)
             const sealedTree = buildGlobalMerkleTree(sealedLogs)
             
             // Compare the rebuilt root against the database's official sealed root
@@ -178,23 +178,48 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
     }
 
+    const chainResult =
+        lastSeal && isSealedRootValid
+            ? verifyChainSegment(
+                postSealLogs,
+                sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
+            )
+            : verifyChain(allEntityLogs)
+
     const formLogs = allEntityLogs.filter(
         l => l.table_name === tableName && l.record_id === recordId
     )
-    const globalTree = buildGlobalMerkleTree(allEntityLogs)
-    const currentGlobalRoot = globalTree.getHexRoot()
+    const logIndexMap = new Map(allEntityLogs.map((log, index) => [log.id, index]))
+    const postSealRoot = postSealLogs.length > 0
+        ? buildGlobalMerkleTree(postSealLogs).getHexRoot()
+        : null
+    const currentGlobalRoot =
+        lastSeal && isSealedRootValid
+            ? (postSealRoot ?? lastSeal.root_hash)
+            : buildGlobalMerkleTree(allEntityLogs).getHexRoot()
 
     const formLogsWithProofs = formLogs.map(log => {
-        const leaf = Buffer.from(log.hash, 'hex')
-        const proof = globalTree.getProof(leaf)
+        const logIndex = logIndexMap.get(log.id) ?? -1
+        const isSealed = lastSeal ? logIndex > -1 && logIndex < sealedLogCount : false
+        const proofResult =
+            isSealed && lastSeal && isSealedRootValid
+                ? {
+                    isValid: true,
+                    proofArray: [],
+                    root: lastSeal.root_hash,
+                }
+                : generateMerkleProofForEntry(
+                    lastSeal && isSealedRootValid ? postSealLogs : allEntityLogs,
+                    log
+                )
 
         return {
             ...log,
-            isSealed: lastSeal ? allEntityLogs.findIndex(l => l.id === log.id) < lastSeal.log_count : false,
+            isSealed,
             cryptographic_proof: {
-                isValid: globalTree.verify(proof, leaf, currentGlobalRoot),
-                proofArray: proof.map(p => p.data.toString('hex')),
-                root: currentGlobalRoot
+                isValid: proofResult.isValid,
+                proofArray: proofResult.proofArray,
+                root: proofResult.root || currentGlobalRoot
             }
         }
     })

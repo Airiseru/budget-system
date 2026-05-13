@@ -115,6 +115,8 @@ export default async function ProposalDetailsPage({
         await canDbmActOnFormForFiscalYear(data.proposal_year)
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForProposalYear && !allowClosedCycleActions;
+    const canVerifyIntegrity =
+        session.user.role === "dbm" || session.user.is_admin === true;
 
     // 5. Server Actions
     const updateAuthStatus = async () => {
@@ -167,6 +169,7 @@ export default async function ProposalDetailsPage({
             latestRejection={latestRejection}
             updateAuthStatus={updateAuthStatus}
             deleteFormAction={deleteFormAction}
+            canVerifyIntegrity={canVerifyIntegrity}
         />
     )
 }

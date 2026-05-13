@@ -21,6 +21,7 @@ import { FullProjectProposal } from "@/src/types/project_proposals";
 import BackButton from "../BackButton";
 import FormDeleteButton from "../FormDeleteButton";
 import { STATUS_BADGE_COLORS, STATUS_LABELS } from "@/src/lib/constants";
+import VerifyIntegrityDialog from "@/components/ui/audit/VerifyIntegrityDialog";
 
 type ProposalExpenseClass = "PS" | "MOOE" | "CO" | "FE" | "FINEX";
 
@@ -97,6 +98,7 @@ interface ProposalViewProps {
     } | null;
     updateAuthStatus: () => Promise<void>;
     deleteFormAction: (id: string) => Promise<void>;
+    canVerifyIntegrity?: boolean;
 }
 
 const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FINEX"];
@@ -172,6 +174,7 @@ export default function ProposalView({
     latestRejection,
     updateAuthStatus,
     deleteFormAction,
+    canVerifyIntegrity = false,
 }: ProposalViewProps) {
     const formData = {
         id: data.id,
@@ -209,8 +212,15 @@ export default function ProposalView({
             {/* NAVIGATION & ACTIONS */}
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
+                <div className="flex flex-row gap-2">
+                {canVerifyIntegrity && (
+                    <VerifyIntegrityDialog
+                        tableName="project_proposals"
+                        formId={data.id ?? ""}
+                    />
+                )}
                 {canEditCurrentVersion && !budgetPrepClosedForEntityActions && (
-                    <div className="flex flex-row gap-2">
+                    <>
                         <Link
                             href={`/forms/proposals/${data.id}/edit`}
                             className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
@@ -230,8 +240,9 @@ export default function ProposalView({
                                     : "Finalize Overwrite"}
                             </button>
                         </form>
-                    </div>
+                    </>
                 )}
+                </div>
             </div>
 
             {/* HEADER SECTION */}
