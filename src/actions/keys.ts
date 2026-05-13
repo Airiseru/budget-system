@@ -390,35 +390,38 @@ export async function verifyFormSignature(entityId: string, formId: string, tabl
         return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Respective officer has signed multiple times." }
     }
 
+    const payload = formPayload as FormSignaturePayload
     const cleanFormData = cleanDataBasedOnTable(tableName, formData)
     const form_state_hash = sha256(canonicalStringify(cleanFormData))
 
     const formIntegrity = await auditRepository.verifyFormIntegrity(tableName, formId)
     console.log(`formIntegrity:`, formIntegrity)
 
-    if ((formPayload as { from_status: string; to_status: string; form_state_hash: string; }).form_state_hash !== form_state_hash) {
-        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Respective officer has signed the form but contains different data from current form." }
+    if (payload.form_state_hash !== form_state_hash) {
+        return {
+            isValid: false,
+            cryptoValid: false,
+            keyValidAtSigning: false,
+            keyNotExpiredAtSigning: false,
+            reason: "Respective officer has signed the form but contains different data from current form."
+        }
     }
 
-    let signaturePayload = ''
-
-    if (typeof formData === 'string') {
-        signaturePayload = formData
-    } else {
-        signaturePayload = buildSignaturePayload({
+    const signaturePayload = typeof formData === 'string'
+        ? formData
+        : buildSignaturePayload({
             entity_id: entityId,
             user_id: signatory.user_id,
             event_type: 'SIGN',
             table_name: tableName,
             record_id: formId,
             payload: {
-                from_status: (formPayload as FormSignaturePayload).from_status,
-                to_status: (formPayload as FormSignaturePayload).to_status,
+                from_status: payload.from_status,
+                to_status: payload.to_status,
                 form_state_hash: form_state_hash,
             },
             changed_at: signatory.created_at
         })
-    }
 
     const cryptoValid = await verifySignature(
         signaturePayload,
