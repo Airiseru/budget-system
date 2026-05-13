@@ -1,6 +1,10 @@
 import { db } from '../database'
+import { Kysely, Transaction } from 'kysely'
 import { Form, NewForm } from '../../../types/forms'
 import { getOperatingUnitDescendantIds } from './entityRepository'
+import type { Database } from '@/src/types'
+
+type DbExecutor = Kysely<Database> | Transaction<Database>
 
 export interface FormFilters {
     fiscal_year?: number;
@@ -85,13 +89,36 @@ export async function getFormAuthStatus(formId: string) {
         .executeTakeFirstOrThrow()
 }
 
+export async function getFormAuthStatusForUpdate(formId: string, executor: DbExecutor) {
+    return await executor
+        .selectFrom('forms')
+        .where('id', '=', formId)
+        .select([
+            'id',
+            'auth_status',
+            'entity_id',
+            'type',
+            'fiscal_year',
+        ])
+        .forUpdate()
+        .executeTakeFirstOrThrow()
+}
+
 export async function createForm(form: NewForm): Promise<Form> {
     return await db.insertInto('forms').values(form).returningAll().executeTakeFirstOrThrow()
 }
 
 export async function updateFormAuthStatus(formId: string, authStatus: string) {
+    return await updateFormAuthStatusWithExecutor(formId, authStatus, db)
+}
+
+export async function updateFormAuthStatusWithExecutor(
+    formId: string,
+    authStatus: string,
+    executor: DbExecutor
+) {
     const date = new Date()
-    const res = await db
+    const res = await executor
         .updateTable('forms')
         .set({ auth_status: authStatus, updated_at: date })
         .where('id', '=', formId)

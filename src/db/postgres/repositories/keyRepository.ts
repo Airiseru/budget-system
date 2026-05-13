@@ -1,11 +1,15 @@
 import { db } from '../database'
+import { Kysely, Transaction } from 'kysely'
 import {
     UserKey, NewUserKey, UserKeyStatus, UserKeyStatuses,
     Signatory, NewSignatory
 } from '../../../types/keys'
+import type { Database } from '@/src/types'
 
-async function getLatestDraftResetByFormId(form_id: string) {
-    return await db
+type DbExecutor = Kysely<Database> | Transaction<Database>
+
+async function getLatestDraftResetByFormId(form_id: string, executor: DbExecutor = db) {
+    return await executor
         .selectFrom('audit_logs')
         .select('changed_at')
         .where('record_id', '=', form_id)
@@ -69,7 +73,11 @@ export async function getAllKeysOfUser(user_id: string): Promise<UserKey[]> {
 }
 
 export async function createSignatory(signatory: NewSignatory): Promise<Signatory> {
-    return await db.insertInto('signatories').values(signatory).returningAll().executeTakeFirstOrThrow()
+    return await createSignatoryWithExecutor(signatory, db)
+}
+
+export async function createSignatoryWithExecutor(signatory: NewSignatory, executor: DbExecutor): Promise<Signatory> {
+    return await executor.insertInto('signatories').values(signatory).returningAll().executeTakeFirstOrThrow()
 }
 
 export async function getSignatoriesOfUser(user_id: string): Promise<Signatory[]> {
@@ -145,6 +153,28 @@ export async function getSignatoryByFormIdAndUserId(form_id: string, user_id: st
     }
 
     return signatory
+}
+
+export async function getCurrentCycleSignatoryByFormIdAndUserId(
+    form_id: string,
+    user_id: string,
+    executor: DbExecutor
+): Promise<Signatory | null> {
+    const latestDraftReset = await getLatestDraftResetByFormId(form_id, executor)
+
+    let query = executor
+        .selectFrom('signatories')
+        .selectAll()
+        .where('form_id', '=', form_id)
+        .where('user_id', '=', user_id)
+
+    if (latestDraftReset?.changed_at) {
+        query = query.where('created_at', '>', latestDraftReset.changed_at)
+    }
+
+    return await query
+        .orderBy('created_at', 'desc')
+        .executeTakeFirst() ?? null
 }
 
 export async function getSignatoryById(id: string): Promise<Signatory | null> {

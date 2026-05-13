@@ -1,8 +1,11 @@
 import { db } from '../database'
 import { NewAllocationWorkflowLog, NewBudgetAllocation, BudgetAllocation, BudgetAllocationUpdate } from '@/src/types/line_items'
-import { sql } from 'kysely'
+import { Kysely, Transaction, sql } from 'kysely'
 import type { BudgetCyclePhase } from '@/src/types/budget_settings'
 import type { ExpenseClass } from '@/src/types/line_items'
+import type { Database } from '@/src/types'
+
+type DbExecutor = Kysely<Database> | Transaction<Database>
 
 const ALLOCATION_STATUS_ORDER = [
     'draft',
@@ -364,9 +367,16 @@ export async function seedAllocationPhaseDefaults(
     fiscalYear: number,
     phase: BudgetCyclePhase
 ) {
+    return await seedAllocationPhaseDefaultsWithExecutor(fiscalYear, phase, db)
+}
+
+export async function seedAllocationPhaseDefaultsWithExecutor(
+    fiscalYear: number,
+    phase: BudgetCyclePhase,
+    executor: DbExecutor
+) {
     if (phase === 'presidential_approval') {
-        await db.transaction().execute(async (trx) => {
-            await trx
+        await executor
                 .updateTable('budget_allocations')
                 .set({
                     nep_amt: sql`budget_allocations.dbm_rec_amt`,
@@ -386,7 +396,7 @@ export async function seedAllocationPhaseDefaults(
                 )
                 .execute()
 
-            await trx
+        await executor
                 .updateTable('budget_allocations')
                 .set({
                     auth_status: 'dbm_approved',
@@ -396,7 +406,7 @@ export async function seedAllocationPhaseDefaults(
                 .where('auth_status', '=', 'proposed')
                 .execute()
 
-            await trx
+        await executor
                 .updateTable('budget_allocations')
                 .set({
                     auth_status: 'dbm_approved',
@@ -406,11 +416,10 @@ export async function seedAllocationPhaseDefaults(
                 .where('tier', '=', 1)
                 .where('auth_status', '=', 'draft')
                 .execute()
-        })
     }
 
     if (phase === 'legislative_deliberation') {
-        await db
+        await executor
             .updateTable('budget_allocations')
             .set({
                 gaa_amt: sql`budget_allocations.nep_amt`,
@@ -437,9 +446,18 @@ export async function updateAllocationStatusForYear(
     fromStatuses: BudgetAllocation['auth_status'][],
     toStatus: BudgetAllocation['auth_status']
 ) {
+    return await updateAllocationStatusForYearWithExecutor(fiscalYear, fromStatuses, toStatus, db)
+}
+
+export async function updateAllocationStatusForYearWithExecutor(
+    fiscalYear: number,
+    fromStatuses: BudgetAllocation['auth_status'][],
+    toStatus: BudgetAllocation['auth_status'],
+    executor: DbExecutor
+) {
     if (fromStatuses.length === 0) return
 
-    await db
+    await executor
         .updateTable('budget_allocations')
         .set({
             auth_status: toStatus,

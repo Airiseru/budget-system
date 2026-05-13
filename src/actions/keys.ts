@@ -2,11 +2,12 @@
 
 import bcrypt from 'bcrypt'
 import { createEntityRepository, createKeyRepository, createFormRepository, createAuditRepository, createBudgetSettingsRepository, createBudgetAllocationRepository } from '../db/factory'
+import { db } from '../db/postgres/database'
 import { sessionDetails, sessionWithEntity } from './auth'
 import { redirect } from 'next/navigation'
 import { verifySignature } from '../lib/crypto'
 import { getWorkflow, canSign, getNextStatus } from '../lib/workflows'
-import { logUserKeyCreation, logUserKeyRevoke, logFormSignatories } from './audit'
+import { logUserKeyCreation, logUserKeyRevoke } from './audit'
 import { FormSignaturePayload } from '../types/audit'
 import { sha256, buildSignaturePayload } from '../lib/audit-hash'
 import { canonicalStringify } from '../lib/canonical'
@@ -60,34 +61,44 @@ async function validateAllocationSignoffPhase(formType: string, fiscalYear: numb
 }
 
 async function advanceAllocationPhaseAfterApproval(formType: string, fiscalYear: number, changedBy: string) {
-    if (formType === 'nep') {
-        await budgetAllocationRepository.updateAllocationStatusForYear(
-            fiscalYear,
-            ['dbm_approved'],
-            'nep_approved'
-        )
-        await budgetSettingsRepository.editBudgetCycle(
-            fiscalYear,
-            'active',
-            'legislative_deliberation',
-            changedBy
-        )
-        await budgetAllocationRepository.seedAllocationPhaseDefaults(fiscalYear, 'legislative_deliberation')
-    }
+    await db.transaction().execute(async (trx) => {
+        if (formType === 'nep') {
+            await budgetAllocationRepository.updateAllocationStatusForYearWithExecutor(
+                fiscalYear,
+                ['dbm_approved'],
+                'nep_approved',
+                trx
+            )
+            await budgetSettingsRepository.editBudgetCycleWithExecutor(
+                fiscalYear,
+                'active',
+                'legislative_deliberation',
+                changedBy,
+                trx
+            )
+            await budgetAllocationRepository.seedAllocationPhaseDefaultsWithExecutor(
+                fiscalYear,
+                'legislative_deliberation',
+                trx
+            )
+        }
 
-    if (formType === 'gaa') {
-        await budgetAllocationRepository.updateAllocationStatusForYear(
-            fiscalYear,
-            ['nep_approved'],
-            'gaa_approved'
-        )
-        await budgetSettingsRepository.editBudgetCycle(
-            fiscalYear,
-            'locked',
-            'enacted_gaa',
-            changedBy
-        )
-    }
+        if (formType === 'gaa') {
+            await budgetAllocationRepository.updateAllocationStatusForYearWithExecutor(
+                fiscalYear,
+                ['nep_approved'],
+                'gaa_approved',
+                trx
+            )
+            await budgetSettingsRepository.editBudgetCycleWithExecutor(
+                fiscalYear,
+                'locked',
+                'enacted_gaa',
+                changedBy,
+                trx
+            )
+        }
+    })
 }
 
 async function getFormFiscalYear(tableName: string, formId: string): Promise<number | null> {
@@ -240,53 +251,63 @@ export async function verifyAndSubmitSignature(
             throw new Error(getBudgetPrepClosedError(fiscalYear))
         }
     
-        // Get correct workflow for form type
-        const workflow = getWorkflow(form.type)
-    
-        if (!canSign(form.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? '', signatoryRole, workflow)) {
-            throw new Error('You are not authorized to sign at this stage')
-        }
-    
-        // Store signature
-        const signatory = await keyRepository.createSignatory({
-            form_id: formId,
-            user_id: session.user.id,
-            role: signatoryRole,
-            key_id: keyId,
-            public_key_snapshot: publicKeySnapshot,
-            signature,
-            created_at: changedAt
-        })
-    
-        // Update form status
-        const nextStatus = getNextStatus(form.auth_status ?? '', workflow, 'approve') ?? ''
-        await formRepository.updateFormAuthStatus(formId, nextStatus)
-
         const stringSignaturePayload = typeof signaturePayload === 'string' ? signaturePayload : canonicalStringify(signaturePayload)
+        const workflow = getWorkflow(form.type)
 
-        // Log signature
-        const logResult = await logFormSignatories(
-            session.user.id,
-            form.entity_id,
-            tableName,
-            formId,
-            'SIGN',
-            (payload as FormSignaturePayload)?.from_status as string ?? '',
-            (payload as FormSignaturePayload).to_status as string ?? '',
-            (payload as FormSignaturePayload).form_state_hash as string ?? '',
-            changedAt,
-            signature,
-            key.public_key,
-            stringSignaturePayload
-        )
-    
-        if (!logResult.success) throw new Error('Failed to log signature')
+        const transactionResult = await db.transaction().execute(async (trx) => {
+            const lockedForm = await formRepository.getFormAuthStatusForUpdate(formId, trx)
 
-        if (fiscalYear !== null && nextStatus === 'approved' && isAllocationSignoffForm) {
+            if (!canSign(lockedForm.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? '', signatoryRole, workflow)) {
+                throw new Error('You are not authorized to sign at this stage')
+            }
+
+            const existingCurrentCycleSignature =
+                await keyRepository.getCurrentCycleSignatoryByFormIdAndUserId(formId, session.user.id, trx)
+
+            if (existingCurrentCycleSignature) {
+                throw new Error('You have already signed this document')
+            }
+
+            const createdSignatory = await keyRepository.createSignatoryWithExecutor({
+                form_id: formId,
+                user_id: session.user.id,
+                role: signatoryRole,
+                key_id: keyId,
+                public_key_snapshot: publicKeySnapshot,
+                signature,
+                created_at: changedAt
+            }, trx)
+
+            const nextStatus = getNextStatus(lockedForm.auth_status ?? '', workflow, 'approve') ?? ''
+            await formRepository.updateFormAuthStatusWithExecutor(formId, nextStatus, trx)
+
+            await auditRepository.createLogWithExecutor(trx, {
+                entity_id: lockedForm.entity_id,
+                user_id: session.user.id,
+                event_type: 'SIGN',
+                table_name: tableName,
+                record_id: formId,
+                payload: {
+                    from_status: lockedForm.auth_status ?? '',
+                    to_status: nextStatus,
+                    form_state_hash: (payload as FormSignaturePayload).form_state_hash as string ?? '',
+                },
+                changed_at: changedAt,
+                public_key_snapshot: key.public_key,
+                signature,
+            }, stringSignaturePayload)
+
+            return {
+                signatory: createdSignatory,
+                nextStatus,
+            }
+        })
+
+        if (fiscalYear !== null && transactionResult.nextStatus === 'approved' && isAllocationSignoffForm) {
             await advanceAllocationPhaseAfterApproval(form.type, fiscalYear, session.user.id)
         }
 
-        return signatory
+        return transactionResult.signatory
     } catch (error) {
         console.error(`Failed to verify and submit signature:`, error)
         throw new Error('Failed to submit signature')
@@ -333,38 +354,40 @@ export async function verifyAndRejectSignature(
         ) {
             throw new Error(getBudgetPrepClosedError(fiscalYear))
         }
+        const stringSignaturePayload = typeof signaturePayload === 'string' ? signaturePayload : canonicalStringify(signaturePayload)
         const workflow = getWorkflow(form.type)
 
-        if (!canSign(form.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? "", signatoryRole, workflow)) {
-            throw new Error('You are not authorized to reject at this stage')
-        }
+        await db.transaction().execute(async (trx) => {
+            const lockedForm = await formRepository.getFormAuthStatusForUpdate(formId, trx)
 
-        const rejectStatus = getNextStatus(form.auth_status ?? '', workflow, 'reject')
-        if (!rejectStatus) {
-            throw new Error('This form cannot be rejected at this stage')
-        }
+            if (!canSign(lockedForm.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? "", signatoryRole, workflow)) {
+                throw new Error('You are not authorized to reject at this stage')
+            }
 
-        await formRepository.updateFormAuthStatus(formId, rejectStatus)
+            const rejectStatus = getNextStatus(lockedForm.auth_status ?? '', workflow, 'reject')
+            if (!rejectStatus) {
+                throw new Error('This form cannot be rejected at this stage')
+            }
 
-        const stringSignaturePayload = typeof signaturePayload === 'string' ? signaturePayload : canonicalStringify(signaturePayload)
+            await formRepository.updateFormAuthStatusWithExecutor(formId, rejectStatus, trx)
 
-        const logResult = await logFormSignatories(
-            session.user.id,
-            form.entity_id,
-            tableName,
-            formId,
-            'REJECT_FORM',
-            (payload as FormSignaturePayload)?.from_status as string ?? '',
-            (payload as FormSignaturePayload).to_status as string ?? '',
-            (payload as FormSignaturePayload).form_state_hash as string ?? '',
-            changedAt,
-            signature,
-            key.public_key,
-            stringSignaturePayload,
-            typeof payload.remarks === 'string' ? payload.remarks : undefined
-        )
-
-        if (!logResult.success) throw new Error('Failed to log rejection')
+            await auditRepository.createLogWithExecutor(trx, {
+                entity_id: lockedForm.entity_id,
+                user_id: session.user.id,
+                event_type: 'REJECT_FORM',
+                table_name: tableName,
+                record_id: formId,
+                payload: {
+                    from_status: lockedForm.auth_status ?? '',
+                    to_status: rejectStatus,
+                    form_state_hash: (payload as FormSignaturePayload).form_state_hash as string ?? '',
+                    ...(typeof payload.remarks === 'string' ? { remarks: payload.remarks } : {}),
+                },
+                changed_at: changedAt,
+                public_key_snapshot: key.public_key,
+                signature,
+            }, stringSignaturePayload)
+        })
 
         return { success: true }
     } catch (error) {

@@ -1,4 +1,5 @@
 import { db } from "../database"
+import { Kysely, Transaction } from "kysely"
 import {
     sha256,
     computeAuditEntryHash,
@@ -22,8 +23,15 @@ import isEqual from "lodash/isEqual"
 import { fetchHydratedFormState } from "./formHydrator"
 import { cleanDataBasedOnTable } from "@/src/lib/validations"
 import { Diff } from "@/src/types/audit"
+import type { Database } from "@/src/types"
 
-export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
+type DbExecutor = Kysely<Database> | Transaction<Database>
+
+async function createLogWithExecutor(
+    executor: DbExecutor,
+    log: Omit<NewAuditLog, 'hash'>,
+    signingPayload: SignaturePayload | string | null
+): Promise<AuditLog> {
     const editedLog: NewAuditLog = {
         ...log,
         table_name: log.table_name ?? null,
@@ -38,9 +46,6 @@ export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: 
 
     if (requiresSignature) {
         if (!log.public_key_snapshot || !log.signature || !signingPayload) {
-            console.log(`public_key_snapshot: ${!log.public_key_snapshot}`)
-            console.log(`signature: ${!log.signature}`)
-            console.log(`signingPayload: ${!signingPayload}`)
             throw new Error(`${log.event_type} requires a digital signature`)
         }
 
@@ -53,50 +58,54 @@ export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: 
         if (!isValid) throw new Error('Invalid digital signature')
     }
 
-    return await db.transaction().execute(async (trx) => {
-        const lastLog = await trx
-            .selectFrom('audit_logs')
-            .select('hash')
-            .where('entity_id', '=', log.entity_id)
-            .orderBy('changed_at', 'desc')
-            .limit(1)
-            .forUpdate()
-            .executeTakeFirst()
+    const lastLog = await executor
+        .selectFrom('audit_logs')
+        .select('hash')
+        .where('entity_id', '=', log.entity_id)
+        .orderBy('changed_at', 'desc')
+        .limit(1)
+        .forUpdate()
+        .executeTakeFirst()
 
-        const prevHash = lastLog ? lastLog.hash : null
-        const changedAt = requiresSignature && log.changed_at
-            ? new Date(log.changed_at)
-            : new Date()
-        
-        const newHash = computeAuditEntryHash({
-            entity_id: log.entity_id,
-            user_id: log.user_id,
-            event_type: log.event_type as AuditLogEntryPayload['event_type'],
-            table_name: log.table_name ?? "NULL",
-            record_id: log.record_id ?? "NULL",
-            payload: log.payload ?? "NULL",
-            changed_at: changedAt.toISOString(),
-            prev_hash: prevHash ?? "NULL",
-            public_key_snapshot: log.public_key_snapshot ?? "NULL",
-            signature: log.signature ?? "NULL",
+    const prevHash = lastLog ? lastLog.hash : null
+    const changedAt = requiresSignature && log.changed_at
+        ? new Date(log.changed_at)
+        : new Date()
+
+    const newHash = computeAuditEntryHash({
+        entity_id: log.entity_id,
+        user_id: log.user_id,
+        event_type: log.event_type as AuditLogEntryPayload['event_type'],
+        table_name: log.table_name ?? "NULL",
+        record_id: log.record_id ?? "NULL",
+        payload: log.payload ?? "NULL",
+        changed_at: changedAt.toISOString(),
+        prev_hash: prevHash ?? "NULL",
+        public_key_snapshot: log.public_key_snapshot ?? "NULL",
+        signature: log.signature ?? "NULL",
+    })
+
+    editedLog.changed_at = changedAt
+    editedLog.prev_hash = prevHash
+    editedLog.hash = newHash
+
+    return await executor
+        .insertInto('audit_logs')
+        .values({
+            ...editedLog,
+            payload: log.payload ? canonicalStringify(log.payload) : null,
         })
+        .returningAll()
+        .executeTakeFirstOrThrow()
+}
 
-        editedLog.changed_at = changedAt
-        editedLog.prev_hash = prevHash
-        editedLog.hash = newHash
-
-        console.log(`[AUDIT] Logging ${log.event_type} with payload ${canonicalStringify(log.payload)}`)
-
-        return await trx
-            .insertInto('audit_logs')
-            .values({
-                ...editedLog,
-                payload: log.payload ? canonicalStringify(log.payload) : null,
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow()
+export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
+    return await db.transaction().execute(async (trx) => {
+        return await createLogWithExecutor(trx, log, signingPayload)
     })
 }
+
+export { createLogWithExecutor }
 
 export async function getHistory(tableName: string, recordId: string) {
     return await db
