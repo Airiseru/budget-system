@@ -10,7 +10,7 @@ export type IntegrityResult = {
     isSealedRootValid: boolean
     timelineBrokenAt: string | null
     isDataMatch: boolean
-    currentGlobalRoot: string
+    currentGlobalRoot: string | null
     lastSealedRoot: string | null
     totalEntityEvents: number
     formEventCount: number
@@ -28,11 +28,11 @@ export type IntegrityResult = {
         public_key_snapshot: string | null
         signature: string | null
         isSealed: boolean
-        cryptographic_proof: {
+        cryptographic_proof?: {
             isValid: boolean
             proofArray: string[]
             root: string
-        }
+        } | null
     }>
 }
 
@@ -77,7 +77,7 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
                         Data State: {result.isDataMatch ? 'Matched' : 'Tampered'}
                     </Badge>
                     <Badge variant={result.isSealedRootValid ? 'outline' : 'destructive'} className={result.isSealedRootValid ? 'border-emerald-600 text-emerald-700 bg-white' : 'bg-white'}>
-                        Daily Seal: {result.isSealedRootValid ? 'Verified' : 'Mismatched'}
+                        Daily Seal: {result.isSealedRootValid ? 'Usable' : 'Unavailable'}
                     </Badge>
                 </div>
             </div>
@@ -104,18 +104,18 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
                 {!result.isSealedRootValid && (
                     <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs border border-destructive/20 flex gap-2">
                         <ShieldX className="h-4 w-4 shrink-0 mt-0.5" />
-                        <p><strong>Rollback Detected:</strong> The database timeline appears intact, but the math does not match the officially published nightly seal. The database may have been restored to an older backup to hide recent actions.</p>
+                        <p><strong>Seal Checkpoint Unavailable:</strong> The published seal can no longer anchor this timeline, which usually means newer logs were removed or the database was restored from an older checkpoint.</p>
                     </div>
                 )}
 
-                {/* Merkle Roots Display */}
+                {/* Seal Metadata Display */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-border/50">
                     <div className="space-y-1">
                         <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider flex items-center gap-1">
-                            Current Global Root
+                            Active Seal Reference
                         </p>
                         <p className="font-mono text-[10px] break-all text-slate-600 bg-slate-50 p-2 rounded border">
-                            {result.currentGlobalRoot}
+                            {result.currentGlobalRoot || 'Not computed during standard verification'}
                         </p>
                     </div>
                     <div className="space-y-1">
@@ -169,12 +169,14 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
                                                 </span>
                                             </div>
                                             
-                                            <FormProofDetails 
-                                                isValid={log.cryptographic_proof.isValid}
-                                                leafHash={log.hash}
-                                                root={log.cryptographic_proof.root}
-                                                proof={log.cryptographic_proof.proofArray}
-                                            />
+                                            {log.cryptographic_proof && (
+                                                <FormProofDetails 
+                                                    isValid={log.cryptographic_proof.isValid}
+                                                    leafHash={log.hash}
+                                                    root={log.cryptographic_proof.root}
+                                                    proof={log.cryptographic_proof.proofArray}
+                                                />
+                                            )}
                                         </div>
                                     </div>
                                 ))}

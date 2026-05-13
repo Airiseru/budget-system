@@ -33,6 +33,11 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .columns(['table_name', 'record_id'])
         .execute()
 
+    await db.schema.createIndex('audit_logs_entity_changed_at_idx')
+        .on('audit_logs')
+        .columns(['entity_id', 'changed_at'])
+        .execute()
+
     await db.schema.createIndex('idx_merkle_roots_entity_id_created_at')
         .on('merkle_roots')
         .columns(['entity_id', 'created_at'])
@@ -94,6 +99,7 @@ export async function down(db: Kysely<unknown>): Promise<void> {
 
     // Drop indexes
     await db.schema.dropIndex('idx_audit_logs_entity_id').execute()
+    await db.schema.dropIndex('audit_logs_entity_changed_at_idx').execute()
     await db.schema.dropIndex('idx_merkle_roots_entity_id_created_at').execute()
     await db.schema.dropIndex('audit_logs_target_idx').execute()
     await db.schema.dropIndex('idx_audit_logs_changed_at').execute()
