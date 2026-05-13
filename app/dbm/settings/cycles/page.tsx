@@ -21,7 +21,7 @@ export default async function BudgetCyclesPage() {
     return (
         <main className="m-6 space-y-6 max-w-6xl md:mx-auto md:my-12">
             <div className="grid grid-cols-[73px_1fr_73px] items-center">
-                <BackButton/>
+                <BackButton url='/dbm'/>
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">Budget Cycles</h1>
                     <p className="text-muted-foreground text-sm mt-1">

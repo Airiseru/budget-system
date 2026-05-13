@@ -225,8 +225,12 @@ export default function AllocationDashboard({
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     scope: bulkValidity.scope,
-                    expense_class: bulkValidity.expense_class === 'all' ? '' : bulkValidity.expense_class,
-                    tier: bulkValidity.scope === 'expense_class_and_tier' ? bulkValidity.tier : '',
+                    expense_class: ['expense_class', 'expense_class_and_tier'].includes(bulkValidity.scope)
+                        ? bulkValidity.expense_class
+                        : '',
+                    tier: ['tier', 'expense_class_and_tier'].includes(bulkValidity.scope)
+                        ? bulkValidity.tier
+                        : '',
                     valid_from: bulkValidity.valid_from,
                     valid_until: bulkValidity.valid_until,
                 }),

@@ -33,14 +33,22 @@ export async function PATCH(request: Request) {
 
     const targets = await BudgetAllocationRepository.listAllocationsForValidityUpdate(
         activeCycle.fiscal_year,
-        parsed.data.scope === 'all' ? undefined : parsed.data.expense_class as 'PS' | 'MOOE' | 'CO' | 'FINEX' | undefined,
-        parsed.data.scope === 'expense_class_and_tier' ? parsed.data.tier : undefined
+        ['expense_class', 'expense_class_and_tier'].includes(parsed.data.scope)
+            ? parsed.data.expense_class as 'PS' | 'MOOE' | 'CO' | 'FINEX' | undefined
+            : undefined,
+        ['tier', 'expense_class_and_tier'].includes(parsed.data.scope)
+            ? parsed.data.tier
+            : undefined
     )
 
     await BudgetAllocationRepository.bulkUpdateAllocationValidity({
         fiscalYear: activeCycle.fiscal_year,
-        expenseClass: parsed.data.scope === 'all' ? undefined : parsed.data.expense_class as 'PS' | 'MOOE' | 'CO' | 'FINEX' | undefined,
-        tier: parsed.data.scope === 'expense_class_and_tier' ? parsed.data.tier : undefined,
+        expenseClass: ['expense_class', 'expense_class_and_tier'].includes(parsed.data.scope)
+            ? parsed.data.expense_class as 'PS' | 'MOOE' | 'CO' | 'FINEX' | undefined
+            : undefined,
+        tier: ['tier', 'expense_class_and_tier'].includes(parsed.data.scope)
+            ? parsed.data.tier
+            : undefined,
         validFrom: parsed.data.valid_from ? parseDateOnlyToUtcNoon(parsed.data.valid_from) : null,
         validUntil: parsed.data.valid_until ? parseDateOnlyToUtcNoon(parsed.data.valid_until) : null,
     })

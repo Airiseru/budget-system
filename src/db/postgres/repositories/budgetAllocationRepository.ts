@@ -95,6 +95,10 @@ export type AllocationDashboardTotals = {
     gaa_total: number
 }
 
+export type AllocationDashboardAggregates = AllocationDashboardTotals & {
+    count: number
+}
+
 export type AllocationSignoffSummary = {
     allocation_count: number
     missing_validity_count: number
@@ -551,6 +555,54 @@ function buildAllocationDashboardBaseQuery(filters: AllocationDashboardFilters) 
     const search = filters.search
     let query = db
         .selectFrom('budget_allocations')
+        .where('budget_allocations.budget_cycle_year', '=', filters.fiscalYear)
+
+    if (departmentId) {
+        query = query.where('budget_allocations.entity_id', 'in', (eb) =>
+            eb
+                .selectFrom('entities')
+                .leftJoin('departments', 'departments.id', 'entities.id')
+                .leftJoin('agencies', 'agencies.id', 'entities.id')
+                .leftJoin('operating_units', 'operating_units.id', 'entities.id')
+                .leftJoin('agencies as ou_agencies', 'ou_agencies.id', 'operating_units.agency_id')
+                .select('entities.id')
+                .where(({ or, eb }) =>
+                    or([
+                        eb('departments.id', '=', departmentId),
+                        eb('agencies.department_id', '=', departmentId),
+                        eb('ou_agencies.department_id', '=', departmentId),
+                    ])
+                )
+        )
+    }
+
+    if (papId) {
+        query = query.where('budget_allocations.pap_code', '=', papId)
+    }
+
+    if (expenseClass || search) {
+        query = query.where('budget_allocations.item_catalog_id', 'in', (eb) => {
+            let itemQuery = eb
+                .selectFrom('item_catalog')
+                .select('item_catalog.id')
+
+            if (expenseClass) {
+                itemQuery = itemQuery.where('item_catalog.expense_class', '=', expenseClass as 'PS' | 'MOOE' | 'CO' | 'FINEX')
+            }
+
+            if (search) {
+                itemQuery = itemQuery.where('item_catalog.name', 'ilike', `%${search}%`)
+            }
+
+            return itemQuery
+        })
+    }
+
+    return query
+}
+
+export async function getAllocationDashboardRows(filters: AllocationDashboardFilters) {
+    let query = buildAllocationDashboardBaseQuery(filters)
         .leftJoin('entities', 'entities.id', 'budget_allocations.entity_id')
         .leftJoin('departments', 'departments.id', 'entities.id')
         .leftJoin('agencies', 'agencies.id', 'entities.id')
@@ -562,35 +614,6 @@ function buildAllocationDashboardBaseQuery(filters: AllocationDashboardFilters) 
         .leftJoin('paps', 'paps.id', 'budget_allocations.pap_code')
         .innerJoin('item_catalog', 'item_catalog.id', 'budget_allocations.item_catalog_id')
         .leftJoin('uacs_funding_sources', 'uacs_funding_sources.code', 'budget_allocations.fund_code')
-        .where('budget_allocations.budget_cycle_year', '=', filters.fiscalYear)
-
-    if (departmentId) {
-        query = query.where(({ eb, or }) =>
-            or([
-                eb('departments.id', '=', departmentId),
-                eb('agency_departments.id', '=', departmentId),
-                eb('parent_agency_departments.id', '=', departmentId),
-            ])
-        )
-    }
-
-    if (papId) {
-        query = query.where('budget_allocations.pap_code', '=', papId)
-    }
-
-    if (expenseClass) {
-        query = query.where('item_catalog.expense_class', '=', expenseClass as 'PS' | 'MOOE' | 'CO' | 'FINEX')
-    }
-
-    if (search) {
-        query = query.where('item_catalog.name', 'ilike', `%${search}%`)
-    }
-
-    return query
-}
-
-export async function getAllocationDashboardRows(filters: AllocationDashboardFilters) {
-    let query = buildAllocationDashboardBaseQuery(filters)
         .selectAll('budget_allocations')
         .select([
             sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as('department_id'),
@@ -657,17 +680,12 @@ export async function getAllocationDashboardRows(filters: AllocationDashboardFil
     return await query.execute() as AllocationDashboardRow[]
 }
 
-export async function countAllocationDashboardRows(filters: AllocationDashboardFilters) {
-    const result = await buildAllocationDashboardBaseQuery(filters)
-        .select(({ fn }) => fn.count<string>('budget_allocations.id').as('count'))
-        .executeTakeFirst()
-
-    return Number(result?.count ?? 0)
-}
-
-export async function getAllocationDashboardTotals(filters: Omit<AllocationDashboardFilters, 'limit' | 'offset'>) {
+export async function getAllocationDashboardAggregates(
+    filters: Omit<AllocationDashboardFilters, 'limit' | 'offset'>
+) {
     const result = await buildAllocationDashboardBaseQuery(filters)
         .select(({ fn }) => [
+            fn.count<string>('budget_allocations.id').as('count'),
             fn.sum<number>('budget_allocations.proposed_amt').as('proposed_total'),
             fn.sum<number>('budget_allocations.dbm_rec_amt').as('dbm_rec_total'),
             fn.sum<number>('budget_allocations.nep_amt').as('nep_total'),
@@ -676,9 +694,26 @@ export async function getAllocationDashboardTotals(filters: Omit<AllocationDashb
         .executeTakeFirst()
 
     return {
+        count: Number(result?.count ?? 0),
         proposed_total: Number(result?.proposed_total ?? 0),
         dbm_rec_total: Number(result?.dbm_rec_total ?? 0),
         nep_total: Number(result?.nep_total ?? 0),
         gaa_total: Number(result?.gaa_total ?? 0),
+    } as AllocationDashboardAggregates
+}
+
+export async function countAllocationDashboardRows(filters: AllocationDashboardFilters) {
+    return (await getAllocationDashboardAggregates(filters)).count
+}
+
+export async function getAllocationDashboardTotals(filters: Omit<AllocationDashboardFilters, 'limit' | 'offset'>) {
+    const { proposed_total, dbm_rec_total, nep_total, gaa_total } =
+        await getAllocationDashboardAggregates(filters)
+
+    return {
+        proposed_total,
+        dbm_rec_total,
+        nep_total,
+        gaa_total,
     } as AllocationDashboardTotals
 }
