@@ -29,9 +29,9 @@ export const auth = betterAuth({
                 input: true,
             },
             role: {
-                type: ['unverified', 'admin', 'dbm', 'agency', 'archived'],
+                type: ['dbm', 'department', 'agency', 'ou', 'others'],
                 required: true,
-                defaultValue: 'unverified',
+                defaultValue: 'others',
                 input: false,
             },
             access_level: {
@@ -39,6 +39,16 @@ export const auth = betterAuth({
                 required: true,
                 defaultValue: 'none',
                 input: false,
+            },
+            workflow_role: {
+                type: "string",
+                required: false,
+                input: false
+            },
+            is_admin: {
+                type: "boolean",
+                required: false,
+                input: false
             },
             signing_pin_hash: {
                 type: "string",
@@ -50,12 +60,13 @@ export const auth = betterAuth({
                 required: true,
                 input: true
             },
-            workflow_role: {
-                type: "string",
+            status: {
+                type: ['unverified', 'active', 'archived', 'suspended'],
                 required: false,
-                input: false
+                input: false,
+                defaultValue: 'unverified'
             },
-            deleted_at: {
+            archived_at: {
                 type: "string",
                 required: false,
                 input: false

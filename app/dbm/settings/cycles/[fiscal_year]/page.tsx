@@ -3,6 +3,7 @@ import BackButton from '@/components/ui/BackButton'
 import { loadBudgetCycle } from '@/src/actions/budgetSettings'
 import { sessionDetails } from '@/src/actions/auth'
 import { EditBudgetCycleForm } from '@/components/ui/dbm/EditBudgetCycleForm'
+import { isAdminUser, isDbmUser } from '@/src/lib/user-status'
 
 export default async function EditBudgetCyclePage({
     params,
@@ -12,8 +13,8 @@ export default async function EditBudgetCyclePage({
     const session = await sessionDetails()
     if (!session) redirect('/login')
 
-    const isAdmin = session.user.role === 'admin'
-    const isDbmApprover = session.user.role === 'dbm' && session.user.access_level === 'approve'
+    const isAdmin = isAdminUser(session.user)
+    const isDbmApprover = isDbmUser(session.user)
 
     if (!isAdmin && !isDbmApprover) {
         redirect('/home')

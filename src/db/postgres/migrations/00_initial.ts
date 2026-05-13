@@ -16,14 +16,16 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('email', 'varchar', (col) => col.notNull())
         .addColumn('email_verified', 'boolean', (col) => col.notNull().defaultTo(false))
         .addColumn('position', 'varchar', (col) => col.notNull())
-        .addColumn('role', 'varchar', (col) => col.notNull().defaultTo('unverified').check(sql`role IN ('unverified', 'admin', 'dbm', 'department', 'agency', 'ou', 'others', 'archived')`))
+        .addColumn('role', 'varchar', (col) => col.check(sql`role IN ('dbm', 'department', 'agency', 'ou', 'others')`))
         .addColumn('workflow_role', 'varchar', (col) => col.check(sql`workflow_role IN ('personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head', 'dbm')`))
         .addColumn('access_level', 'varchar', (col) => col.notNull().defaultTo('none'))
+        .addColumn('is_admin', 'boolean', (col) => col.notNull().defaultTo(false))
         .addColumn('signing_pin_hash', 'varchar(60)') // hashed pin for digital signatures
         .addColumn('entity_id', 'uuid', (col) => col.references('entities.id').onDelete('cascade').notNull())
+        .addColumn('status', 'varchar', (col) => col.notNull().defaultTo('unverified').check(sql`status IN ('unverified', 'active', 'archived', 'suspended')`))
         .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
-        .addColumn('deleted_at', 'timestamptz')
+        .addColumn('archived_at', 'timestamptz')
         .execute()
 
     // create Forms table

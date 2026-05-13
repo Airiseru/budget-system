@@ -14,7 +14,7 @@ test.describe.serial('Authentication Flow', () => {
 
         await page.getByLabel('name').fill(`John Doe ${browserName}`)
         await page.click('text=Select your Entity')
-        await page.getByText('Department of Agrarian Reform').nth(1).click()
+        await page.getByText('Regional Office I').first().click()
         await page.getByLabel('email').fill(testEmail)
         await page.getByLabel('position').fill('Personnel Officer')
         await page.getByLabel('password').first().fill(globalPassword)
@@ -54,7 +54,7 @@ test.describe.serial('Authentication Flow', () => {
             // Approve user
             await page.getByRole('button', { name: 'Pending Approvals' }).click()
             await page.click('text=Select Role')
-            await page.getByRole('option', { name: 'Department' }).click()
+            await page.getByRole('option', { name: 'Operating Unit' }).click()
             await page.click('text=Select Workflow')
             await page.getByRole('option', { name: 'Personnel Officer' }).click()
             await page.click('text=Select Level')

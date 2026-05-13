@@ -15,7 +15,7 @@ test.describe.serial('Signup Flow', () => {
 
             await page.getByLabel('name').fill(`John Doe ${browserName}`)
             await page.click('text=Select your Entity')
-            await page.getByText('Department of Agrarian Reform').nth(1).click()
+            await page.getByText('Regional Office I').first().click()
             await page.getByLabel('email').fill(`test-${browserName}-${uniqueId}@dar.com`)
             await page.getByLabel('position').fill('Personnel Officer')
             await page.getByLabel('password').first().fill(globalPassword)
@@ -36,8 +36,8 @@ test.describe.serial('Signup Flow', () => {
 
             await page.getByRole('button', { name: 'Pending Approvals' }).click()
 
-            page.once('dialog', dialog => dialog.accept())
-            await page.getByRole('button', { name: 'Deny & Delete' }).click()
+            await page.getByRole('button', { name: 'Reject User' }).click()
+            await page.getByRole('button', { name: 'Reject User' }).last().click()
 
             await expect(page.getByText('No pending users require approval at this time.')).toBeVisible()
         })
@@ -52,7 +52,7 @@ test.describe.serial('Signup Flow', () => {
 
         await page.getByLabel('name').fill('A')
         await page.click('text=Select your Entity')
-        await page.getByText('Department of Agrarian Reform').nth(1).click()
+        await page.getByText('Department of Agrarian Reform').first().click()
         await page.getByLabel('email').fill('a@b')
         await page.getByLabel('position').fill('A')
         await page.getByLabel('password').first().fill('A')

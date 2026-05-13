@@ -35,11 +35,19 @@ export default async function UserSettingsPage() {
                 </div>
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Role</p>
-                    <p className="font-medium capitalize">{ROLE_LABELS[session.user.role]}</p>
+                    <p className="font-medium capitalize">{ROLE_LABELS[session.user.role] ?? session.user.role}</p>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Administrator Access</p>
+                    <p className="font-medium">{session.user.is_admin ? 'Yes' : 'No'}</p>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Account Status</p>
+                    <p className="font-medium capitalize">{session.user.status}</p>
                 </div>
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Access Level</p>
-                    <p className="font-medium capitalize">{ACCESS_LEVEL_LABELS[session.user.access_level]}</p>
+                    <p className="font-medium capitalize">{ACCESS_LEVEL_LABELS[session.user.access_level] ?? session.user.access_level}</p>
                 </div>
             </div>
 

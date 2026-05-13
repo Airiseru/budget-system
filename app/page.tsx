@@ -1,16 +1,17 @@
 import { Button } from "@/components/ui/button"
 import { redirect } from "next/navigation"
 import { sessionWithEntity } from "@/src/actions/auth"
+import { isAdminUser, isUnverifiedUser } from "@/src/lib/user-status"
 import Link from "next/link";
 
 export default async function Home() {
 	const session = await sessionWithEntity()
 
-	if (session?.user.role === 'admin') {
+	if (session && isAdminUser(session.user)) {
         redirect('/admin')
     }
 
-    if (session?.user.role === 'unverified') {
+    if (session && isUnverifiedUser(session.user)) {
         redirect('/pending-approval')
     }
 

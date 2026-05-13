@@ -4,13 +4,14 @@ import { loadAdminEntities } from '@/src/actions/entities'
 import BackButton from '@/components/ui/BackButton'
 import { EntityRequestForm } from '@/components/ui/admin/EntityRequestForm'
 import { createEntityRepository } from '@/src/db/factory'
+import { isAdminUser } from '@/src/lib/user-status'
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export default async function AdminEntityRequestPage() {
     const session = await sessionWithEntity()
     if (!session) redirect('/login')
-    if (session.user.role !== 'admin') redirect('/admin')
+    if (!isAdminUser(session.user)) redirect('/admin')
 
     const result = await loadAdminEntities()
     let departments = 'departments' in result ? result.departments : []

@@ -208,24 +208,30 @@ export default async function globalSetup() {
         role: 'dbm', 
         access_level: 'approve',
         workflow_role: 'dbm',
+        is_admin: true,
+        status: 'active',
     })
 
     await EntityRepository.updateUser(darUser.id ?? '', {
-        role: 'admin',
+        role: 'agency',
         access_level: 'approve',
         workflow_role: 'agency_head',
+        is_admin: true,
+        status: 'active',
     })
 
     await EntityRepository.updateUser(darPersonnelUser.id ?? '', {
         role: 'ou',
         access_level: 'encode',
         workflow_role: 'personnel_officer',
+        status: 'active',
     })
 
     await EntityRepository.updateUser(darBudgetUser.id ?? '', {
         role: 'ou',
         access_level: 'encode',
         workflow_role: 'budget_officer',
+        status: 'active',
     })
 
 }
