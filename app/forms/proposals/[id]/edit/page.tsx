@@ -1,12 +1,21 @@
 import { redirect } from "next/navigation";
 import { sessionWithEntity } from "@/src/actions/auth";
 import ProposalClientWrapper from "@/components/ui/proposals/ProposalNew";
-import { createProposalRepository } from "@/src/db/factory";
-import { isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import {
+    createItemRepository,
+    createProposalRepository,
+    createUacsRepository,
+} from "@/src/db/factory";
+import {
+    isBudgetPrepActiveForYear,
+    isDbmFormActionPhaseForYear,
+} from "@/src/lib/budget-cycle";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
+const ItemRepo = createItemRepository(process.env.DATABASE_TYPE || "postgres");
+const UacsRepo = createUacsRepository(process.env.DATABASE_TYPE || "postgres");
 
 export default async function EditProposalPage({
     params,
@@ -31,17 +40,32 @@ export default async function EditProposalPage({
     }
 
     // This will now pass type checking and logic
-    if (project.auth_status !== "draft") {
+    const isDbmOverwrite =
+        session.user.role === "dbm" && project.auth_status === "pending_dbm";
+
+    if (project.auth_status !== "draft" && !isDbmOverwrite) {
         redirect(`/forms/proposals/${id}?error=locked`);
     }
 
-    if (!(await isBudgetPrepActiveForYear(project.proposal_year))) {
+    const phaseOpen = isDbmOverwrite
+        ? await isDbmFormActionPhaseForYear(project.proposal_year)
+        : await isBudgetPrepActiveForYear(project.proposal_year);
+
+    if (!phaseOpen) {
         redirect(`/forms/proposals/${id}?error=budget-cycle-closed`);
     }
 
-    if (!session || session.user.access_level !== "encode") {
+    if (
+        !session ||
+        (session.user.access_level !== "encode" && session.user.role !== "dbm")
+    ) {
         redirect("/forms/proposals?error=unauthorized");
     }
+
+    const [itemCatalogs, fundingSources] = await Promise.all([
+        ItemRepo.listAllItemCatalog(),
+        UacsRepo.listFundingSources(),
+    ]);
 
     return (
         <ProposalClientWrapper
@@ -50,6 +74,8 @@ export default async function EditProposalPage({
             userId={session.user.id}
             entityName={session.user_entity.entity_name || "Unknown Agency"}
             entityId={session.user.entity_id}
+            itemCatalogs={itemCatalogs}
+            fundingSources={fundingSources}
         />
     );
 }

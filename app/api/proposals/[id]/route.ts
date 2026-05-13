@@ -5,13 +5,14 @@ import { createProposalRepository } from "@/src/db/factory";
 import {
     getBudgetPrepClosedError,
     isBudgetPrepActiveForYear,
+    isDbmFormActionPhaseForYear,
 } from "@/src/lib/budget-cycle";
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
 
 export async function PUT(
     req: Request,
-    { params }: { params: { id: string } },
+    { params }: { params: Promise<{ id: string }> },
 ) {
     const { id } = await params;
     console.log("!!! PUT REQUEST RECEIVED FOR ID:", id);
@@ -32,7 +33,10 @@ export async function PUT(
             );
 
         // LOCKING LOGIC: Same as Retirees/Staffing
-        if (existing.auth_status !== "draft") {
+        const isDbmOverwrite =
+            session.user.role === "dbm" && existing.auth_status === "pending_dbm";
+
+        if (existing.auth_status !== "draft" && !isDbmOverwrite) {
             return NextResponse.json(
                 { error: "Only drafts can be updated" },
                 { status: 403 },
@@ -46,6 +50,16 @@ export async function PUT(
         if (
             nextStatus === "pending_budget" &&
             !(await isBudgetPrepActiveForYear(proposalYear))
+        ) {
+            return NextResponse.json(
+                { error: getBudgetPrepClosedError(proposalYear) },
+                { status: 403 },
+            );
+        }
+
+        if (
+            isDbmOverwrite &&
+            !(await isDbmFormActionPhaseForYear(proposalYear))
         ) {
             return NextResponse.json(
                 { error: getBudgetPrepClosedError(proposalYear) },
@@ -68,14 +82,15 @@ export async function PUT(
 
 export async function DELETE(
     req: Request,
-    { params }: { params: { id: string } },
+    { params }: { params: Promise<{ id: string }> },
 ) {
+    const { id } = await params;
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session)
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
     try {
-        const existing = await repo.getProjectProposalById(params.id);
+        const existing = await repo.getProjectProposalById(id);
         if (!existing)
             return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -86,7 +101,7 @@ export async function DELETE(
             );
         }
 
-        await repo.deleteProjectProposal(params.id);
+        await repo.deleteProjectProposal(id);
         return new NextResponse(null, { status: 204 });
     } catch (error) {
         return NextResponse.json(

@@ -76,7 +76,6 @@ export type LegislativeInsertionState = {
     fund_code: string
     tier: '1' | '2'
     specific_description: string
-    quantity: string
     currency: string
     gaa_amt: string
     valid_from: string
@@ -106,7 +105,6 @@ export const initialInsertionState: LegislativeInsertionState = {
     fund_code: '',
     tier: '1',
     specific_description: '',
-    quantity: '1',
     currency: 'PHP',
     gaa_amt: '0',
     valid_from: '',

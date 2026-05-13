@@ -171,15 +171,6 @@ export default function LegislativeInsertionDialog({
                         </div>
 
                         <div className="space-y-2">
-                            <p className="font-medium">Quantity</p>
-                            <input
-                                value={value.quantity}
-                                onChange={(event) => onChange({ ...value, quantity: event.target.value })}
-                                className={FIELD_CLASSNAME}
-                            />
-                        </div>
-
-                        <div className="space-y-2">
                             <p className="font-medium">GAA Amount</p>
                             <input
                                 type="number"

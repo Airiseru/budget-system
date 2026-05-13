@@ -561,16 +561,9 @@ export function TierOneAllocationManager({
                             />
                         </div>
 
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <label className="font-medium" htmlFor="quantity">Quantity</label>
-                                <input id="quantity" name="quantity" type="number" min="1" defaultValue={state?.values?.quantity ?? String(initialValues?.quantity ?? 1)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
-                                {state?.fieldErrors?.quantity?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.quantity[0]}</p>}
-                            </div>
-                            <div className="space-y-2">
-                                <label className="font-medium" htmlFor="currency">Currency</label>
-                                <input id="currency" name="currency" defaultValue={state?.values?.currency ?? initialValues?.currency ?? 'PHP'} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
-                            </div>
+                        <div className="space-y-2">
+                            <label className="font-medium" htmlFor="currency">Currency</label>
+                            <input id="currency" name="currency" defaultValue={state?.values?.currency ?? initialValues?.currency ?? 'PHP'} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
                         </div>
 
                         <div className="grid gap-4 md:grid-cols-2">

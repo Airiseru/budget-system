@@ -41,7 +41,6 @@ export interface BudgetAllocationTable {
     item_catalog_id: string
     tier: 1 | 2
     specific_description: string | null
-    quantity: number
     currency: string
     release_classification: AllocationReleaseClassification
     origin_tag: AllocationOriginTag

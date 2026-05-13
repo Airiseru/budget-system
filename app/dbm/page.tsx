@@ -31,6 +31,10 @@ export default async function HomePage() {
                     label='View All Forms'
                 />
                 <GeneralButton
+                    url='/dbm/proposals'
+                    label='Review Project Proposals'
+                />
+                <GeneralButton
                     url='/dbm/paps'
                     label='Manage PAPs'
                 />

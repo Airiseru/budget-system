@@ -13,6 +13,12 @@ type ProposalExpenseClass = {
 
 type ProposalCostSourceItem = Record<string, unknown> & {
     costs?: ProposalExpenseClass[];
+    item_catalog_id?: string | null;
+    fund_code?: string | null;
+    specific_description?: string | null;
+    currency?: string;
+    proposed_amt?: number | string;
+    tier?: 2;
 };
 
 type ProposalAttributionEntry = {
@@ -75,6 +81,50 @@ type CostSourceTableName =
     | "foreign_financial_targets"
     | "foreign_physical_targets";
 
+export type DbmProposalComponent = {
+    id: string;
+    component_name: string;
+    item_catalog_id: string | null;
+    fund_code: string | null;
+    specific_description: string | null;
+    currency: string;
+    proposed_amt: number;
+    expense_class: string | null;
+    item_name: string | null;
+};
+
+export type DbmProposalReviewRow = {
+    id: string;
+    entity_id: string;
+    title: string;
+    proposal_year: number;
+    priority_rank: number;
+    type: "202" | "203";
+    total_proposal_currency: string;
+    total_proposal_cost: number;
+    auth_status: string | null;
+    updated_at: Date;
+    department_id: string | null;
+    department_name: string | null;
+    agency_id: string | null;
+    agency_name: string | null;
+    operating_unit_id: string | null;
+    operating_unit_name: string | null;
+    entity_name: string | null;
+    components: DbmProposalComponent[];
+};
+
+export type DbmProposalReviewFilters = {
+    fiscalYear?: number;
+    status?: string;
+    departmentId?: string;
+    agencyId?: string;
+    operatingUnitId?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+};
+
 /**
  * Helper to handle the "Cost Source" architecture.
  * This separates the Entity (Component/Location) from its specific Expense Classes (PS, MOOE, etc.)
@@ -97,7 +147,12 @@ async function insertWithCostSource(
             .executeTakeFirstOrThrow();
 
         // 2. Separate costs array from the entity metadata (like component_name or location)
-        const { costs, ...entityData } = item;
+        const costs = item.costs;
+        const entityData: Record<string, unknown> = { ...item };
+        delete entityData.costs;
+        delete entityData.id;
+        delete entityData.proposal_id;
+        delete entityData.cost_source_id;
 
         // 3. Insert the entity (e.g., the Component Row)
         await trx
@@ -750,4 +805,211 @@ export async function swapProposalRanks(
 export async function deleteProjectProposal(id: string) {
     // Relying on ON DELETE CASCADE from the forms table
     await db.deleteFrom("forms").where("id", "=", id).execute();
+}
+
+function buildDbmProposalReviewBaseQuery(filters: DbmProposalReviewFilters) {
+    let query = db
+        .selectFrom("project_proposals as pp")
+        .innerJoin("forms as f", "f.id", "pp.id")
+        .leftJoin("entities", "entities.id", "f.entity_id")
+        .leftJoin("departments", "departments.id", "f.entity_id")
+        .leftJoin("agencies", "agencies.id", "f.entity_id")
+        .leftJoin("operating_units", "operating_units.id", "f.entity_id")
+        .leftJoin(
+            "agencies as parent_agencies",
+            "parent_agencies.id",
+            "operating_units.agency_id",
+        )
+        .leftJoin(
+            "departments as agency_departments",
+            "agency_departments.id",
+            "agencies.department_id",
+        )
+        .leftJoin(
+            "departments as parent_agency_departments",
+            "parent_agency_departments.id",
+            "parent_agencies.department_id",
+        );
+
+    if (filters.fiscalYear) {
+        query = query.where("pp.proposal_year", "=", filters.fiscalYear);
+    }
+
+    if (filters.status) {
+        query = query.where("f.auth_status", "=", filters.status);
+    }
+
+    if (filters.departmentId) {
+        query = query.where(({ eb, or }) =>
+            or([
+                eb("departments.id", "=", filters.departmentId!),
+                eb("agency_departments.id", "=", filters.departmentId!),
+                eb(
+                    "parent_agency_departments.id",
+                    "=",
+                    filters.departmentId!,
+                ),
+            ]),
+        );
+    }
+
+    if (filters.agencyId) {
+        query = query.where(({ eb, or }) =>
+            or([
+                eb("agencies.id", "=", filters.agencyId!),
+                eb("parent_agencies.id", "=", filters.agencyId!),
+            ]),
+        );
+    }
+
+    if (filters.operatingUnitId) {
+        query = query.where("operating_units.id", "=", filters.operatingUnitId);
+    }
+
+    if (filters.search?.trim()) {
+        query = query.where(({ eb, or }) =>
+            or([
+                eb("pp.title", "ilike", `%${filters.search!.trim()}%`),
+                eb("pp.description", "ilike", `%${filters.search!.trim()}%`),
+            ]),
+        );
+    }
+
+    return query;
+}
+
+export async function listDbmProposalReviewRows(
+    filters: DbmProposalReviewFilters = {},
+) {
+    let query = buildDbmProposalReviewBaseQuery(filters)
+        .select([
+            "pp.id",
+            "pp.entity_id",
+            "pp.title",
+            "pp.proposal_year",
+            "pp.priority_rank",
+            "pp.type",
+            "pp.total_proposal_currency",
+            "pp.total_proposal_cost",
+            "f.auth_status",
+            "f.updated_at",
+            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
+                "department_id",
+            ),
+            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
+                "department_name",
+            ),
+            sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as(
+                "agency_id",
+            ),
+            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as(
+                "agency_name",
+            ),
+            "operating_units.id as operating_unit_id",
+            "operating_units.name as operating_unit_name",
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
+                "entity_name",
+            ),
+        ])
+        .orderBy(sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`, "asc")
+        .orderBy(sql`COALESCE(agencies.name, parent_agencies.name)`, "asc")
+        .orderBy("operating_units.name", "asc")
+        .orderBy("pp.priority_rank", "asc")
+        .orderBy("f.updated_at", "desc");
+
+    if (typeof filters.limit === "number") query = query.limit(filters.limit);
+    if (typeof filters.offset === "number") {
+        query = query.offset(filters.offset);
+    }
+
+    const rows = (await query.execute()) as Omit<
+        DbmProposalReviewRow,
+        "components"
+    >[];
+
+    const proposalIds = rows.map((row) => row.id);
+    const components = proposalIds.length
+        ? ((await db
+              .selectFrom("cost_by_components as cbc")
+              .leftJoin(
+                  "item_catalog",
+                  "item_catalog.id",
+                  "cbc.item_catalog_id",
+              )
+              .leftJoin(
+                  "cost_by_expense_class as cec",
+                  "cec.cost_source_id",
+                  "cbc.cost_source_id",
+              )
+              .select([
+                  "cbc.id",
+                  "cbc.proposal_id",
+                  "cbc.component_name",
+                  "cbc.item_catalog_id",
+                  "cbc.fund_code",
+                  "cbc.specific_description",
+                  "cbc.currency",
+                  "cbc.proposed_amt",
+                  "item_catalog.name as item_name",
+                  sql<string | null>`COALESCE(item_catalog.expense_class, cec.expense_class)`.as(
+                      "expense_class",
+                  ),
+              ])
+              .where("cbc.proposal_id", "in", proposalIds)
+              .orderBy("cbc.component_name", "asc")
+              .execute()) as (DbmProposalComponent & {
+              proposal_id: string;
+          })[])
+        : [];
+
+    const componentsByProposal = new Map<string, DbmProposalComponent[]>();
+    for (const component of components) {
+        const current = componentsByProposal.get(component.proposal_id) ?? [];
+        current.push(component);
+        componentsByProposal.set(component.proposal_id, current);
+    }
+
+    return rows.map((row) => ({
+        ...row,
+        components: componentsByProposal.get(row.id) ?? [],
+    })) as DbmProposalReviewRow[];
+}
+
+export async function countDbmProposalReviewRows(
+    filters: Omit<DbmProposalReviewFilters, "limit" | "offset"> = {},
+) {
+    const result = await buildDbmProposalReviewBaseQuery(filters)
+        .select(({ fn }) => fn.count<string>("pp.id").as("count"))
+        .executeTakeFirst();
+
+    return Number(result?.count ?? 0);
+}
+
+export async function updatePendingDbmProposalScopesToRejected(filters: {
+    fiscalYear: number;
+    departmentId?: string;
+    agencyId?: string;
+    operatingUnitId?: string;
+}) {
+    const proposals = await listDbmProposalReviewRows({
+        fiscalYear: filters.fiscalYear,
+        status: "pending_dbm",
+        departmentId: filters.departmentId,
+        agencyId: filters.agencyId,
+        operatingUnitId: filters.operatingUnitId,
+    });
+
+    if (proposals.length === 0) return 0;
+
+    await db
+        .updateTable("forms")
+        .set({ auth_status: "rejected", updated_at: sql`now()` })
+        .where(
+            "id",
+            "in",
+            proposals.map((proposal) => proposal.id),
+        )
+        .execute();
+
+    return proposals.length;
 }

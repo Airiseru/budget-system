@@ -46,6 +46,12 @@ export interface CostComponentTable {
     id: Generated<string>;
     proposal_id: string;
     component_name: string;
+    item_catalog_id: string | null;
+    fund_code: string | null;
+    specific_description: string | null;
+    currency: string;
+    proposed_amt: number;
+    tier: 2;
     cost_source_id: string;
 }
 export type CostComponent = Selectable<CostComponentTable>;
@@ -118,6 +124,9 @@ export type ForeignPhysicalTarget = Selectable<ForeignPhysicalTargetTable>;
 export interface FullProjectProposal extends ProjectProposal {
     prerequisites: PAPPrerequisite[];
     components: CostComponent[];
+    cost_by_components?: (CostComponent & {
+        costs?: CostByExpenseClass[];
+    })[];
     financial_attributions?: LocalFinancialAttribution[];
     physical_targets?: LocalPhysicalTarget[];
     locations?: LocalLocation[];

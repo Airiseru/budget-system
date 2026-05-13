@@ -4,6 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalSchema } from "@/src/lib/validations/proposal.schema";
 import { AlertCircle } from "lucide-react";
+import SearchableComboboxField, {
+    SearchableComboboxOption,
+} from "@/components/ui/dbm/SearchableComboboxField";
+import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
+import type { UacsFundingSource } from "@/src/types/uacs";
 
 interface AttributionYearTier {
     year: number;
@@ -128,6 +133,12 @@ interface ForeignFinTarget {
 
 interface CostingComponent {
     component_name: string;
+    item_catalog_id?: string | null;
+    fund_code?: string | null;
+    specific_description?: string | null;
+    currency?: string;
+    proposed_amt?: number | string;
+    tier?: 2;
     costs: ExpenseRow[];
 }
 
@@ -295,6 +306,8 @@ interface WrapperProps {
     entityName: string;
     entityId: string;
     activeFiscalYear?: number;
+    itemCatalogs?: ItemCatalogOption[];
+    fundingSources?: UacsFundingSource[];
 }
 
 export default function ProposalForm({
@@ -304,12 +317,15 @@ export default function ProposalForm({
     entityName,
     entityId,
     activeFiscalYear,
+    itemCatalogs = [],
+    fundingSources = [],
 }: WrapperProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
+    const isDbmOverwrite = project?.auth_status === "pending_dbm";
     const [submitAction, setSubmitAction] = useState<
-        "draft" | "pending_budget"
-    >("draft");
+        "draft" | "pending_budget" | "pending_dbm"
+    >(isDbmOverwrite ? "pending_dbm" : "draft");
 
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         title: project?.title || "",
@@ -349,6 +365,23 @@ export default function ProposalForm({
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+
+    const itemCatalogOptions: SearchableComboboxOption[] = itemCatalogs.map(
+        (item) => ({
+            value: item.id,
+            label: `${item.name} (${item.expense_class})`,
+        }),
+    );
+
+    const fundingSourceOptions: SearchableComboboxOption[] = fundingSources.map(
+        (source) => ({
+            value: source.code,
+            label: `${source.code} - ${source.description}`,
+        }),
+    );
+
+    const getSelectedItemCatalog = (id?: string | null) =>
+        itemCatalogs.find((item) => item.id === id);
 
     const getErrorsForPath = (pathPrefix: string) => {
         return Object.entries(errors)
@@ -495,16 +528,28 @@ export default function ProposalForm({
         e.preventDefault();
         setErrors({});
 
-        // 1. Map the components to ensure they always have an 'amount'
-        // for the Zod validator to stay happy.
         const normalizedComponents = payload.cost_by_components.map((comp) => ({
             ...comp,
-            costs: comp.costs.map((c) => ({
-                ...c,
-                // Ensure amount is a number for the schema
-                amount: Number(c.amount || 0),
-                currency: "PHP",
-            })),
+            component_name:
+                getSelectedItemCatalog(comp.item_catalog_id)?.name ||
+                comp.component_name ||
+                "",
+            tier: 2 as const,
+            currency: comp.currency || comp.costs[0]?.currency || "PHP",
+            proposed_amt: Number(comp.proposed_amt || comp.costs[0]?.amount || 0),
+            costs: [
+                {
+                    expense_class:
+                        getSelectedItemCatalog(comp.item_catalog_id)
+                            ?.expense_class ||
+                        comp.costs[0]?.expense_class ||
+                        "MOOE",
+                    amount: Number(
+                        comp.proposed_amt || comp.costs[0]?.amount || 0,
+                    ),
+                    currency: comp.currency || comp.costs[0]?.currency || "PHP",
+                },
+            ],
         }));
 
         const finalPayload = {
@@ -650,8 +695,15 @@ export default function ProposalForm({
 
     const calculateTotal = (payload: ProjectProposalPayload) => {
         return payload.cost_by_components.reduce((sum, comp) => {
-            // Since BP 202 and BP 203 are unified,
-            // every item in comp.costs has an 'amount' property.
+            const proposedAmount =
+                comp.proposed_amt === undefined || comp.proposed_amt === null
+                    ? null
+                    : Number(comp.proposed_amt || 0);
+
+            if (proposedAmount !== null) {
+                return sum + proposedAmount;
+            }
+
             const rowTotal = comp.costs.reduce((cSum, c) => {
                 return cSum + Number(c.amount || 0);
             }, 0);
@@ -659,6 +711,171 @@ export default function ProposalForm({
             return sum + rowTotal;
         }, 0);
     };
+
+    const addCostComponent = () =>
+        addRow("cost_by_components", {
+            component_name: "",
+            item_catalog_id: "",
+            fund_code: "",
+            specific_description: "",
+            currency: "PHP",
+            proposed_amt: 0,
+            tier: 2,
+            costs: [],
+        });
+
+    const updateCostComponentItem = (index: number, itemCatalogId: string) => {
+        const selectedItem = getSelectedItemCatalog(itemCatalogId);
+
+        updateRow("cost_by_components", index, {
+            item_catalog_id: itemCatalogId,
+            component_name: selectedItem?.name ?? "",
+            costs: selectedItem
+                ? [
+                      {
+                          expense_class: selectedItem.expense_class,
+                          amount: Number(
+                              payload.cost_by_components[index]
+                                  ?.proposed_amt || 0,
+                          ),
+                          currency:
+                              payload.cost_by_components[index]?.currency ||
+                              "PHP",
+                      },
+                  ]
+                : [],
+        });
+    };
+
+    const renderCostComponentAllocationTable = (showGroupHover = false) => (
+        <div className="overflow-x-auto">
+            <table className="w-full min-w-[980px] text-left border-collapse">
+                <thead>
+                    <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
+                        <th className="py-3 px-4 border-r min-w-[240px]">
+                            Item Catalog
+                        </th>
+                        <th className="py-3 px-4 border-r min-w-[220px]">
+                            Fund Source
+                        </th>
+                        <th className="py-3 px-4 border-r min-w-[220px]">
+                            Description
+                        </th>
+                        <th className="py-3 px-2 border-r text-center w-24">
+                            Currency
+                        </th>
+                        <th className="py-3 px-2 border-r text-right w-36">
+                            Proposed Amount
+                        </th>
+                        <th className="w-10" />
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-muted-50">
+                    {payload.cost_by_components.map((comp, i) => {
+                        const selectedItem = getSelectedItemCatalog(
+                            comp.item_catalog_id,
+                        );
+
+                        return (
+                            <tr
+                                key={i}
+                                className={`hover:bg-muted-50/30 transition-colors ${
+                                    showGroupHover ? "group" : ""
+                                }`}
+                            >
+                                <td className="py-3 px-4 border-r align-top">
+                                    <SearchableComboboxField
+                                        items={itemCatalogOptions}
+                                        value={comp.item_catalog_id ?? ""}
+                                        placeholder="Select item catalog"
+                                        searchPlaceholder="Search line items"
+                                        emptyText="No line items found."
+                                        onValueChange={(value) =>
+                                            updateCostComponentItem(i, value)
+                                        }
+                                    />
+                                    {selectedItem && (
+                                        <p className="mt-1 text-xs text-muted-400">
+                                            {selectedItem.expense_class} expense
+                                            class
+                                        </p>
+                                    )}
+                                </td>
+                                <td className="py-3 px-4 border-r align-top">
+                                    <SearchableComboboxField
+                                        items={fundingSourceOptions}
+                                        value={comp.fund_code ?? ""}
+                                        placeholder="Select fund source"
+                                        searchPlaceholder="Search fund sources"
+                                        emptyText="No fund sources found."
+                                        onValueChange={(value) =>
+                                            updateRow("cost_by_components", i, {
+                                                fund_code: value,
+                                            })
+                                        }
+                                    />
+                                </td>
+                                <td className="py-3 px-4 border-r align-top">
+                                    <textarea
+                                        className="min-h-12 w-full rounded border border-muted-200 bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                        placeholder="Optional description"
+                                        value={comp.specific_description ?? ""}
+                                        onChange={(e) =>
+                                            updateRow("cost_by_components", i, {
+                                                specific_description:
+                                                    e.target.value,
+                                            })
+                                        }
+                                    />
+                                </td>
+                                <td className="py-3 px-2 border-r align-top">
+                                    <input
+                                        className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-sm uppercase outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={comp.currency ?? "PHP"}
+                                        onChange={(e) =>
+                                            updateRow("cost_by_components", i, {
+                                                currency: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </td>
+                                <td className="py-3 px-2 border-r align-top">
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-right text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={comp.proposed_amt ?? ""}
+                                        onChange={(e) =>
+                                            updateRow("cost_by_components", i, {
+                                                proposed_amt: e.target.value,
+                                            })
+                                        }
+                                    />
+                                </td>
+                                <td className="py-3 px-2 text-center align-top">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            removeRow("cost_by_components", i)
+                                        }
+                                        className={`text-red-400 hover:text-red-600 transition-colors ${
+                                            showGroupHover
+                                                ? "opacity-0 group-hover:opacity-100"
+                                                : ""
+                                        }`}
+                                        title="Remove allocation"
+                                    >
+                                        âœ•
+                                    </button>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
 
     return (
         <form
@@ -1071,67 +1288,119 @@ export default function ProposalForm({
                                 </h3>
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        addRow("cost_by_components", {
-                                            component_name: "",
-                                            costs: [],
-                                        })
-                                    }
+                                    onClick={addCostComponent}
                                     className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                                 >
-                                    + ADD COMPONENT
+                                    + ADD ALLOCATION
                                 </button>
                             </div>
 
-                            <div className="p-0">
-                                <table className="w-full text-left border-collapse">
+                            <div className="overflow-x-auto">
+                                <table className="w-full min-w-[980px] text-left border-collapse">
                                     <thead>
                                         <tr className="bg-muted-50/50 border-b border-muted-100">
-                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                                Component Name
+                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase min-w-[240px]">
+                                                Item Catalog
                                             </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                PS
+                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase min-w-[220px]">
+                                                Fund Source
                                             </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                MOOE
+                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase min-w-[220px]">
+                                                Description
                                             </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                CO
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-24">
+                                                Currency
                                             </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                FINEX
+                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-right w-36">
+                                                Proposed Amount
                                             </th>
+                                            <th className="w-10" />
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-muted-50">
                                         {payload.cost_by_components.map(
                                             (comp, i) => {
-                                                // Cast comp to the 202 version since we are in the 202 block
-                                                const comp202 = comp as {
-                                                    component_name: string;
-                                                    costs: ExpenseRow[];
-                                                };
-                                                const errorKey = `cost_by_components.${i}.component_name`;
+                                                const selectedItem =
+                                                    getSelectedItemCatalog(
+                                                        comp.item_catalog_id,
+                                                    );
 
                                                 return (
                                                     <tr
                                                         key={i}
                                                         className="hover:bg-muted-50/30 transition-colors"
                                                     >
-                                                        <td className="py-3 px-4">
-                                                            <input
-                                                                value={
-                                                                    comp202.component_name
+                                                        <td className="py-3 px-4 align-top">
+                                                            <SearchableComboboxField
+                                                                items={
+                                                                    itemCatalogOptions
                                                                 }
-                                                                className={`w-full bg-transparent font-medium text-muted-700 outline-none placeholder:text-muted-300 ${errors[errorKey] ? "border-red-500" : ""}}`}
-                                                                placeholder="Component Name"
+                                                                value={
+                                                                    comp.item_catalog_id ??
+                                                                    ""
+                                                                }
+                                                                placeholder="Select item catalog"
+                                                                searchPlaceholder="Search line items"
+                                                                emptyText="No line items found."
+                                                                onValueChange={(
+                                                                    value,
+                                                                ) =>
+                                                                    updateCostComponentItem(
+                                                                        i,
+                                                                        value,
+                                                                    )
+                                                                }
+                                                            />
+                                                            {selectedItem && (
+                                                                <p className="mt-1 text-xs text-muted-400">
+                                                                    {
+                                                                        selectedItem.expense_class
+                                                                    }{" "}
+                                                                    expense
+                                                                    class
+                                                                </p>
+                                                            )}
+                                                        </td>
+                                                        <td className="py-3 px-4 align-top">
+                                                            <SearchableComboboxField
+                                                                items={
+                                                                    fundingSourceOptions
+                                                                }
+                                                                value={
+                                                                    comp.fund_code ??
+                                                                    ""
+                                                                }
+                                                                placeholder="Select fund source"
+                                                                searchPlaceholder="Search fund sources"
+                                                                emptyText="No fund sources found."
+                                                                onValueChange={(
+                                                                    value,
+                                                                ) =>
+                                                                    updateRow(
+                                                                        "cost_by_components",
+                                                                        i,
+                                                                        {
+                                                                            fund_code:
+                                                                                value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-4 align-top">
+                                                            <textarea
+                                                                className="min-h-12 w-full rounded border border-muted-200 bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                placeholder="Optional description"
+                                                                value={
+                                                                    comp.specific_description ??
+                                                                    ""
+                                                                }
                                                                 onChange={(e) =>
                                                                     updateRow(
                                                                         "cost_by_components",
                                                                         i,
                                                                         {
-                                                                            component_name:
+                                                                            specific_description:
                                                                                 e
                                                                                     .target
                                                                                     .value,
@@ -1140,52 +1409,52 @@ export default function ProposalForm({
                                                                 }
                                                             />
                                                         </td>
-
-                                                        {/* Financial Columns */}
-                                                        {(
-                                                            [
-                                                                "PS",
-                                                                "MOOE",
-                                                                "CO",
-                                                                "FINEX",
-                                                            ] as const
-                                                        ).map((itemClass) => (
-                                                            <td
-                                                                key={itemClass}
-                                                                className="py-3 px-2"
-                                                            >
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
-                                                                    placeholder="0"
-                                                                    value={
-                                                                        comp202.costs.find(
-                                                                            (
-                                                                                c,
-                                                                            ) =>
-                                                                                c.expense_class ===
-                                                                                itemClass,
-                                                                        )
-                                                                            ?.amount ??
-                                                                        ""
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixChange(
-                                                                            "cost_by_components",
-                                                                            i,
-                                                                            itemClass,
-                                                                            e
-                                                                                .target
-                                                                                .valueAsNumber ||
-                                                                                0,
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </td>
-                                                        ))}
-                                                        <td className="py-3 px-4">
+                                                        <td className="py-3 px-2 align-top">
+                                                            <input
+                                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-sm uppercase outline-none focus:ring-1 focus:ring-blue-500"
+                                                                value={
+                                                                    comp.currency ??
+                                                                    "PHP"
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "cost_by_components",
+                                                                        i,
+                                                                        {
+                                                                            currency:
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-2 align-top">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-right text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                value={
+                                                                    comp.proposed_amt ??
+                                                                    ""
+                                                                }
+                                                                onChange={(e) =>
+                                                                    updateRow(
+                                                                        "cost_by_components",
+                                                                        i,
+                                                                        {
+                                                                            proposed_amt:
+                                                                                e
+                                                                                    .target
+                                                                                    .value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+                                                        <td className="py-3 px-2 text-center align-top">
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
@@ -1209,8 +1478,8 @@ export default function ProposalForm({
 
                                 {payload.cost_by_components.length === 0 && (
                                     <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No components added. Click &quot;+ ADD
-                                        COMPONENT&quot; to begin.
+                                        No component allocations added. Click
+                                        &quot;+ ADD ALLOCATION&quot; to begin.
                                     </div>
                                 )}
                             </div>
@@ -2171,18 +2440,15 @@ export default function ProposalForm({
                                 </h3>
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        addRow("cost_by_components", {
-                                            component_name: "",
-                                            costs: [],
-                                        })
-                                    }
+                                    onClick={addCostComponent}
                                     className="text-secondary-foreground-600 text-sm font-bold hover:underline"
                                 >
-                                    + ADD COMPONENT
+                                    + ADD ALLOCATION
                                 </button>
                             </div>
 
+                            {renderCostComponentAllocationTable(true)}
+                            {false && (
                             <div className="overflow-x-auto">
                                 <table className="w-full text-left border-collapse">
                                     <thead>
@@ -2411,6 +2677,7 @@ export default function ProposalForm({
                                     </tbody>
                                 </table>
                             </div>
+                            )}
                         </div>
                         {getErrorsForPath("cost_by_components").length > 0 && (
                             <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
@@ -3046,18 +3313,24 @@ export default function ProposalForm({
                 <button
                     type="submit"
                     disabled={isLoading}
-                    onClick={() => setSubmitAction("draft")}
+                    onClick={() =>
+                        setSubmitAction(isDbmOverwrite ? "pending_dbm" : "draft")
+                    }
                     className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
                 >
-                    Save Draft
+                    {isDbmOverwrite ? "Save Overwrite" : "Save Draft"}
                 </button>
                 <button
                     type="submit"
                     disabled={isLoading}
-                    onClick={() => setSubmitAction("pending_budget")}
+                    onClick={() =>
+                        setSubmitAction(
+                            isDbmOverwrite ? "pending_dbm" : "pending_budget",
+                        )
+                    }
                     className="px-6 py-2 bg-secondary-foreground-600 text-primary-foreground font-bold rounded-lg shadow-md hover:bg-secondary-foreground-700"
                 >
-                    Submit Proposal
+                    {isDbmOverwrite ? "Finalize Overwrite" : "Submit Proposal"}
                 </button>
             </div>
         </form>

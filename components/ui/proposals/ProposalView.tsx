@@ -41,6 +41,10 @@ type ProposalCostedItem = {
     component_name?: string;
     description?: string;
     location?: string;
+    fund_code?: string | null;
+    specific_description?: string | null;
+    currency?: string;
+    proposed_amt?: number;
     costs?: ProposalCostEntry[];
 };
 
@@ -433,19 +437,16 @@ export default function ProposalView({
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
                                         <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                            Component Name
+                                            Item Catalog
+                                        </th>
+                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase">
+                                            Fund Source
+                                        </th>
+                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase">
+                                            Description
                                         </th>
                                         <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            PS
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            MOOE
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            CO
-                                        </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                            FINEX
+                                            Amount
                                         </th>
                                     </tr>
                                 </thead>
@@ -456,10 +457,27 @@ export default function ProposalView({
                                                 <td className="p-4 font-medium text-muted-700">
                                                     {comp.component_name}
                                                 </td>
-
-                                                <CostBreakdownColumns
-                                                    item={comp}
-                                                />
+                                                <td className="p-4 text-muted-700">
+                                                    {comp.fund_code || "-"}
+                                                </td>
+                                                <td className="p-4 text-muted-600">
+                                                    {comp.specific_description ||
+                                                        "-"}
+                                                </td>
+                                                <td className="p-4 text-right font-mono">
+                                                    {comp.currency || "PHP"}{" "}
+                                                    {Number(
+                                                        comp.proposed_amt ??
+                                                            comp.costs?.[0]
+                                                                ?.amount ??
+                                                            0,
+                                                    ).toLocaleString(
+                                                        undefined,
+                                                        {
+                                                            minimumFractionDigits: 2,
+                                                        },
+                                                    )}
+                                                </td>
                                             </tr>
                                         ),
                                     )}
@@ -829,23 +847,22 @@ export default function ProposalView({
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b text-sm divide-x font-black text-muted-400 uppercase">
                                         <th className="py-4 px-4 w-64">
-                                            Components
+                                            Item Catalog
                                         </th>
-                                        {["PS", "MOOE", "CO", "FINEX"].map(
-                                            (ec) => (
-                                                <th
-                                                    key={ec}
-                                                    className="px-2 text-center  min-w-[180px]"
-                                                >
-                                                    {ec}
-                                                </th>
-                                            ),
-                                        )}
+                                        <th className="py-4 px-4">
+                                            Fund Source
+                                        </th>
+                                        <th className="py-4 px-4">
+                                            Description
+                                        </th>
+                                        <th className="py-4 px-2 text-right">
+                                            Amount
+                                        </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
                                     {data.cost_by_components.map(
-                                        (comp: any, i: any) => (
+                                        (comp: ProposalCostedItem, i: number) => (
                                             <tr
                                                 key={i}
                                                 className="hover:bg-muted-50/30 divide-x transition-colors group"
@@ -853,134 +870,27 @@ export default function ProposalView({
                                                 <td className="py-3 px-4 align-top">
                                                     {comp.component_name}
                                                 </td>
-                                                {[
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ].map((ec) => {
-                                                    const getCost = (
-                                                        cat: "LP" | "GOP",
-                                                        method?:
-                                                            | "cash"
-                                                            | "non_cash",
-                                                    ) =>
-                                                        comp.costs?.find(
-                                                            (c: any) =>
-                                                                c.expense_class ===
-                                                                    ec &&
-                                                                c.fund_category ===
-                                                                    cat &&
-                                                                (cat !== "LP" ||
-                                                                    c.fund_method ===
-                                                                        method),
-                                                        )?.amount || "";
-
-                                                    const lpCash = Number(
-                                                        getCost("LP", "cash") ||
+                                                <td className="py-3 px-4 align-top">
+                                                    {comp.fund_code || "-"}
+                                                </td>
+                                                <td className="py-3 px-4 align-top">
+                                                    {comp.specific_description ||
+                                                        "-"}
+                                                </td>
+                                                <td className="py-3 px-2 text-right align-top font-mono">
+                                                    {comp.currency || "PHP"}{" "}
+                                                    {Number(
+                                                        comp.proposed_amt ??
+                                                            comp.costs?.[0]
+                                                                ?.amount ??
                                                             0,
-                                                    );
-                                                    const lpNonCash = Number(
-                                                        getCost(
-                                                            "LP",
-                                                            "non_cash",
-                                                        ) || 0,
-                                                    );
-                                                    const gop = Number(
-                                                        getCost("GOP") || 0,
-                                                    );
-                                                    const cellTotal =
-                                                        lpCash +
-                                                        lpNonCash +
-                                                        gop;
-                                                    return (
-                                                        <td
-                                                            key={ec}
-                                                            className="p-3  align-top min-w-[160px]"
-                                                        >
-                                                            <div className="flex flex-col gap-2">
-                                                                {/* LP Cash Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        LP CASH
-                                                                    </span>
-                                                                    <div
-                                                                        key={`${ec}-LP-CASH`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
-                                                                    >
-                                                                        {getCost(
-                                                                            "LP",
-                                                                            "cash",
-                                                                        )
-                                                                            ? getCost(
-                                                                                  "LP",
-                                                                                  "cash",
-                                                                              ).toLocaleString()
-                                                                            : "-"}
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* LP Non-Cash Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        LP
-                                                                        NON-CASH
-                                                                    </span>
-                                                                    <div
-                                                                        key={`${ec}-LP-NON-CASH`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
-                                                                    >
-                                                                        {getCost(
-                                                                            "LP",
-                                                                            "non_cash",
-                                                                        )
-                                                                            ? getCost(
-                                                                                  "LP",
-                                                                                  "non_cash",
-                                                                              ).toLocaleString()
-                                                                            : "-"}
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* GOP Input */}
-                                                                <div className="flex items-center justify-between gap-2">
-                                                                    <span className="text-[10px] font-bold text-muted-500 w-12">
-                                                                        GOP
-                                                                    </span>
-                                                                    <div
-                                                                        key={`${ec}-GOP`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
-                                                                    >
-                                                                        {getCost(
-                                                                            "GOP",
-                                                                            "cash",
-                                                                        )
-                                                                            ? getCost(
-                                                                                  "GOP",
-                                                                                  "cash",
-                                                                              ).toLocaleString()
-                                                                            : "-"}
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Sub-total for this Expense Class */}
-                                                                <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
-                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
-                                                                        Total
-                                                                    </span>
-                                                                    <span className="text-sm font-mono font-bold text-blue-600">
-                                                                        {cellTotal.toLocaleString(
-                                                                            undefined,
-                                                                            {
-                                                                                minimumFractionDigits: 2,
-                                                                            },
-                                                                        )}
-                                                                    </span>
-                                                                </div>
-                                                            </div>
-                                                        </td>
-                                                    );
-                                                })}
+                                                    ).toLocaleString(
+                                                        undefined,
+                                                        {
+                                                            minimumFractionDigits: 2,
+                                                        },
+                                                    )}
+                                                </td>
                                             </tr>
                                         ),
                                     )}

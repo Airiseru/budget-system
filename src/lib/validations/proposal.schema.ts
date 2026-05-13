@@ -32,11 +32,19 @@ const BaseSchema = z.object({
     cost_by_components: z
         .array(
             z.object({
-                component_name: z.string().min(1, "Component name is required"),
+                component_name: z.string().optional(),
+                item_catalog_id: z.string().min(1, "Item catalog is required"),
+                fund_code: z.string().min(1, "Fund source is required"),
+                specific_description: z.string().nullable().optional(),
+                currency: z.string().min(1, "Currency is required"),
+                proposed_amt: z.coerce
+                    .number()
+                    .min(0.01, "Proposed amount must be greater than 0"),
+                tier: z.literal(2).optional().default(2),
                 costs: NonZeroCostArraySchema,
             }),
         )
-        .min(1, "Please add at least one component"),
+        .min(1, "Please add at least one component allocation"),
 });
 
 export const ProposalSchema = z.discriminatedUnion("type", [

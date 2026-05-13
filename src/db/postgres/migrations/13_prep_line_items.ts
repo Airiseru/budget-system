@@ -15,7 +15,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('item_catalog_id', 'uuid', (col) => col.references('item_catalog.id').notNull())
         .addColumn('tier', 'integer', (col) => col.notNull()) // 1 (Ongoing) or 2 (New/Expanded)
         .addColumn('specific_description', 'text')
-        .addColumn('quantity', 'integer', (col) => col.notNull())
         
         // Money allocations
         .addColumn('currency', 'varchar', (col) => col.defaultTo('PHP').notNull())

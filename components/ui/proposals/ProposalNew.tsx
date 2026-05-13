@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 import ProposalForm from "@/components/ui/proposals/ProposalForm";
 import { FullProjectProposal } from "@/src/types/project_proposals";
+import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
+import type { UacsFundingSource } from "@/src/types/uacs";
 
 interface WrapperProps {
     project?: FullProjectProposal;
@@ -13,6 +15,8 @@ interface WrapperProps {
     entityName: string;
     entityId: string;
     activeFiscalYear?: number;
+    itemCatalogs?: ItemCatalogOption[];
+    fundingSources?: UacsFundingSource[];
 }
 
 export default function ProposalClientWrapper({
@@ -22,6 +26,8 @@ export default function ProposalClientWrapper({
     entityName,
     entityId,
     activeFiscalYear,
+    itemCatalogs,
+    fundingSources,
 }: WrapperProps) {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -66,6 +72,8 @@ export default function ProposalClientWrapper({
                     entityName={entityName}
                     entityId={entityId}
                     activeFiscalYear={activeFiscalYear}
+                    itemCatalogs={itemCatalogs}
+                    fundingSources={fundingSources}
                 />
             </div>
 
