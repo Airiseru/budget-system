@@ -338,6 +338,41 @@ export async function sealDailyAuditLog(entityId: string) {
     return { success: true, rootHash }
 }
 
+export async function generateMerkleProofForEntry(entityId: string, logId: string) {
+    const lastSeal = await db
+        .selectFrom('merkle_roots')
+        .selectAll()
+        .where('entity_id', '=', entityId)
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .executeTakeFirst()
+
+    if (!lastSeal) throw new Error('No seal exists yet — cannot generate proof')
+
+    const sealedLogs = await db
+        .selectFrom('audit_logs')
+        .selectAll()
+        .where('entity_id', '=', entityId)
+        .orderBy('changed_at', 'asc')
+        .limit(lastSeal.log_count)
+        .execute()
+
+    const tree = buildGlobalMerkleTree(sealedLogs)
+    const index = sealedLogs.findIndex(l => l.id === logId)
+    if (index === -1) throw new Error('Entry not found in sealed logs')
+
+    const leaf = Buffer.from(sealedLogs[index].hash, 'hex')
+    const proof = tree.getProof(leaf, index)
+
+    return {
+        entryId: logId,
+        leaf: sealedLogs[index].hash,
+        proof: proof.map(p => p.data.toString('hex')),
+        root: lastSeal.root_hash,
+        sealedAt: lastSeal.created_at,
+    }
+}
+
 export async function getPayloadOfFormSignEvent(
     userId: string,
     entityId: string,

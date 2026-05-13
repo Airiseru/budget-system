@@ -115,19 +115,6 @@ export function buildGlobalMerkleTree(allEntityLogs: AuditLog[]): MerkleTree {
     })
 }
 
-export function verifySpecificLogProof(
-    allEntityLogs: AuditLog[], 
-    targetLog: AuditLog
-): { isValid: boolean, proof: string[], root: string } {
-    const result = generateMerkleProofForEntry(allEntityLogs, targetLog)
-
-    return {
-        isValid: result.isValid,
-        proof: result.proofArray,
-        root: result.root,
-    }
-}
-
 export function generateMerkleProofForEntry(
     logs: AuditLog[],
     targetLog: AuditLog
