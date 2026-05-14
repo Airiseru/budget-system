@@ -83,7 +83,7 @@ export type LegislativeInsertionState = {
 }
 
 export type BulkValidityState = {
-    scope: 'all' | 'expense_class' | 'expense_class_and_tier'
+    scope: 'all' | 'expense_class' | 'tier' | 'expense_class_and_tier'
     expense_class: string
     tier: '1' | '2'
     valid_from: string
@@ -113,7 +113,7 @@ export const initialInsertionState: LegislativeInsertionState = {
 
 export const initialBulkValidityState: BulkValidityState = {
     scope: 'all',
-    expense_class: 'all',
+    expense_class: '',
     tier: '1',
     valid_from: '',
     valid_until: '',

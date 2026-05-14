@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LogoutButton } from "@/components/ui/LogoutButton";
 import { redirect } from "next/navigation";
 import { sessionDetails } from "@/src/actions/auth";
+import { isActiveUser, isUnverifiedUser } from "@/src/lib/user-status";
 import { HomeButton } from "@/components/ui/HomeButton";
 
 export default async function HomePage() {
@@ -10,8 +11,10 @@ export default async function HomePage() {
 
     if (!session) {
         return redirect("/login");
-    } else if (session.user.role === "unverified") {
+    } else if (isUnverifiedUser(session.user)) {
         return redirect("/pending-approval");
+    } else if (!isActiveUser(session.user)) {
+        return redirect("/login");
     }
 
     const isDBM = session.user.role === "dbm";

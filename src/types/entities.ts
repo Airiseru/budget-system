@@ -6,7 +6,7 @@ import {
     Updateable
 } from 'kysely'
 
-import { ROLE_LABELS, ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '../lib/constants'
+import { ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '../lib/constants'
 
 export interface EntitiesTable {
     id: Generated<string>,
@@ -16,7 +16,8 @@ export interface EntitiesTable {
 export type Entity = Selectable<EntitiesTable>
 export type NewEntity = Insertable<EntitiesTable>
 
-export type UserRole = keyof typeof ROLE_LABELS | 'archived'
+export type UserRole = 'dbm' | 'department' | 'agency' | 'ou' | 'others' | 'unverified'
+export type UserStatus = 'unverified' | 'active' | 'archived' | 'suspended'
 export type UserAccessLevel = keyof typeof ACCESS_LEVEL_LABELS | 'none'
 export type UserWorkflowRole = keyof typeof WORKFLOW_ROLE_LABELS
 
@@ -28,6 +29,9 @@ export interface UserTable {
     image: string | null
     position: string
     role: UserRole
+    is_admin: boolean
+    status: UserStatus
+    archived_at: Date | null
     workflow_role: UserWorkflowRole | null
     access_level: UserAccessLevel
     signing_pin_hash: string | null
@@ -165,14 +169,18 @@ export type EntitySegments = {
 
 export type UserEntity = {
     user_id: string
+    entity_id?: string | null
     user_name: string
     user_email: string
     position: string
     role: UserRole
+    is_admin?: boolean
+    status?: UserStatus
     workflow_role: UserWorkflowRole | null
     access_level: UserAccessLevel
     entity_type: string
     entity_name: string
+    parent_entity_name?: string
     user_created_at: Date
     user_updated_at: Date
 }

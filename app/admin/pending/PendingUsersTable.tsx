@@ -14,6 +14,23 @@ import { UserEntity, UserRole, UserAccessLevel, UserWorkflowRole } from '@/src/t
 import { ROLE_LABELS, ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '@/src/lib/constants'
 
 export function PendingUsersTable({ users }: { users: UserEntity[] }) {
+    const [pendingRejectUser, setPendingRejectUser] = useState<UserEntity | null>(null)
+    const [isRejecting, setIsRejecting] = useState(false)
+
+    async function handleConfirmReject() {
+        if (!pendingRejectUser) return
+
+        setIsRejecting(true)
+        try {
+            await denyUser(pendingRejectUser.user_id)
+            setPendingRejectUser(null)
+        } catch (error) {
+            console.error("Failed to deny user", error)
+        } finally {
+            setIsRejecting(false)
+        }
+    }
+
     if (users.length === 0) {
         return (
             <div className="border border-border border-dashed rounded-lg p-12 text-center text-muted-foreground">
@@ -23,32 +40,77 @@ export function PendingUsersTable({ users }: { users: UserEntity[] }) {
     }
 
     return (
-        <div className="border border-border rounded-md">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>User Details</TableHead>
-                        <TableHead>Position</TableHead>
-                        <TableHead>Organization Role</TableHead>
-                        <TableHead>Workflow Role</TableHead>
-                        <TableHead>Access Level</TableHead>
-                        <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {users.map((user) => (
-                        <UserApprovalRow key={user.user_id} user={user} />
-                    ))}
-                </TableBody>
-            </Table>
-        </div>
+        <>
+            <div className="border border-border rounded-md">
+                <Table>
+                    <TableHeader>
+                        <TableRow>
+                            <TableHead>User Details</TableHead>
+                            <TableHead className="w-md">Position</TableHead>
+                            <TableHead>Parent Entity</TableHead>
+                            <TableHead>Organization Role</TableHead>
+                            <TableHead>Workflow Role</TableHead>
+                            <TableHead>Access Level</TableHead>
+                            <TableHead>Admin</TableHead>
+                            <TableHead className="text-right">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {users.map((user) => (
+                            <UserApprovalRow
+                                key={user.user_id}
+                                user={user}
+                                onRequestReject={() => setPendingRejectUser(user)}
+                            />
+                        ))}
+                    </TableBody>
+                </Table>
+            </div>
+
+            {pendingRejectUser ? (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <div className="w-full max-w-md rounded-xl border border-border bg-background p-6 shadow-lg">
+                        <div className="space-y-2">
+                            <h3 className="text-lg font-semibold text-foreground">Reject pending user?</h3>
+                            <p className="text-sm text-muted-foreground">
+                                This will reject <span className="font-medium text-foreground">{pendingRejectUser.user_email}</span> and archive the pending account.
+                            </p>
+                        </div>
+
+                        <div className="mt-6 flex justify-end gap-2">
+                            <Button
+                                variant="outline"
+                                onClick={() => setPendingRejectUser(null)}
+                                disabled={isRejecting}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                onClick={handleConfirmReject}
+                                disabled={isRejecting}
+                            >
+                                Reject User
+                            </Button>
+                        </div>
+                    </div>
+                </div>
+            ) : null}
+        </>
     )
 }
 
-function UserApprovalRow({ user }: { user: UserEntity }) {
+function UserApprovalRow({
+    user,
+    onRequestReject,
+}: {
+    user: UserEntity
+    onRequestReject: () => void
+}) {
     const [role, setRole] = useState<string>("")
     const [accessLevel, setAccessLevel] = useState<string>("")
     const [workflowRole, setWorkflowRole] = useState<string>("")
+    const [isAdmin, setIsAdmin] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
 
     async function handleApprove() {
@@ -58,22 +120,16 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
         try {
             const finalWorkflowRole = workflowRole === 'none' ? null : workflowRole
 
-            await approveUser(user.user_id, role as UserRole, accessLevel as UserAccessLevel, finalWorkflowRole as UserWorkflowRole)
+            await approveUser(
+                user.user_id,
+                role as UserRole,
+                accessLevel as UserAccessLevel,
+                finalWorkflowRole as UserWorkflowRole,
+                isAdmin
+            )
         } catch (error) {
             console.error("Failed to approve user", error)
             setIsLoading(false)
-        }
-    }
-
-    async function handleDeny() {
-        if (confirm(`Are you sure you want to permanently delete ${user.user_email}?`)) {
-            setIsLoading(true)
-            try {
-                await denyUser(user.user_id)
-            } catch (error) {
-                console.error("Failed to deny user", error)
-                setIsLoading(false)
-            }
         }
     }
 
@@ -84,9 +140,15 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
                 <div className="text-xs text-muted-foreground whitespace-normal break-word">{user.user_email}</div>
             </TableCell>
 
-            <TableCell>
+            <TableCell className="w-md align-middle">
                 <div className="font-medium text-foreground whitespace-normal break-word">{user.position}</div>
                 <div className="text-xs text-muted-foreground whitespace-normal break-word">{user.entity_name}</div>
+            </TableCell>
+
+            <TableCell>
+                <div className="text-sm text-foreground whitespace-normal break-words">
+                    {user.parent_entity_name || '—'}
+                </div>
             </TableCell>
             
             <TableCell>
@@ -134,13 +196,26 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
                 </Select>
             </TableCell>
 
-            <TableCell className="text-right flex justify-end gap-2">
+            <TableCell>
+                <label className="flex items-center gap-2 text-sm">
+                    <input
+                        type="checkbox"
+                        checked={isAdmin}
+                        onChange={(event) => setIsAdmin(event.target.checked)}
+                        disabled={isLoading}
+                        className='mx-auto'
+                    />
+                </label>
+            </TableCell>
+
+            <TableCell className="align-middle">
+                <div className="flex items-center justify-end gap-2">
                 <Button 
                     variant="destructive" 
                     size="icon" 
-                    onClick={handleDeny}
+                    onClick={onRequestReject}
                     disabled={isLoading}
-                    title="Deny & Delete"
+                    title="Reject User"
                 >
                     <Trash2 className="w-4 h-4" />
                 </Button>
@@ -154,6 +229,7 @@ function UserApprovalRow({ user }: { user: UserEntity }) {
                     <Check className="w-4 h-4" />
                     Approve
                 </Button>
+                </div>
             </TableCell>
         </TableRow>
     )

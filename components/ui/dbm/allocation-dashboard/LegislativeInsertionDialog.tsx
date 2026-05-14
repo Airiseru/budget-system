@@ -49,7 +49,12 @@ export default function LegislativeInsertionDialog({
     const FIELD_CLASSNAME = "h-12 w-full rounded-md border border-border bg-background px-3 py-2"
     const SELECT_TRIGGER_CLASSNAME = "h-auto min-h-12 w-full border-border px-3 py-3 text-md"
     const orderedEntities = buildOrderedEntities(entities)
-    const sortedPaps = [...paps].sort((a, b) => a.title.localeCompare(b.title))
+    const sortedPaps = [...paps]
+        .filter((pap) => {
+            if (!value.entity_id) return true
+            return pap.entity_id === null || pap.entity_id === value.entity_id
+        })
+        .sort((a, b) => a.title.localeCompare(b.title))
     const sortedItems = [...items]
         .filter((item) => {
             if (item.scope === 'global') return true
@@ -103,6 +108,7 @@ export default function LegislativeInsertionDialog({
                                     onChange({
                                         ...value,
                                         entity_id: next,
+                                        pap_code: '',
                                         item_catalog_id: '',
                                     })
                                 }

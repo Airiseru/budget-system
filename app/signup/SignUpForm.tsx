@@ -5,15 +5,9 @@ import { useActionState, useState } from "react"
 import { Department, Agency, OperatingUnit } from "@/src/types/entities"
 import BackButton from "@/components/ui/BackButton"
 import { Button } from "@/components/ui/button"
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
+import SearchableComboboxField, {
+    type SearchableComboboxOption,
+} from "@/components/ui/dbm/SearchableComboboxField"
 import { Eye, EyeOff } from 'lucide-react'
 
 type Props = {
@@ -33,14 +27,51 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
         setSelectedEntityId(value ?? '')
     }
 
-    const getEntityName = (id: string) => {
-        const dept = departments.find(d => d.id === id)
-        if (dept) return dept.name
-        const agency = agencies.find(a => a.id === id)
-        if (agency) return agency.name
-        const operatingUnit = operatingUnits.find(ou => ou.id === id)
-        if (operatingUnit) return operatingUnit.name
-        return ''
+    const orderedDepartments = [...departments].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
+    const orderedAgencies = [...agencies].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
+    const orderedOperatingUnits = [...operatingUnits].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
+
+    const entityOptions: SearchableComboboxOption[] = []
+    const pushOperatingUnits = (agencyId: string, parentOuId: string | null = null, depth = 1) => {
+        const matches = orderedOperatingUnits.filter(
+            (operatingUnit) =>
+                operatingUnit.agency_id === agencyId &&
+                (operatingUnit.parent_ou_id ?? null) === parentOuId
+        )
+
+        for (const operatingUnit of matches) {
+            entityOptions.push({
+                value: operatingUnit.id,
+                label: `${'  '.repeat(depth)}↳ ${operatingUnit.name}`,
+            })
+            pushOperatingUnits(agencyId, operatingUnit.id, depth + 1)
+        }
+    }
+
+    for (const department of orderedDepartments) {
+        entityOptions.push({
+            value: department.id,
+            label: department.name,
+        })
+
+        const childAgencies = orderedAgencies.filter((agency) => agency.department_id === department.id)
+        for (const agency of childAgencies) {
+            entityOptions.push({
+                value: agency.id,
+                label: `${agency.name}`,
+            })
+            pushOperatingUnits(agency.id)
+        }
+    }
+
+    if (independentAgencies.length > 0) {
+        for (const agency of [...independentAgencies].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))) {
+            entityOptions.push({
+                value: agency.id,
+                label: `${agency.name}`,
+            })
+            pushOperatingUnits(agency.id)
+        }
     }
 
     return (
@@ -63,73 +94,14 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
                     {/* hidden input carries the actual UUID to the server action */}
                     <input id="entity_id" type="hidden" name="entity_id" value={selectedEntityId} required />
 
-                    <Select 
+                    <SearchableComboboxField
+                        items={entityOptions}
                         value={selectedEntityId}
-                        onValueChange={handleEntityChange}
-                    >
-                        <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base">
-                            <SelectValue placeholder="Select your Entity">
-                                {selectedEntityId 
-                                    ? getEntityName(selectedEntityId) 
-                                    : <span className="text-gray-400">Select your Entity</span>
-                                }
-                            </SelectValue>
-                        </SelectTrigger>
-                        
-                        <SelectContent>
-                            {/* Standard Departments and Agencies */}
-                            {departments.map((dept) => {
-                                const childAgencies = agencies.filter(a => a.department_id === dept.id)
-                                
-                                return (
-                                    <SelectGroup key={dept.id}>
-                                        {/* SelectLabel replaces optgroup label */}
-                                        <SelectLabel className="bg-muted/50">{dept.name}</SelectLabel>
-                                        
-                                        <SelectItem value={dept.id}>
-                                            {dept.name}
-                                        </SelectItem>
-                                        
-                                        {childAgencies.map((agency) => (
-                                            <div key={agency.id}>
-                                                <SelectItem value={agency.id}>
-                                                    {agency.name}
-                                                </SelectItem>
-                                                {operatingUnits
-                                                    .filter(ou => ou.agency_id === agency.id)
-                                                    .map((ou) => (
-                                                        <SelectItem key={ou.id} value={ou.id}>
-                                                            {`↳ ${ou.name}`}
-                                                        </SelectItem>
-                                                    ))}
-                                            </div>
-                                        ))}
-                                    </SelectGroup>
-                                )
-                            })}
-
-                            {/* Independent Agencies */}
-                            {independentAgencies.length > 0 && (
-                                <SelectGroup>
-                                    <SelectLabel className="bg-muted/50">Independent Agencies & SUCs</SelectLabel>
-                                    {independentAgencies.map((agency) => (
-                                        <div key={agency.id}>
-                                            <SelectItem value={agency.id}>
-                                                {agency.name}
-                                            </SelectItem>
-                                            {operatingUnits
-                                                .filter(ou => ou.agency_id === agency.id)
-                                                .map((ou) => (
-                                                    <SelectItem key={ou.id} value={ou.id}>
-                                                        {`↳ ${ou.name}`}
-                                                    </SelectItem>
-                                                ))}
-                                        </div>
-                                    ))}
-                                </SelectGroup>
-                            )}
-                        </SelectContent>
-                    </Select>
+                        onValueChange={(value) => handleEntityChange(value)}
+                        placeholder="Select your Entity"
+                        searchPlaceholder="Search entities"
+                        emptyText="No entities found."
+                    />
                     {state?.fieldErrors?.entity_id && (
                         <p className="text-red-500 text-sm italic">{state.fieldErrors.entity_id[0]}</p>
                     )}

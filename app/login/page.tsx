@@ -48,8 +48,10 @@ export default function LoginPage() {
         }
 
         // Route the user based on the role
-        if (data?.user?.role === 'admin') {
+        if (data?.user?.is_admin) {
             router.push('/admin')
+        } else if (data?.user?.status === 'unverified') {
+            router.push('/pending-approval')
         } else {
             router.push('/home')
         }

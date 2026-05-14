@@ -513,12 +513,19 @@ export async function getPendingUsers(): Promise<UserEntity[]> {
         .leftJoin('entities', 'users.entity_id', 'entities.id')
         .leftJoin('departments', 'departments.id', 'entities.id')
         .leftJoin('agencies', 'agencies.id', 'entities.id')
+        .leftJoin('operating_units', 'operating_units.id', 'entities.id')
+        .leftJoin('departments as agency_departments', 'agency_departments.id', 'agencies.department_id')
+        .leftJoin('agencies as ou_agencies', 'ou_agencies.id', 'operating_units.agency_id')
+        .leftJoin('departments as ou_departments', 'ou_departments.id', 'ou_agencies.department_id')
         .select([
             'users.id as user_id',
+            'users.entity_id as entity_id',
             'users.name as user_name',
             'users.email as user_email',
             'users.position as position',
             'users.role as role',
+            'users.is_admin as is_admin',
+            'users.status as status',
             'users.workflow_role as workflow_role',
             'users.access_level as access_level',
             'users.created_at as user_created_at',
@@ -526,9 +533,10 @@ export async function getPendingUsers(): Promise<UserEntity[]> {
         ])
         .select([
             sql<string>`COALESCE(entities.type, '')`.as('entity_type'),
-            sql<string>`COALESCE(departments.name, agencies.name, '')`.as('entity_name')
+            sql<string>`COALESCE(departments.name, agencies.name, operating_units.name, '')`.as('entity_name'),
+            sql<string>`COALESCE(departments.name, agency_departments.name, ou_departments.name, '')`.as('parent_entity_name')
         ])
-        .where('role', '=', 'unverified')
+        .where('users.status', '=', 'unverified')
         .orderBy('users.created_at', 'asc')
         .execute()
 }
@@ -571,7 +579,15 @@ export async function updateUser(id: string, updateWith: UserUpdate): Promise<vo
 }
 
 export async function deleteUser(id: string): Promise<void> {
-    await db.updateTable('users').set({ deleted_at: new Date(), role: 'archived' }).where('id', '=', id).executeTakeFirstOrThrow()
+    const archivedAt = new Date()
+    await db
+        .updateTable('users')
+        .set({
+            archived_at: archivedAt,
+            status: 'archived',
+        })
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
 }
 
 export async function createEntityRequest(request: NewEntityRequest): Promise<EntityRequest> {
@@ -667,6 +683,41 @@ export async function getOperatingUnitDescendantIds(rootOuId: string): Promise<s
     }
 
     return descendantIds
+}
+
+export async function getAccessibleEntityIds(entityId: string): Promise<string[]> {
+    const entity = await getEntityById(entityId).catch(() => null)
+    if (!entity) {
+        return []
+    }
+
+    if (entity.type === 'department') {
+        const agencies = await getAllAgenciesByDepartmentId(entityId)
+        const entityIds = new Set<string>([entityId])
+
+        for (const agency of agencies) {
+            entityIds.add(agency.id)
+
+            const operatingUnits = await getAllOperatingUnitsByAgencyId(agency.id)
+            for (const operatingUnit of operatingUnits) {
+                entityIds.add(operatingUnit.id)
+            }
+        }
+
+        return [...entityIds]
+    }
+
+    if (entity.type === 'agency') {
+        const operatingUnits = await getAllOperatingUnitsByAgencyId(entityId)
+        return [entityId, ...operatingUnits.map((operatingUnit) => operatingUnit.id)]
+    }
+
+    if (entity.type === 'operating_unit') {
+        const descendantIds = await getOperatingUnitDescendantIds(entityId)
+        return [entityId, ...descendantIds]
+    }
+
+    return [entityId]
 }
 
 export async function setEntityAndDescendantsInactive(entityId: string): Promise<void> {

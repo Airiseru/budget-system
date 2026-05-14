@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation"
 import { sessionDetails } from "@/src/actions/auth"
+import { isActiveUser, isUnverifiedUser, isDbmUser } from "@/src/lib/user-status"
 import { HomeButton } from "@/components/ui/HomeButton"
 import GeneralButton from "@/components/ui/GeneralButton"
 
@@ -9,14 +10,17 @@ export default async function HomePage() {
     if (!session) {
         return redirect('/login')
     }
-    else if (session.user.role === 'unverified') {
+    else if (isUnverifiedUser(session.user)) {
         return redirect('/pending-approval')
+    }
+    else if (!isActiveUser(session.user)) {
+        return redirect('/login')
     }
     else if (session.user.role !== 'dbm') {
         return redirect('/home')
     }
 
-    const isApprover = session.user.role === 'dbm' && session.user.access_level === 'approve'
+    const isApprover = isDbmUser(session.user)
     
     return (
         <main className="m-4">

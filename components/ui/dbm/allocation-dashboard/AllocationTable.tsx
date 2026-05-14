@@ -155,7 +155,7 @@ export default function AllocationTable({
                                     : ((gaaAmount - nepAmount) / nepAmount) * 100
                             const hasNoNepToGaaChange = Math.abs(nepVsGaaDiff) < 0.0001
                             const removedInGaa =
-                                canEditGaa &&
+                                (canEditGaa || isViewOnlyPhase) &&
                                 Number(row.gaa_amt) === 0 &&
                                 Number(row.nep_amt) > 0
                             const legislativeInsertion =

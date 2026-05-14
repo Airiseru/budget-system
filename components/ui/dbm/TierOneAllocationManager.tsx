@@ -528,7 +528,7 @@ export function TierOneAllocationManager({
                                 value={itemCatalogId}
                                 placeholder="Select item catalog"
                                 searchPlaceholder="Search line items"
-                                emptyText="No line items found."
+                                emptyText="No items found."
                                 disabled={!canEditStructure}
                                 onValueChange={setItemCatalogId}
                             />

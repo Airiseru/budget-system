@@ -8,6 +8,7 @@ import { SignupFormSchema, UserFormState } from "../lib/validations/user"
 import { redirect } from "next/navigation"
 import * as z from 'zod'
 import { ACCESS_LEVELS_HIERARCHY } from "../lib/constants"
+import { isActiveUser, isAdminUser, isUnverifiedUser } from "../lib/user-status"
 
 export async function sessionDetails() {
     return await auth.api.getSession({
@@ -44,7 +45,13 @@ export async function sessionWithEntity() {
 
 export async function requireVerifiedUser() {
     const session = await sessionDetails()
-    if (!session || session?.user?.role === 'unverified') {
+    if (!session) {
+        redirect('/login')
+    }
+    if (isUnverifiedUser(session.user)) {
+        redirect('/pending-approval')
+    }
+    if (!isActiveUser(session.user)) {
         redirect('/login')
     }
 }
@@ -54,10 +61,10 @@ export async function redirectBasedOnRole() {
     if (!session) {
         redirect('/login')
     }
-    else if (session.user.role === 'unverified') {
+    else if (isUnverifiedUser(session.user)) {
         redirect('/pending-approval')
     }
-    else if (session.user.role === 'admin') {
+    else if (isAdminUser(session.user)) {
         redirect('/admin')
     }
     else {

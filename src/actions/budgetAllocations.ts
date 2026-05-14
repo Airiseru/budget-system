@@ -302,23 +302,14 @@ export async function loadDbmAllocationDashboard({
             : activeCycle?.fiscal_year ?? selectedYear ?? latestYear
     const safePage = Number.isFinite(page) && page > 0 ? page : 1
 
-    const [departments, paps, entitySegments, items, fundingSources, totalCount, filteredTotals, overallTotals, signoffSummary] = await Promise.all([
+    const [departments, paps, entitySegments, items, fundingSources, filteredAggregates, overallAggregates, signoffSummary] = await Promise.all([
         EntityRepository.getAllDepartments(),
         PapRepository.getPapOptions(),
         EntityRepository.getAllEntitySegments(true),
         ItemRepository.listAllItemCatalog(),
         UacsRepository.listFundingSources(),
         viewingYear
-            ? BudgetAllocationRepository.countAllocationDashboardRows({
-                fiscalYear: viewingYear,
-                departmentId: selectedDepartmentId,
-                papId: selectedPapId,
-                expenseClass: selectedExpenseClass,
-                search: search.trim() || undefined,
-            })
-            : Promise.resolve(0),
-        viewingYear
-            ? BudgetAllocationRepository.getAllocationDashboardTotals({
+            ? BudgetAllocationRepository.getAllocationDashboardAggregates({
                 fiscalYear: viewingYear,
                 departmentId: selectedDepartmentId,
                 papId: selectedPapId,
@@ -326,16 +317,18 @@ export async function loadDbmAllocationDashboard({
                 search: search.trim() || undefined,
             })
             : Promise.resolve({
+                count: 0,
                 proposed_total: 0,
                 dbm_rec_total: 0,
                 nep_total: 0,
                 gaa_total: 0,
             }),
         viewingYear
-            ? BudgetAllocationRepository.getAllocationDashboardTotals({
+            ? BudgetAllocationRepository.getAllocationDashboardAggregates({
                 fiscalYear: viewingYear,
             })
             : Promise.resolve({
+                count: 0,
                 proposed_total: 0,
                 dbm_rec_total: 0,
                 nep_total: 0,
@@ -352,6 +345,20 @@ export async function loadDbmAllocationDashboard({
                 last_updated_at: null,
             }),
     ])
+
+    const totalCount = filteredAggregates.count
+    const filteredTotals = {
+        proposed_total: filteredAggregates.proposed_total,
+        dbm_rec_total: filteredAggregates.dbm_rec_total,
+        nep_total: filteredAggregates.nep_total,
+        gaa_total: filteredAggregates.gaa_total,
+    }
+    const overallTotals = {
+        proposed_total: overallAggregates.proposed_total,
+        dbm_rec_total: overallAggregates.dbm_rec_total,
+        nep_total: overallAggregates.nep_total,
+        gaa_total: overallAggregates.gaa_total,
+    }
 
     const totalPages = viewingYear ? Math.max(1, Math.ceil(totalCount / ALLOCATION_DASHBOARD_PAGE_SIZE)) : 1
     const currentPage = Math.min(safePage, totalPages)

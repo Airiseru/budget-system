@@ -6,6 +6,7 @@ import { z } from 'zod'
 import { sessionDetails } from './auth'
 import { createBudgetSettingsRepository, createBudgetAllocationRepository } from '../db/factory'
 import { StartBudgetCycleSchema, EditBudgetCycleSchema, BudgetCycleFormState } from '../lib/validations/budgetSettings'
+import { isAdminUser, isDbmUser } from '../lib/user-status'
 
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -14,8 +15,8 @@ async function requireBudgetCycleManager() {
     const session = await sessionDetails()
     if (!session) redirect('/login')
 
-    const isAdmin = session.user.role === 'admin'
-    const isDbmApprover = session.user.role === 'dbm' && session.user.access_level === 'approve'
+    const isAdmin = isAdminUser(session.user)
+    const isDbmApprover = isDbmUser(session.user)
 
     if (!isAdmin && !isDbmApprover) {
         redirect('/home')

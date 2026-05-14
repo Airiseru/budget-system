@@ -62,10 +62,15 @@ export default function BulkValidityPanel({
                             <Select
                                 value={value.scope}
                                 onValueChange={(next) =>
-                                    onChange({
-                                        ...value,
-                                        scope: (next ?? 'all') as BulkValidityState['scope'],
-                                    })
+                                    onChange(
+                                        (next ?? 'all') === 'all'
+                                            ? { ...value, scope: 'all', expense_class: '' }
+                                            : (next ?? 'all') === 'expense_class'
+                                                ? { ...value, scope: 'expense_class', expense_class: value.expense_class || 'PS' }
+                                                : (next ?? 'all') === 'tier'
+                                                    ? { ...value, scope: 'tier', expense_class: '' }
+                                                    : { ...value, scope: 'expense_class_and_tier', expense_class: value.expense_class || 'PS' }
+                                    )
                                 }
                             >
                                 <SelectTrigger className={FIELD_CLASSNAME}>
@@ -74,12 +79,15 @@ export default function BulkValidityPanel({
                                             ? 'All line items'
                                             : value.scope === 'expense_class'
                                                 ? 'Expense class only'
-                                                : 'Expense class and tier'}
+                                                : value.scope === 'tier'
+                                                    ? 'Tier only'
+                                                    : 'Expense class and tier'}
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All line items</SelectItem>
                                     <SelectItem value="expense_class">Expense class only</SelectItem>
+                                    <SelectItem value="tier">Tier only</SelectItem>
                                     <SelectItem value="expense_class_and_tier">Expense class and tier</SelectItem>
                                 </SelectContent>
                             </Select>
@@ -88,18 +96,17 @@ export default function BulkValidityPanel({
                             <p className="font-medium">Expense Class</p>
                             <Select
                                 value={value.expense_class}
-                                onValueChange={(next) => onChange({ ...value, expense_class: next ?? 'all' })}
-                                disabled={value.scope === 'all'}
+                                onValueChange={(next) => onChange({ ...value, expense_class: next ?? '' })}
+                                disabled={!['expense_class', 'expense_class_and_tier'].includes(value.scope)}
                             >
                                 <SelectTrigger className={FIELD_CLASSNAME}>
                                     <SelectValue>
-                                        {value.expense_class === 'all'
-                                            ? 'All expense classes'
-                                            : `${value.expense_class} • ${EXPENSE_CLASSES[value.expense_class] ?? value.expense_class}`}
+                                        {value.expense_class
+                                            ? `${value.expense_class} • ${EXPENSE_CLASSES[value.expense_class] ?? value.expense_class}`
+                                            : 'Select expense class'}
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All expense classes</SelectItem>
                                     {Object.entries(EXPENSE_CLASSES).map(([code, label]) => (
                                         <SelectItem key={code} value={code}>
                                             {code} • {label}
@@ -113,7 +120,7 @@ export default function BulkValidityPanel({
                             <Select
                                 value={value.tier}
                                 onValueChange={(next) => onChange({ ...value, tier: (next ?? '1') as '1' | '2' })}
-                                disabled={value.scope !== 'expense_class_and_tier'}
+                                disabled={!['tier', 'expense_class_and_tier'].includes(value.scope)}
                             >
                                 <SelectTrigger className={FIELD_CLASSNAME}>
                                     <SelectValue>{value.tier === '1' ? 'Tier 1' : 'Tier 2'}</SelectValue>

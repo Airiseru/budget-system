@@ -8,6 +8,7 @@ import { NewEntityFormState, EditEntityFormState, DeleteEntityFormState } from '
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { DepartmentSchema, AgencySchema, OperatingUnitSchema } from '../lib/validations/entities'
+import { isAdminUser, isUnverifiedUser } from '../lib/user-status'
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -134,8 +135,7 @@ export async function loadEntities(needsAdmin = false, isCreate: boolean = false
 export async function loadAdminEntities(): Promise<LoadAdminEntitiesResult> {
     const session = await sessionWithEntity()
     if (!session) return {}
-    if (session.user.role !== 'admin') return {}
-    if (!session.user.entity_id) return {}
+    if (!isAdminUser(session.user)) return {}
 
     if (session.user_entity.entity_type === 'national') {
         return {
@@ -176,7 +176,7 @@ export async function createNewEntity(
     const session = await sessionWithEntity()
 
     if (!session) redirect('login')
-    if (session.user.role === 'unverified') redirect('pending-approval')
+    if (isUnverifiedUser(session.user)) redirect('pending-approval')
 
     const entityType = formData.get('entity_type') as string
     const name = formData.get('name') as string
@@ -374,7 +374,7 @@ export async function createEntityRequestAction(
 ): Promise<EntityRequestFormState> {
     const session = await sessionWithEntity()
     if (!session) redirect('/login')
-    if (session.user.role !== 'admin') {
+    if (!isAdminUser(session.user)) {
         return { formErrors: ['Only admins can request new entities.'] }
     }
     if (!session.user.entity_id) {

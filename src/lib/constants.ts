@@ -100,7 +100,6 @@ export const STATUS_COLOR_MAPPER = (status: string) => {
 }
 
 export const ROLE_LABELS: Record<string, string> = {
-    admin: 'Administrator',
     dbm: 'DBM',
     department: 'Department',
     agency: 'Agency',
@@ -109,6 +108,7 @@ export const ROLE_LABELS: Record<string, string> = {
 }
 
 export const ACCESS_LEVEL_LABELS: Record<string, string> = {
+    none: 'None',
     view: 'Viewer',
     encode: 'Encoder',
     review: 'Reviewer',

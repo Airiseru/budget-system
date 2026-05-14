@@ -1,7 +1,7 @@
 import { z } from 'zod'
 
 const TierOneRemarkStageSchema = z.enum(['entity_proposal', 'dbm_review', 'dbm_appeal'])
-const BulkValidityScopeSchema = z.enum(['all', 'expense_class', 'expense_class_and_tier'])
+const BulkValidityScopeSchema = z.enum(['all', 'expense_class', 'tier', 'expense_class_and_tier'])
 
 const optionalEmptyString = z.preprocess(
     (value) => {
@@ -71,7 +71,7 @@ export const BulkValidityUpdateSchema = z.object({
     valid_from: optionalEmptyString.nullable().transform((value) => value ?? null),
     valid_until: optionalEmptyString.nullable().transform((value) => value ?? null),
 }).superRefine((value, ctx) => {
-    if (value.scope !== 'all' && !value.expense_class) {
+    if (['expense_class', 'expense_class_and_tier'].includes(value.scope) && !value.expense_class) {
         ctx.addIssue({
             code: 'custom',
             path: ['expense_class'],
@@ -79,7 +79,7 @@ export const BulkValidityUpdateSchema = z.object({
         })
     }
 
-    if (value.scope === 'expense_class_and_tier' && !value.tier) {
+    if (['tier', 'expense_class_and_tier'].includes(value.scope) && !value.tier) {
         ctx.addIssue({
             code: 'custom',
             path: ['tier'],
