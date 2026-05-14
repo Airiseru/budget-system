@@ -45,6 +45,18 @@ export async function getBudgetCycleByYear(fiscalYear: number): Promise<BudgetCy
         .executeTakeFirst() ?? null
 }
 
+export async function getBudgetCycleByYearForUpdate(
+    fiscalYear: number,
+    executor: DbExecutor
+): Promise<BudgetCycle | null> {
+    return await executor
+        .selectFrom('budget_cycles')
+        .selectAll()
+        .where('fiscal_year', '=', fiscalYear)
+        .forUpdate()
+        .executeTakeFirst() ?? null
+}
+
 export async function getActiveBudgetCycle(): Promise<BudgetCycle | null> {
     return await db
         .selectFrom('budget_cycles')

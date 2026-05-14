@@ -9,7 +9,6 @@ import {
     createBudgetAllocationRepository,
     createBudgetSettingsRepository,
     createEntityRepository,
-    createFormRepository,
     createItemRepository,
     createKeyRepository,
     createPapRepository,
@@ -22,7 +21,6 @@ import {
     TierOneAllocationSchema,
 } from '../lib/validations/budgetAllocations'
 import { getCurrentSignatoryRole, getWorkflow } from '../lib/workflows'
-import { logNewForm } from './audit'
 import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '../lib/constants'
 import type { BudgetCyclePhase } from '../types/budget_settings'
 import type { ExpenseClass } from '../types/line_items'
@@ -30,7 +28,6 @@ import type { ExpenseClass } from '../types/line_items'
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
-const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 const ItemRepository = createItemRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -196,6 +193,10 @@ function getAllocationSignoffCodename(type: AllocationSignoffType, fiscalYear: n
     return `${type.toUpperCase()} Sign-Off FY ${fiscalYear}`
 }
 
+function getAllocationSignoffRecordId(type: AllocationSignoffType, fiscalYear: number) {
+    return `${type}:${fiscalYear}`
+}
+
 async function getMatchedPreviousYearGaaAmount(params: {
     fiscalYear: number
     entity_id: string
@@ -220,41 +221,6 @@ async function ensurePhaseDefaults(fiscalYear: number, phase: BudgetCyclePhase |
     }
 
     await BudgetAllocationRepository.seedAllocationPhaseDefaults(fiscalYear, phase)
-}
-
-async function getOrCreateAllocationSignoffForm(
-    type: AllocationSignoffType,
-    fiscalYear: number,
-    entityId: string,
-    userId: string
-) {
-    const existing = await FormRepository.getLatestFormByTypeAndFiscalYear(type, fiscalYear)
-    if (existing) return existing
-
-    const created = await FormRepository.createForm({
-        entity_id: entityId,
-        type,
-        fiscal_year: fiscalYear,
-        parent_form_id: null,
-        version: 1,
-        codename: getAllocationSignoffCodename(type, fiscalYear),
-        auth_status: 'pending_dbm',
-    })
-
-    await logNewForm(
-        userId,
-        entityId,
-        'budget_allocations',
-        created.id,
-        {
-            fiscal_year: fiscalYear,
-            signoff_type: type,
-            auth_status: 'pending_dbm',
-        },
-        created.created_at
-    )
-
-    return created
 }
 
 export async function loadTierOneDashboard() {
@@ -380,44 +346,38 @@ export async function loadDbmAllocationDashboard({
         ? getAllocationSignoffTypeForPhase(activeCycle.current_phase)
         : null
 
-    const signoffForm = signoffType
-        ? await getOrCreateAllocationSignoffForm(
-            signoffType,
-            viewingYear!,
-            session.user.entity_id,
-            session.user.id
-        )
+    const signoffSnapshot = signoffType && viewingYear
+        ? await BudgetAllocationRepository.getAllocationSignoffSnapshot(viewingYear, signoffType)
         : null
-
-    const signoffWorkflow = signoffForm ? getWorkflow(signoffForm.type) : null
-    const signoffCurrentRole = signoffForm && signoffWorkflow
-        ? getCurrentSignatoryRole(signoffForm.auth_status ?? '', signoffWorkflow)
+    const signoffRecordId = signoffType && viewingYear
+        ? getAllocationSignoffRecordId(signoffType, viewingYear)
         : null
-    const signoffSignatories = signoffForm
-        ? await KeyRepository.getSignatoriesByTarget('budget_cycles', String(viewingYear!), signoffForm.id)
+    const signoffWorkflow = signoffType ? getWorkflow(signoffType) : null
+    const signoffCurrentRole = signoffType && signoffWorkflow
+        ? getCurrentSignatoryRole('pending_dbm', signoffWorkflow)
+        : null
+    const signoffSignatories = signoffRecordId
+        ? await KeyRepository.getSignatoriesByTarget('budget_cycles', String(viewingYear!), signoffRecordId)
         : []
-    const signoffAlreadySigned = signoffForm
-        ? await KeyRepository.getSignatoryByTargetAndUserId('budget_cycles', String(viewingYear!), session.user.id, signoffForm.id)
+    const signoffAlreadySigned = signoffRecordId
+        ? await KeyRepository.getSignatoryByTargetAndUserId('budget_cycles', String(viewingYear!), session.user.id, signoffRecordId)
         : null
 
-    const signoffData = signoffForm && signoffWorkflow && signoffCurrentRole
+    const signoffData = signoffType && signoffRecordId && signoffWorkflow && signoffCurrentRole && signoffSnapshot
         ? {
-            formId: signoffForm.id,
-            entityId: signoffForm.entity_id,
-            authStatus: signoffForm.auth_status ?? '',
+            formId: signoffRecordId,
+            entityId: session.user.entity_id ?? '',
+            authStatus: 'pending_dbm',
             signatoryRole: signoffCurrentRole,
             userId: session.user.id,
-            codename: signoffForm.codename,
-            formData: {
-                fiscal_year: viewingYear,
-                signoff_type: signoffForm.type,
-                totals: signoffSummary,
-            },
+            fiscalYear: viewingYear,
+            signoffType,
+            codename: getAllocationSignoffCodename(signoffType, viewingYear!),
+            formData: signoffSnapshot,
             signatories: signoffSignatories,
             alreadySigned: !!signoffAlreadySigned,
             missingValidityCount: signoffSummary.missing_validity_count,
             userCanSign:
-                signoffForm.auth_status === 'pending_dbm' &&
                 session.user.access_level === 'approve' &&
                 session.user.workflow_role === 'dbm',
         }

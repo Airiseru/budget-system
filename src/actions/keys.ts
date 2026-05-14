@@ -9,7 +9,7 @@ import { verifySignature } from '../lib/crypto'
 import { getWorkflow, canSign, getNextStatus } from '../lib/workflows'
 import { logUserKeyCreation, logUserKeyRevoke } from './audit'
 import { FormSignaturePayload } from '../types/audit'
-import { sha256 } from '../lib/audit-hash'
+import { buildSignaturePayload, sha256 } from '../lib/audit-hash'
 import { canonicalStringify } from '../lib/canonical'
 import { cleanDataBasedOnTable } from '../lib/validations'
 import { createProposalRepository, createRetireeRepository, createStaffingRepository } from '../db/factory'
@@ -74,6 +74,54 @@ function getSignatoryTarget(formType: string, formId: string, fiscalYear: number
     }
 }
 
+function parseAllocationSignoffRecordId(recordId: string): { formType: 'nep' | 'gaa'; fiscalYear: number } | null {
+    const match = /^(nep|gaa):(\d{4})$/.exec(recordId)
+    if (!match) {
+        return null
+    }
+
+    const fiscalYear = Number(match[2])
+    if (!Number.isFinite(fiscalYear)) {
+        return null
+    }
+
+    return {
+        formType: match[1] as 'nep' | 'gaa',
+        fiscalYear,
+    }
+}
+
+async function buildAuthoritativeSignaturePayload(params: {
+    tableName: string
+    formId: string
+    fromStatus: string
+    toStatus: string
+    remarks?: string
+}) {
+    if (params.tableName === 'budget_allocations') {
+        const parsed = parseAllocationSignoffRecordId(params.formId)
+        if (!parsed) {
+            throw new Error('Invalid allocation sign-off record.')
+        }
+
+        const snapshot = await budgetAllocationRepository.getAllocationSignoffSnapshot(
+            parsed.fiscalYear,
+            parsed.formType
+        )
+
+        return {
+            from_status: params.fromStatus,
+            to_status: params.toStatus,
+            form_state_hash: sha256(canonicalStringify(snapshot)),
+            ...(typeof params.remarks === 'string' && params.remarks.trim()
+                ? { remarks: params.remarks.trim() }
+                : {}),
+        } satisfies FormSignaturePayload
+    }
+
+    throw new Error(`No authoritative signature payload builder for table ${params.tableName}.`)
+}
+
 async function advanceAllocationPhaseAfterApproval(formType: string, fiscalYear: number, changedBy: string) {
     await db.transaction().execute(async (trx) => {
         if (formType === 'nep') {
@@ -132,6 +180,26 @@ async function getFormFiscalYear(tableName: string, formId: string): Promise<num
     }
 
     return null
+}
+
+export async function getCurrentAuthoritativeSignaturePayload(
+    tableName: string,
+    formId: string,
+    fromStatus: string,
+    toStatus: string
+) {
+    const session = await sessionWithEntity()
+    if (!session) redirect('/login')
+    if (session.user.role !== 'dbm') {
+        throw new Error('Unauthorized')
+    }
+
+    return await buildAuthoritativeSignaturePayload({
+        tableName,
+        formId,
+        fromStatus,
+        toStatus,
+    })
 }
 
 export async function setSigningPin(pin: string) {
@@ -241,12 +309,18 @@ export async function verifyAndSubmitSignature(
         if (key.expires_at && key.expires_at < new Date()) throw new Error('Key has expired')
         if (publicKeySnapshot !== key.public_key) throw new Error('Public key snapshot mismatch')
     
-        // Get form's current status
-        const form = await formRepository.getFormAuthStatus(formId)
-        const formRecord = ['nep', 'gaa'].includes(form.type)
-            ? await formRepository.getFormById(formId)
-            : null
-        const fiscalYear = formRecord?.fiscal_year ?? await getFormFiscalYear(tableName, formId)
+        const parsedAllocationSignoff =
+            tableName === 'budget_allocations'
+                ? parseAllocationSignoffRecordId(formId)
+                : null
+        const form = parsedAllocationSignoff
+            ? {
+                auth_status: 'pending_dbm',
+                entity_id: session.user.entity_id ?? '',
+                type: parsedAllocationSignoff.formType,
+            }
+            : await formRepository.getFormAuthStatus(formId)
+        const fiscalYear = parsedAllocationSignoff?.fiscalYear ?? await getFormFiscalYear(tableName, formId)
         const canBypassClosedCycle =
             allowClosedCycleAction &&
             session.user.role === 'dbm' &&
@@ -271,10 +345,68 @@ export async function verifyAndSubmitSignature(
         const workflow = getWorkflow(form.type)
 
         const transactionResult = await db.transaction().execute(async (trx) => {
-            const lockedForm = await formRepository.getFormAuthStatusForUpdate(formId, trx)
+            let currentAuthStatus = 'pending_dbm'
+            let currentEntityId = session.user.entity_id ?? ''
 
-            if (!canSign(lockedForm.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? '', signatoryRole, workflow)) {
+            if (parsedAllocationSignoff) {
+                const lockedCycle = await budgetSettingsRepository.getBudgetCycleByYearForUpdate(
+                    parsedAllocationSignoff.fiscalYear,
+                    trx
+                )
+
+                if (!lockedCycle) {
+                    throw new Error('Sign-off target not found')
+                }
+            } else {
+                const lockedForm = await formRepository.getFormAuthStatusForUpdate(formId, trx)
+                currentAuthStatus = lockedForm.auth_status ?? ''
+                currentEntityId = lockedForm.entity_id
+            }
+
+            if (!canSign(currentAuthStatus, session.user.access_level, session.user.workflow_role ?? '', signatoryRole, workflow)) {
                 throw new Error('You are not authorized to sign at this stage')
+            }
+
+            const nextStatus = getNextStatus(currentAuthStatus, workflow, 'approve') ?? ''
+            const authoritativePayload = parsedAllocationSignoff
+                ? await buildAuthoritativeSignaturePayload({
+                    tableName,
+                    formId,
+                    fromStatus: currentAuthStatus,
+                    toStatus: nextStatus,
+                })
+                : payload as FormSignaturePayload
+
+            if (
+                authoritativePayload.from_status !== (payload as FormSignaturePayload).from_status ||
+                authoritativePayload.to_status !== (payload as FormSignaturePayload).to_status ||
+                authoritativePayload.form_state_hash !== (payload as FormSignaturePayload).form_state_hash
+            ) {
+                throw new Error('The allocation sign-off data changed before signing completed. Please try again.')
+            }
+
+            const expectedSignaturePayload = buildSignaturePayload({
+                entity_id: currentEntityId,
+                user_id: session.user.id,
+                event_type: 'SIGN',
+                table_name: tableName,
+                record_id: formId,
+                payload: authoritativePayload,
+                changed_at: changedAt,
+            })
+
+            if (stringSignaturePayload !== expectedSignaturePayload) {
+                throw new Error('Signature payload mismatch.')
+            }
+
+            const signatureStillValid = await verifySignature(
+                stringSignaturePayload,
+                signature,
+                key.public_key,
+            )
+
+            if (!signatureStillValid) {
+                throw new Error('Invalid signature.')
             }
 
             const existingCurrentCycleSignature =
@@ -300,11 +432,11 @@ export async function verifyAndSubmitSignature(
                 public_key_snapshot: key.public_key,
                 signature,
                 signature_payload: stringSignaturePayload,
-                form_state_hash: (payload as FormSignaturePayload).form_state_hash as string ?? '',
-                from_status: lockedForm.auth_status ?? '',
-                to_status: getNextStatus(lockedForm.auth_status ?? '', workflow, 'approve') ?? '',
-                remarks: typeof (payload as FormSignaturePayload).remarks === 'string'
-                    ? (payload as FormSignaturePayload).remarks ?? null
+                form_state_hash: authoritativePayload.form_state_hash,
+                from_status: currentAuthStatus,
+                to_status: nextStatus,
+                remarks: typeof authoritativePayload.remarks === 'string'
+                    ? authoritativePayload.remarks ?? null
                     : null,
                 signer_workflow_role: session.user.workflow_role ?? null,
                 signer_access_level: session.user.access_level,
@@ -313,19 +445,20 @@ export async function verifyAndSubmitSignature(
                 created_at: changedAt
             }, trx)
 
-            const nextStatus = getNextStatus(lockedForm.auth_status ?? '', workflow, 'approve') ?? ''
-            await formRepository.updateFormAuthStatusWithExecutor(formId, nextStatus, trx)
+            if (!parsedAllocationSignoff) {
+                await formRepository.updateFormAuthStatusWithExecutor(formId, nextStatus, trx)
+            }
 
             await auditRepository.createLogWithExecutor(trx, {
-                entity_id: lockedForm.entity_id,
+                entity_id: currentEntityId,
                 user_id: session.user.id,
                 event_type: 'SIGN',
                 table_name: tableName,
                 record_id: formId,
                 payload: {
-                    from_status: lockedForm.auth_status ?? '',
+                    from_status: currentAuthStatus,
                     to_status: nextStatus,
-                    form_state_hash: (payload as FormSignaturePayload).form_state_hash as string ?? '',
+                    form_state_hash: authoritativePayload.form_state_hash,
                 },
                 changed_at: changedAt,
                 public_key_snapshot: key.public_key,

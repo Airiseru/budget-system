@@ -8,6 +8,7 @@ import {
     verifyAndSubmitSignature,
     getUserKeys,
     verifySigningPin,
+    getCurrentAuthoritativeSignaturePayload,
 } from "@/src/actions/keys";
 import { FormSignaturePayload } from "@/src/types/audit";
 import { canonicalStringify } from "@/src/lib/canonical";
@@ -90,13 +91,18 @@ export function SignButton({
 
             const date = new Date();
 
-            const cleanFormData = cleanDataBasedOnTable(tableName, formData);
-
-            const payload: FormSignaturePayload = {
-                from_status: fromAuthStatus ?? signatoryRole,
-                to_status: toAuthStatus ?? "approved",
-                form_state_hash: sha256(canonicalStringify(cleanFormData)),
-            };
+            const payload: FormSignaturePayload = tableName === "budget_allocations"
+                ? await getCurrentAuthoritativeSignaturePayload(
+                    tableName,
+                    formId,
+                    fromAuthStatus ?? signatoryRole,
+                    toAuthStatus ?? "approved",
+                )
+                : {
+                    from_status: fromAuthStatus ?? signatoryRole,
+                    to_status: toAuthStatus ?? "approved",
+                    form_state_hash: sha256(canonicalStringify(cleanDataBasedOnTable(tableName, formData))),
+                };
 
             const signaturePayload = buildSignaturePayload({
                 entity_id: entityId,

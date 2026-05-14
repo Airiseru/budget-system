@@ -365,3 +365,15 @@ export async function getFormIntegrity(tableName: string, recordId: string) {
 
     return await AuditRepository.verifyFormIntegrity(tableName, recordId)
 }
+
+export async function getAllocationSignoffIntegrity(
+    fiscalYear: number,
+    signoffType: 'nep' | 'gaa'
+) {
+    const session = await sessionDetails()
+    if (!session || (session.user.role !== 'dbm' && !isAdminUser(session.user))) {
+        throw new Error('Unauthorized')
+    }
+
+    return await AuditRepository.verifyAllocationSignoffIntegrity(fiscalYear, signoffType)
+}

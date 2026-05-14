@@ -28,6 +28,7 @@ import { Diff } from "@/src/types/audit"
 import type { Database } from "@/src/types"
 import { getNextStatus, getWorkflow, type Workflow } from "@/src/lib/workflows"
 import * as keyRepository from "./keyRepository"
+import * as budgetAllocationRepository from "./budgetAllocationRepository"
 
 type DbExecutor = Kysely<Database> | Transaction<Database>
 type SignedAuditLog = AuditLog & {
@@ -45,6 +46,15 @@ function getWorkflowActionForEvent(eventType: SignedAuditEventType): 'approve' |
 
 function didTimestampsMatch(left: Date | string, right: Date | string) {
     return new Date(left).getTime() === new Date(right).getTime()
+}
+
+function getSourceRecordIdFromSignaturePayload(signaturePayload: string): string | null {
+    try {
+        const parsed = JSON.parse(signaturePayload) as { record_id?: unknown }
+        return typeof parsed.record_id === 'string' ? parsed.record_id : null
+    } catch {
+        return null
+    }
 }
 
 async function verifySignedAuditEventAgainstSignatory(params: {
@@ -461,6 +471,208 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
             authorizationSnapshotsValid,
             isDataMatch
         }
+    }
+}
+
+export async function verifyAllocationSignoffIntegrity(
+    fiscalYear: number,
+    signoffType: 'nep' | 'gaa'
+) {
+    const signoffRecordId = `${signoffType}:${fiscalYear}`
+
+    const firstLog = await db
+        .selectFrom('audit_logs')
+        .select('entity_id')
+        .where('table_name', '=', 'budget_allocations')
+        .where('record_id', '=', signoffRecordId)
+        .limit(1)
+        .executeTakeFirst()
+
+    if (!firstLog) return null
+
+    const lastSeal = await db
+        .selectFrom('merkle_roots')
+        .selectAll()
+        .where('entity_id', '=', firstLog.entity_id)
+        .orderBy('created_at', 'desc')
+        .limit(1)
+        .executeTakeFirst()
+
+    const allEntityLogs = await db
+        .selectFrom('audit_logs')
+        .selectAll()
+        .where('entity_id', '=', firstLog.entity_id)
+        .orderBy('changed_at', 'asc')
+        .execute()
+
+    let isSealedRootValid = true
+    const sealedLogCount = lastSeal?.log_count ?? 0
+    const sealedLogs = lastSeal ? allEntityLogs.slice(0, sealedLogCount) : []
+    const postSealLogs = lastSeal ? allEntityLogs.slice(sealedLogCount) : allEntityLogs
+
+    if (lastSeal && allEntityLogs.length < sealedLogCount) {
+        isSealedRootValid = false
+    }
+
+    const chainResult =
+        lastSeal && isSealedRootValid
+            ? verifyChainSegment(
+                postSealLogs,
+                sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
+            )
+            : verifyChain(allEntityLogs)
+
+    const signoffLogs = allEntityLogs.filter(
+        (log) => log.table_name === 'budget_allocations' && log.record_id === signoffRecordId
+    )
+    const logIndexMap = new Map(allEntityLogs.map((log, index) => [log.id, index]))
+    const currentGlobalRoot = lastSeal?.root_hash ?? null
+
+    const signoffLogsWithProofs = signoffLogs.map((log) => {
+        const logIndex = logIndexMap.get(log.id) ?? -1
+        const isSealed = lastSeal ? logIndex > -1 && logIndex < sealedLogCount : false
+
+        return {
+            ...log,
+            isSealed,
+            cryptographic_proof: null,
+        }
+    })
+
+    const currentState = await budgetAllocationRepository.getAllocationSignoffSnapshot(
+        fiscalYear,
+        signoffType
+    )
+
+    const currentHash = await sha256(canonicalStringify(currentState))
+    const workflow = getWorkflow(signoffType)
+    const usedSignatoryIds = new Set<string>()
+    let cryptographicValid = true
+    let signatoryRowsValid = true
+    let authorizationSnapshotsValid = true
+    let stateHashValid = true
+
+    for (const log of signoffLogsWithProofs) {
+        if (!isSignedAuditEvent(log.event_type)) {
+            continue
+        }
+
+        const payload = log.payload as FormSignaturePayload | null
+        if (!payload) {
+            cryptographicValid = false
+            signatoryRowsValid = false
+            authorizationSnapshotsValid = false
+            stateHashValid = false
+            continue
+        }
+
+        const matchingSignatory = await keyRepository.getMatchingSignatoryForAuditEvent(
+            'budget_cycles',
+            String(fiscalYear),
+            log.user_id,
+            log.event_type,
+            log.signature ?? '',
+            new Date(log.changed_at)
+        )
+
+        if (!matchingSignatory || usedSignatoryIds.has(matchingSignatory.id)) {
+            cryptographicValid = false
+            signatoryRowsValid = false
+            authorizationSnapshotsValid = false
+            stateHashValid = false
+            continue
+        }
+
+        usedSignatoryIds.add(matchingSignatory.id)
+
+        const expectedPayload = buildSignaturePayload({
+            entity_id: log.entity_id,
+            user_id: log.user_id,
+            event_type: log.event_type,
+            table_name: log.table_name,
+            record_id: log.record_id,
+            payload,
+            changed_at: new Date(log.changed_at),
+        })
+
+        const transition = workflow.transitions[payload.from_status]
+        const workflowAction = getWorkflowActionForEvent(log.event_type)
+        const expectedNextStatus = getNextStatus(payload.from_status, workflow, workflowAction)
+        const expectedSignatoryRole = transition?.signatory_role ?? null
+        const allowedAccessLevels = transition?.allowed_access_levels ?? []
+
+        const signatureStillValid = await verifySignature(
+            matchingSignatory.signature_payload,
+            matchingSignatory.signature,
+            matchingSignatory.public_key_snapshot
+        )
+
+        const sourceRecordIdMatches =
+            getSourceRecordIdFromSignaturePayload(matchingSignatory.signature_payload) === signoffRecordId
+
+        if (!signatureStillValid) {
+            cryptographicValid = false
+        }
+
+        if (
+            matchingSignatory.target_table !== 'budget_cycles' ||
+            matchingSignatory.target_record_id !== String(fiscalYear) ||
+            matchingSignatory.user_id !== log.user_id ||
+            matchingSignatory.event_type !== log.event_type ||
+            matchingSignatory.signature !== log.signature ||
+            matchingSignatory.public_key_snapshot !== log.public_key_snapshot ||
+            matchingSignatory.signature_payload !== expectedPayload ||
+            !sourceRecordIdMatches ||
+            matchingSignatory.form_state_hash !== payload.form_state_hash ||
+            matchingSignatory.from_status !== payload.from_status ||
+            matchingSignatory.to_status !== payload.to_status ||
+            (matchingSignatory.remarks ?? null) !== (payload.remarks ?? null) ||
+            !didTimestampsMatch(matchingSignatory.created_at, log.changed_at)
+        ) {
+            signatoryRowsValid = false
+        }
+
+        if (
+            !transition ||
+            expectedNextStatus !== payload.to_status ||
+            expectedSignatoryRole === null ||
+            matchingSignatory.role !== expectedSignatoryRole ||
+            matchingSignatory.signer_workflow_role !== expectedSignatoryRole ||
+            !allowedAccessLevels.includes(matchingSignatory.signer_access_level)
+        ) {
+            authorizationSnapshotsValid = false
+        }
+
+        if (payload.form_state_hash !== currentHash || matchingSignatory.form_state_hash !== currentHash) {
+            stateHashValid = false
+        }
+    }
+
+    const isDataMatch =
+        signoffLogs.length > 0 &&
+        cryptographicValid &&
+        signatoryRowsValid &&
+        authorizationSnapshotsValid &&
+        stateHashValid
+
+    return {
+        isTimelineIntact: chainResult.isValid,
+        isSealedRootValid,
+        timelineBrokenAt: chainResult.brokenAt,
+        isDataMatch,
+        currentGlobalRoot,
+        lastSealedRoot: lastSeal?.root_hash || null,
+        totalEntityEvents: allEntityLogs.length,
+        formEventCount: signoffLogs.length,
+        formLogs: signoffLogsWithProofs,
+        debugState: {
+            currentState,
+            cryptographicValid,
+            signatoryRowsValid,
+            authorizationSnapshotsValid,
+            stateHashValid,
+            isDataMatch,
+        },
     }
 }
 

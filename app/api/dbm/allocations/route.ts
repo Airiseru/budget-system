@@ -40,36 +40,43 @@ export async function POST(request: Request) {
         )
     }
 
-    const created = await BudgetAllocationRepository.createBudgetAllocation({
-        entity_id: parsed.data.entity_id,
-        budget_cycle_year: activeCycle.fiscal_year,
-        pap_code: parsed.data.pap_code,
-        fund_code: parsed.data.fund_code,
-        item_catalog_id: parsed.data.item_catalog_id,
-        tier: parsed.data.tier,
-        specific_description: parsed.data.specific_description,
-        quantity: parsed.data.quantity,
-        currency: parsed.data.currency,
-        release_classification: 'unclassified',
-        origin_tag: 'legislative_insertion',
-        proposed_amt: 0,
-        dbm_rec_amt: 0,
-        nep_amt: 0,
-        gaa_amt: parsed.data.gaa_amt,
-        prev_year_gaa_amt: 0,
-        valid_from: parsed.data.valid_from ? parseDateOnlyToUtcNoon(parsed.data.valid_from) : null,
-        valid_until: parsed.data.valid_until ? parseDateOnlyToUtcNoon(parsed.data.valid_until) : null,
-        auth_status: 'nep_approved',
-    })
+    try {
+        const created = await BudgetAllocationRepository.createBudgetAllocation({
+            entity_id: parsed.data.entity_id,
+            budget_cycle_year: activeCycle.fiscal_year,
+            pap_code: parsed.data.pap_code,
+            fund_code: parsed.data.fund_code,
+            item_catalog_id: parsed.data.item_catalog_id,
+            tier: parsed.data.tier,
+            specific_description: parsed.data.specific_description,
+            quantity: parsed.data.quantity,
+            currency: parsed.data.currency,
+            release_classification: 'unclassified',
+            origin_tag: 'legislative_insertion',
+            proposed_amt: 0,
+            dbm_rec_amt: 0,
+            nep_amt: 0,
+            gaa_amt: parsed.data.gaa_amt,
+            prev_year_gaa_amt: 0,
+            valid_from: parsed.data.valid_from ? parseDateOnlyToUtcNoon(parsed.data.valid_from) : null,
+            valid_until: parsed.data.valid_until ? parseDateOnlyToUtcNoon(parsed.data.valid_until) : null,
+            auth_status: 'nep_approved',
+        })
 
-    await BudgetAllocationRepository.createAllocationWorkflowLog({
-        allocation_id: created.id,
-        workflow_stage: 'congressional_bicam',
-        remarks: 'Created a legislative insertion line item.',
-        amt_before: null,
-        amt_after: created.gaa_amt,
-        performed_by: session.user.id,
-    })
+        await BudgetAllocationRepository.createAllocationWorkflowLog({
+            allocation_id: created.id,
+            workflow_stage: 'congressional_bicam',
+            remarks: 'Created a legislative insertion line item.',
+            amt_before: null,
+            amt_after: created.gaa_amt,
+            performed_by: session.user.id,
+        })
 
-    return NextResponse.json({ success: true, allocation: created })
+        return NextResponse.json({ success: true, allocation: created })
+    } catch (error) {
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : 'Failed to create legislative insertion.' },
+            { status: 409 }
+        )
+    }
 }

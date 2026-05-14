@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { CirclePlus } from 'lucide-react'
 import BackButton from '@/components/ui/BackButton'
+import VerifyAllocationSignoffIntegrityDialog from '@/components/ui/audit/VerifyAllocationSignoffIntegrityDialog'
 import { Button } from '@/components/ui/button'
 import type { AllocationDashboardRow } from '@/src/db/postgres/repositories/budgetAllocationRepository'
 import type { AllocationDashboardProps, BulkValidityState, LegislativeInsertionState } from './allocation-dashboard/shared'
@@ -108,6 +109,24 @@ export default function AllocationDashboard({
     }), [filteredTotals, pageDeltaTotals])
 
     const gaaExceedsNep = displayedOverallTotals.gaa_total > displayedOverallTotals.nep_total
+    const integrityTargets = useMemo(() => {
+        if (!viewingYear) return [] as Array<'nep' | 'gaa'>
+
+        const isActiveYear = !!activeCycle && viewingYear === activeCycle.fiscal_year
+        if (!isActiveYear) {
+            return ['nep', 'gaa'] satisfies Array<'nep' | 'gaa'>
+        }
+
+        if (currentPhase === 'presidential_approval') {
+            return ['nep'] satisfies Array<'nep' | 'gaa'>
+        }
+
+        if (currentPhase === 'legislative_deliberation' || currentPhase === 'enacted_gaa') {
+            return ['nep', 'gaa'] satisfies Array<'nep' | 'gaa'>
+        }
+
+        return [] as Array<'nep' | 'gaa'>
+    }, [activeCycle, currentPhase, viewingYear])
 
     useEffect(() => {
         setSelectedYear(viewingYear ? String(viewingYear) : '')
@@ -298,6 +317,29 @@ export default function AllocationDashboard({
                 totals={displayedOverallTotals}
                 showGaaTotals={showGaaTotals}
             />
+
+            {viewingYear && integrityTargets.length > 0 ? (
+                <section className="rounded-2xl border border-border bg-background px-5 py-4 shadow-sm">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <h2 className="text-base font-semibold text-secondary-foreground">Integrity Checks</h2>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                                Verify the signed NEP and GAA checkpoints for Fiscal Year {viewingYear} at any time from the dashboard.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {integrityTargets.map((target) => (
+                                <VerifyAllocationSignoffIntegrityDialog
+                                    key={`${viewingYear}-${target}`}
+                                    fiscalYear={viewingYear}
+                                    signoffType={target}
+                                    buttonLabel={target === 'nep' ? 'Verify NEP Integrity' : 'Verify GAA Integrity'}
+                                />
+                            ))}
+                        </div>
+                    </div>
+                </section>
+            ) : null}
 
             <AllocationSignoffPanel
                 key={`${signoff?.formId ?? 'none'}-${currentPhase ?? 'none'}`}
