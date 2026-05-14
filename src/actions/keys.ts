@@ -9,7 +9,7 @@ import { verifySignature } from '../lib/crypto'
 import { getWorkflow, canSign, getNextStatus } from '../lib/workflows'
 import { logUserKeyCreation, logUserKeyRevoke } from './audit'
 import { FormSignaturePayload } from '../types/audit'
-import { sha256, buildSignaturePayload } from '../lib/audit-hash'
+import { sha256 } from '../lib/audit-hash'
 import { canonicalStringify } from '../lib/canonical'
 import { cleanDataBasedOnTable } from '../lib/validations'
 import { createProposalRepository, createRetireeRepository, createStaffingRepository } from '../db/factory'
@@ -57,6 +57,20 @@ async function validateAllocationSignoffPhase(formType: string, fiscalYear: numb
         if (missingValidityCount > 0) {
             throw new Error('All allocations must have a complete validity period before this stage can be signed.')
         }
+    }
+}
+
+function getSignatoryTarget(formType: string, formId: string, fiscalYear: number | null) {
+    if ((formType === 'nep' || formType === 'gaa') && fiscalYear !== null) {
+        return {
+            targetTable: 'budget_cycles' as const,
+            targetRecordId: String(fiscalYear),
+        }
+    }
+
+    return {
+        targetTable: 'forms' as const,
+        targetRecordId: formId,
     }
 }
 
@@ -225,6 +239,7 @@ export async function verifyAndSubmitSignature(
         if (!key || key.user_id !== session.user.id) throw new Error('Invalid key')
         if (key.status !== 'active') throw new Error('Key is no longer active')
         if (key.expires_at && key.expires_at < new Date()) throw new Error('Key has expired')
+        if (publicKeySnapshot !== key.public_key) throw new Error('Public key snapshot mismatch')
     
         // Get form's current status
         const form = await formRepository.getFormAuthStatus(formId)
@@ -238,6 +253,7 @@ export async function verifyAndSubmitSignature(
             session.user.workflow_role === 'dbm' &&
             fiscalYear !== null &&
             await canDbmActOnFormForFiscalYear(fiscalYear)
+        const signatoryTarget = getSignatoryTarget(form.type, formId, fiscalYear)
 
         const isAllocationSignoffForm = ['nep', 'gaa'].includes(form.type)
 
@@ -262,19 +278,38 @@ export async function verifyAndSubmitSignature(
             }
 
             const existingCurrentCycleSignature =
-                await keyRepository.getCurrentCycleSignatoryByFormIdAndUserId(formId, session.user.id, trx)
+                await keyRepository.getCurrentCycleSignatoryByTargetAndUserId(
+                    signatoryTarget.targetTable,
+                    signatoryTarget.targetRecordId,
+                    session.user.id,
+                    trx,
+                    formId
+                )
 
             if (existingCurrentCycleSignature) {
                 throw new Error('You have already signed this document')
             }
 
             const createdSignatory = await keyRepository.createSignatoryWithExecutor({
-                form_id: formId,
+                target_table: signatoryTarget.targetTable,
+                target_record_id: signatoryTarget.targetRecordId,
                 user_id: session.user.id,
                 role: signatoryRole,
+                event_type: 'SIGN',
                 key_id: keyId,
-                public_key_snapshot: publicKeySnapshot,
+                public_key_snapshot: key.public_key,
                 signature,
+                signature_payload: stringSignaturePayload,
+                form_state_hash: (payload as FormSignaturePayload).form_state_hash as string ?? '',
+                from_status: lockedForm.auth_status ?? '',
+                to_status: getNextStatus(lockedForm.auth_status ?? '', workflow, 'approve') ?? '',
+                remarks: typeof (payload as FormSignaturePayload).remarks === 'string'
+                    ? (payload as FormSignaturePayload).remarks ?? null
+                    : null,
+                signer_workflow_role: session.user.workflow_role ?? null,
+                signer_access_level: session.user.access_level,
+                signer_entity_id: session.user.entity_id ?? null,
+                signer_is_admin: session.user.is_admin === true,
                 created_at: changedAt
             }, trx)
 
@@ -337,6 +372,7 @@ export async function verifyAndRejectSignature(
         if (!key || key.user_id !== session.user.id) throw new Error('Invalid key')
         if (key.status !== 'active') throw new Error('Key is no longer active')
         if (key.expires_at && key.expires_at < new Date()) throw new Error('Key has expired')
+        if (publicKeySnapshot !== key.public_key) throw new Error('Public key snapshot mismatch')
 
         const form = await formRepository.getFormAuthStatus(formId)
         const fiscalYear = await getFormFiscalYear(tableName, formId)
@@ -346,6 +382,7 @@ export async function verifyAndRejectSignature(
             session.user.workflow_role === 'dbm' &&
             fiscalYear !== null &&
             await canDbmActOnFormForFiscalYear(fiscalYear)
+        const signatoryTarget = getSignatoryTarget(form.type, formId, fiscalYear)
 
         if (
             fiscalYear !== null &&
@@ -368,6 +405,29 @@ export async function verifyAndRejectSignature(
             if (!rejectStatus) {
                 throw new Error('This form cannot be rejected at this stage')
             }
+
+            await keyRepository.createSignatoryWithExecutor({
+                target_table: signatoryTarget.targetTable,
+                target_record_id: signatoryTarget.targetRecordId,
+                user_id: session.user.id,
+                role: signatoryRole,
+                event_type: 'REJECT_FORM',
+                key_id: keyId,
+                public_key_snapshot: key.public_key,
+                signature,
+                signature_payload: stringSignaturePayload,
+                form_state_hash: (payload as FormSignaturePayload).form_state_hash as string ?? '',
+                from_status: lockedForm.auth_status ?? '',
+                to_status: rejectStatus,
+                remarks: typeof (payload as FormSignaturePayload).remarks === 'string'
+                    ? (payload as FormSignaturePayload).remarks ?? null
+                    : null,
+                signer_workflow_role: session.user.workflow_role ?? null,
+                signer_access_level: session.user.access_level,
+                signer_entity_id: session.user.entity_id ?? null,
+                signer_is_admin: session.user.is_admin === true,
+                created_at: changedAt,
+            }, trx)
 
             await formRepository.updateFormAuthStatusWithExecutor(formId, rejectStatus, trx)
 
@@ -396,28 +456,17 @@ export async function verifyAndRejectSignature(
     }
 }
 
-export async function verifyFormSignature(entityId: string, formId: string, tableName: string, signatoryId: string, formData: object | string) {
+export async function verifyFormSignature(
+    signatoryId: string,
+    tableName: string,
+    formData: object | string
+) {
     const signatory = await keyRepository.getSignatoryWithKey(signatoryId)
     if (!signatory) throw new Error('Invalid signatory')
-
-    const formPayload = await auditRepository.getPayloadOfFormSignEvent(signatory.user_id, entityId, tableName, formId)
-
-    if (!formPayload) {
-        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Form signature not found." }
-    }
-
-    if (formPayload === "Form not signed by user") {
-        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Form has not been officially signed by respective officer." }
-    }
-    else if (formPayload === "Multiple signatures of user found for form") {
-        return { isValid: false, cryptoValid: false, keyValidAtSigning: false, keyNotExpiredAtSigning: false, reason: "Respective officer has signed multiple times." }
-    }
-
-    const payload = formPayload as FormSignaturePayload
     const cleanFormData = cleanDataBasedOnTable(tableName, formData)
     const form_state_hash = sha256(canonicalStringify(cleanFormData))
 
-    if (payload.form_state_hash !== form_state_hash) {
+    if (signatory.form_state_hash !== form_state_hash) {
         return {
             isValid: false,
             cryptoValid: false,
@@ -427,24 +476,8 @@ export async function verifyFormSignature(entityId: string, formId: string, tabl
         }
     }
 
-    const signaturePayload = typeof formData === 'string'
-        ? formData
-        : buildSignaturePayload({
-            entity_id: entityId,
-            user_id: signatory.user_id,
-            event_type: 'SIGN',
-            table_name: tableName,
-            record_id: formId,
-            payload: {
-                from_status: payload.from_status,
-                to_status: payload.to_status,
-                form_state_hash: form_state_hash,
-            },
-            changed_at: signatory.created_at
-        })
-
     const cryptoValid = await verifySignature(
-        signaturePayload,
+        signatory.signature_payload,
         signatory.signature,
         signatory.public_key_snapshot
     )

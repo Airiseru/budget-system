@@ -24,7 +24,13 @@ export const FORM_TYPES: Record<string, string> = {
 
 export const FORM_ROUTE_MAP: Record<string, string> = {
     'bp_staffing': '/forms/staff',
-    'bp_retiree': '/forms/retirees'
+    'bp_retiree': '/forms/retirees',
+    'bp_local_proposal_new': '/forms/proposals',
+    'bp_local_proposal_expanded': '/forms/proposals',
+    'bp_foreign_proposal_new': '/forms/proposals',
+    'bp_foreign_proposal_expanded': '/forms/proposals',
+    'nep': '/dbm/allocations',
+    'gaa': '/dbm/allocations',
 }
 
 export const FORM_NAMES: Record<string, string> = {

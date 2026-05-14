@@ -197,7 +197,7 @@ export default function AllFormView({
                                                 <Building2 size={16} className="text-muted-foreground/70 shrink-0" />
                                                 <div>
                                                     <p className="font-bold text-secondary-foreground leading-tight">{form.entity_name}</p>
-                                                    <p className="text-sm text-muted-foreground line-clamp-1">{form.department_name || 'No department'}</p>
+                                                    <p className="text-sm text-muted-foreground">{form.department_name || 'No department'}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -214,7 +214,7 @@ export default function AllFormView({
                                             </span>
                                         </td>
                                         <td className="px-4 py-3">
-                                            <span className={`px-2.5 py-1 rounded-full text-sm font-bold border ${STATUS_COLOR_MAPPER(form.auth_status ?? "")}`}>
+                                            <span className={`px-3 py-1 rounded-full text-sm font-bold border inline-block whitespace-nowrap ${STATUS_COLOR_MAPPER(form.auth_status ?? "")}`}>
                                                 {STATUS_LABELS[form.auth_status ?? ""]}
                                             </span>
                                         </td>

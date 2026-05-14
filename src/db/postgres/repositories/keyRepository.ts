@@ -4,9 +4,20 @@ import {
     UserKey, NewUserKey, UserKeyStatus, UserKeyStatuses,
     Signatory, NewSignatory
 } from '../../../types/keys'
+import type { SignedAuditEventType } from '@/src/types/audit'
 import type { Database } from '@/src/types'
 
 type DbExecutor = Kysely<Database> | Transaction<Database>
+type SignatoryTargetTable = 'forms' | 'budget_cycles'
+
+function getSourceRecordIdFromSignaturePayload(signaturePayload: string): string | null {
+    try {
+        const parsed = JSON.parse(signaturePayload) as { record_id?: unknown }
+        return typeof parsed.record_id === 'string' ? parsed.record_id : null
+    } catch {
+        return null
+    }
+}
 
 async function getLatestDraftResetByFormId(form_id: string, executor: DbExecutor = db) {
     return await executor
@@ -84,8 +95,14 @@ export async function getSignatoriesOfUser(user_id: string): Promise<Signatory[]
     return await db.selectFrom('signatories').selectAll().where('user_id', '=', user_id).execute()
 }
 
-export async function getSignatoriesByFormId(form_id: string) {
-    const latestDraftReset = await getLatestDraftResetByFormId(form_id)
+export async function getSignatoriesByTarget(
+    targetTable: SignatoryTargetTable,
+    targetRecordId: string,
+    sourceRecordId?: string
+) {
+    const latestDraftReset = targetTable === 'forms'
+        ? await getLatestDraftResetByFormId(targetRecordId)
+        : null
 
     let query = db
         .selectFrom('signatories')
@@ -94,22 +111,39 @@ export async function getSignatoriesByFormId(form_id: string) {
             'signatories.id',
             'users.name as user_name',
             'signatories.role',
-            'signatories.created_at'
+            'signatories.event_type',
+            'signatories.created_at',
+            'signatories.signature_payload',
         ])
-        .where('signatories.form_id', '=', form_id)
+        .where('signatories.target_table', '=', targetTable)
+        .where('signatories.target_record_id', '=', targetRecordId)
         .where('signatories.signature', 'is not', null)
 
     if (latestDraftReset?.changed_at) {
         query = query.where('signatories.created_at', '>', latestDraftReset.changed_at)
     }
 
-    return await query
+    const rows = await query
         .orderBy('signatories.created_at', 'asc')
         .execute()
+
+    if (!sourceRecordId) {
+        return rows
+    }
+
+    return rows.filter((row) => getSourceRecordIdFromSignaturePayload(row.signature_payload) === sourceRecordId)
 }
 
-export async function getPastSignatoriesByFormId(form_id: string) {
-    const latestDraftReset = await getLatestDraftResetByFormId(form_id)
+export async function getSignatoriesByFormId(form_id: string) {
+    return await getSignatoriesByTarget('forms', form_id, form_id)
+}
+
+export async function getPastSignatoriesByTarget(targetTable: SignatoryTargetTable, targetRecordId: string) {
+    if (targetTable !== 'forms') {
+        return []
+    }
+
+    const latestDraftReset = await getLatestDraftResetByFormId(targetRecordId)
 
     if (!latestDraftReset?.changed_at) {
         return []
@@ -122,31 +156,49 @@ export async function getPastSignatoriesByFormId(form_id: string) {
             'signatories.id',
             'users.name as user_name',
             'signatories.role',
+            'signatories.event_type',
             'signatories.created_at'
         ])
-        .where('signatories.form_id', '=', form_id)
+        .where('signatories.target_table', '=', 'forms')
+        .where('signatories.target_record_id', '=', targetRecordId)
         .where('signatories.signature', 'is not', null)
         .where('signatories.created_at', '<=', latestDraftReset.changed_at)
         .orderBy('signatories.created_at', 'desc')
         .execute()
 }
 
-export async function getSignatoryByFormIdAndUserId(form_id: string, user_id: string): Promise<Signatory | null> {
-    const latestDraftReset = await getLatestDraftResetByFormId(form_id)
+export async function getPastSignatoriesByFormId(form_id: string) {
+    return await getPastSignatoriesByTarget('forms', form_id)
+}
+
+export async function getSignatoryByTargetAndUserId(
+    targetTable: SignatoryTargetTable,
+    targetRecordId: string,
+    user_id: string,
+    sourceRecordId?: string
+): Promise<Signatory | null> {
+    const latestDraftReset = targetTable === 'forms'
+        ? await getLatestDraftResetByFormId(targetRecordId)
+        : null
 
     let query = db
         .selectFrom('signatories')
         .selectAll()
-        .where('form_id', '=', form_id)
+        .where('target_table', '=', targetTable)
+        .where('target_record_id', '=', targetRecordId)
         .where('user_id', '=', user_id)
 
     if (latestDraftReset?.changed_at) {
         query = query.where('created_at', '>', latestDraftReset.changed_at)
     }
 
-    const signatory = await query
+    const signatories = await query
         .orderBy('created_at', 'desc')
-        .executeTakeFirst()
+        .execute()
+
+    const signatory = sourceRecordId
+        ? signatories.find((entry) => getSourceRecordIdFromSignaturePayload(entry.signature_payload) === sourceRecordId)
+        : signatories[0]
 
     if (!signatory) {
         return null
@@ -155,30 +207,92 @@ export async function getSignatoryByFormIdAndUserId(form_id: string, user_id: st
     return signatory
 }
 
+export async function getSignatoryByFormIdAndUserId(form_id: string, user_id: string): Promise<Signatory | null> {
+    return await getSignatoryByTargetAndUserId('forms', form_id, user_id, form_id)
+}
+
 export async function getCurrentCycleSignatoryByFormIdAndUserId(
     form_id: string,
     user_id: string,
     executor: DbExecutor
 ): Promise<Signatory | null> {
-    const latestDraftReset = await getLatestDraftResetByFormId(form_id, executor)
+    return await getCurrentCycleSignatoryByTargetAndUserId('forms', form_id, user_id, executor, form_id)
+}
+
+export async function getCurrentCycleSignatoryByTargetAndUserId(
+    targetTable: SignatoryTargetTable,
+    targetRecordId: string,
+    user_id: string,
+    executor: DbExecutor,
+    sourceRecordId?: string
+): Promise<Signatory | null> {
+    const latestDraftReset = targetTable === 'forms'
+        ? await getLatestDraftResetByFormId(targetRecordId, executor)
+        : null
 
     let query = executor
         .selectFrom('signatories')
         .selectAll()
-        .where('form_id', '=', form_id)
+        .where('target_table', '=', targetTable)
+        .where('target_record_id', '=', targetRecordId)
         .where('user_id', '=', user_id)
 
     if (latestDraftReset?.changed_at) {
         query = query.where('created_at', '>', latestDraftReset.changed_at)
     }
 
-    return await query
+    const signatories = await query
         .orderBy('created_at', 'desc')
-        .executeTakeFirst() ?? null
+        .execute()
+
+    if (sourceRecordId) {
+        return signatories.find((entry) => getSourceRecordIdFromSignaturePayload(entry.signature_payload) === sourceRecordId) ?? null
+    }
+
+    return signatories[0] ?? null
 }
 
 export async function getSignatoryById(id: string): Promise<Signatory | null> {
     return await db.selectFrom('signatories').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
+}
+
+export async function listSignatoriesByTarget(
+    targetTable: SignatoryTargetTable,
+    targetRecordId: string,
+    executor: DbExecutor = db
+): Promise<Signatory[]> {
+    return await executor
+        .selectFrom('signatories')
+        .selectAll()
+        .where('target_table', '=', targetTable)
+        .where('target_record_id', '=', targetRecordId)
+        .orderBy('created_at', 'asc')
+        .execute()
+}
+
+export async function listSignatoriesByFormId(form_id: string, executor: DbExecutor = db): Promise<Signatory[]> {
+    return await listSignatoriesByTarget('forms', form_id, executor)
+}
+
+export async function getMatchingSignatoryForAuditEvent(
+    targetTable: SignatoryTargetTable,
+    targetRecordId: string,
+    user_id: string,
+    event_type: SignedAuditEventType,
+    signature: string,
+    created_at: Date,
+    executor: DbExecutor = db
+): Promise<Signatory | null> {
+    return await executor
+        .selectFrom('signatories')
+        .selectAll()
+        .where('target_table', '=', targetTable)
+        .where('target_record_id', '=', targetRecordId)
+        .where('user_id', '=', user_id)
+        .where('event_type', '=', event_type)
+        .where('signature', '=', signature)
+        .where('created_at', '=', created_at)
+        .executeTakeFirst() ?? null
 }
 
 export async function getSignatoryWithKey(signature_id: string) {
@@ -190,9 +304,21 @@ export async function getSignatoryWithKey(signature_id: string) {
         .select([
             // signatory fields
             'signatories.id',
-            'signatories.form_id',
+            'signatories.target_table',
+            'signatories.target_record_id',
+            'signatories.event_type',
+            'signatories.role',
             'signatories.signature',
+            'signatories.signature_payload',
             'signatories.public_key_snapshot',
+            'signatories.form_state_hash',
+            'signatories.from_status',
+            'signatories.to_status',
+            'signatories.remarks',
+            'signatories.signer_workflow_role',
+            'signatories.signer_access_level',
+            'signatories.signer_entity_id',
+            'signatories.signer_is_admin',
             'signatories.created_at',
 
             // key fields needed for validation

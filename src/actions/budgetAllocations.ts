@@ -394,10 +394,10 @@ export async function loadDbmAllocationDashboard({
         ? getCurrentSignatoryRole(signoffForm.auth_status ?? '', signoffWorkflow)
         : null
     const signoffSignatories = signoffForm
-        ? await KeyRepository.getSignatoriesByFormId(signoffForm.id)
+        ? await KeyRepository.getSignatoriesByTarget('budget_cycles', String(viewingYear!), signoffForm.id)
         : []
     const signoffAlreadySigned = signoffForm
-        ? await KeyRepository.getSignatoryByFormIdAndUserId(signoffForm.id, session.user.id)
+        ? await KeyRepository.getSignatoryByTargetAndUserId('budget_cycles', String(viewingYear!), session.user.id, signoffForm.id)
         : null
 
     const signoffData = signoffForm && signoffWorkflow && signoffCurrentRole

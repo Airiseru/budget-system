@@ -70,7 +70,10 @@ export const REQUIRES_SIGNATURE: AuditEventType[] = [
 export const SIGNATORY_EVENTS: AuditEventType[] = [
     'SIGN',
     'APPROVE_FORM',
+    'REJECT_FORM',
 ]
+
+export type SignedAuditEventType = 'SIGN' | 'APPROVE_FORM' | 'REJECT_FORM'
 
 export type FieldDiff = {
     from: unknown

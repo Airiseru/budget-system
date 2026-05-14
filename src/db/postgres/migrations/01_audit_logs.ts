@@ -90,12 +90,20 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         FOR EACH STATEMENT
         EXECUTE FUNCTION make_table_append_only();
     `.execute(db)
+
+    await sql`
+        CREATE TRIGGER trg_signatories_append_only
+        BEFORE UPDATE OR DELETE ON signatories
+        FOR EACH STATEMENT
+        EXECUTE FUNCTION make_table_append_only();
+    `.execute(db)
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop triggers
     await sql`DROP TRIGGER IF EXISTS trg_prevent_status_rollback ON forms`.execute(db)
     await sql`DROP TRIGGER IF EXISTS trg_audit_logs_append_only ON audit_logs`.execute(db)
+    await sql`DROP TRIGGER IF EXISTS trg_signatories_append_only ON signatories`.execute(db)
 
     // Drop indexes
     await db.schema.dropIndex('idx_audit_logs_entity_id').execute()
