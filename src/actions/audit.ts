@@ -4,6 +4,8 @@ import { createAdministrativeOverrideRepository, createAuditRepository, createKe
 import { NewAuditLog, SignedLogInput } from "../types/audit"
 import { computeDiff, isDiffEmpty } from "../lib/diff"
 import { AuditEventType, SignaturePayload } from "../types/audit"
+import { sessionDetails } from "./auth"
+import { isAdminUser } from "../lib/user-status"
 
 const AuditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepository = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -356,5 +358,22 @@ export async function logFormOverwrite(
 }
 
 export async function getFormIntegrity(tableName: string, recordId: string) {
+    const session = await sessionDetails()
+    if (!session || (session.user.role !== 'dbm' && !isAdminUser(session.user))) {
+        throw new Error('Unauthorized')
+    }
+
     return await AuditRepository.verifyFormIntegrity(tableName, recordId)
+}
+
+export async function getAllocationSignoffIntegrity(
+    fiscalYear: number,
+    signoffType: 'nep' | 'gaa'
+) {
+    const session = await sessionDetails()
+    if (!session || (session.user.role !== 'dbm' && !isAdminUser(session.user))) {
+        throw new Error('Unauthorized')
+    }
+
+    return await AuditRepository.verifyAllocationSignoffIntegrity(fiscalYear, signoffType)
 }

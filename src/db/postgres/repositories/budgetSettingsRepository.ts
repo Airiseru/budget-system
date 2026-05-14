@@ -1,6 +1,9 @@
-import { sql } from 'kysely'
+import { Kysely, Transaction, sql } from 'kysely'
 import { db } from '../database'
 import { BudgetCycle, NewBudgetCycle, BudgetCycleUpdate } from '@/src/types/budget_settings'
+import type { Database } from '@/src/types'
+
+type DbExecutor = Kysely<Database> | Transaction<Database>
 
 function normalizeCycleState(
     prepStatus: BudgetCycle['prep_status'],
@@ -42,6 +45,18 @@ export async function getBudgetCycleByYear(fiscalYear: number): Promise<BudgetCy
         .executeTakeFirst() ?? null
 }
 
+export async function getBudgetCycleByYearForUpdate(
+    fiscalYear: number,
+    executor: DbExecutor
+): Promise<BudgetCycle | null> {
+    return await executor
+        .selectFrom('budget_cycles')
+        .selectAll()
+        .where('fiscal_year', '=', fiscalYear)
+        .forUpdate()
+        .executeTakeFirst() ?? null
+}
+
 export async function getActiveBudgetCycle(): Promise<BudgetCycle | null> {
     return await db
         .selectFrom('budget_cycles')
@@ -78,7 +93,26 @@ export async function editBudgetCycle(
     legalBasisRef?: string | null
 ): Promise<BudgetCycle> {
     return await db.transaction().execute(async (trx) => {
-        const existingCycle = await trx
+        return await editBudgetCycleWithExecutor(
+            fiscalYear,
+            nextStatus,
+            nextPhase,
+            changedBy,
+            trx,
+            legalBasisRef
+        )
+    })
+}
+
+export async function editBudgetCycleWithExecutor(
+    fiscalYear: number,
+    nextStatus: BudgetCycle['prep_status'],
+    nextPhase: BudgetCycle['current_phase'],
+    changedBy: string,
+    executor: DbExecutor,
+    legalBasisRef?: string | null
+): Promise<BudgetCycle> {
+        const existingCycle = await executor
             .selectFrom('budget_cycles')
             .selectAll()
             .where('fiscal_year', '=', fiscalYear)
@@ -91,7 +125,7 @@ export async function editBudgetCycle(
         const normalizedState = normalizeCycleState(nextStatus, nextPhase)
 
         if (normalizedState.prep_status === 'active') {
-            const activeCycle = await trx
+            const activeCycle = await executor
                 .selectFrom('budget_cycles')
                 .selectAll()
                 .where('prep_status', '=', 'active')
@@ -102,7 +136,7 @@ export async function editBudgetCycle(
             }
         }
 
-        return await trx
+        return await executor
             .updateTable('budget_cycles')
             .set({
                 prep_status: normalizedState.prep_status,
@@ -122,7 +156,6 @@ export async function editBudgetCycle(
             .where('fiscal_year', '=', fiscalYear)
             .returningAll()
             .executeTakeFirstOrThrow()
-    })
 }
 
 export async function startBudgetCycle(fiscalYear: number, changedBy: string, legalBasisRef?: string | null): Promise<BudgetCycle> {

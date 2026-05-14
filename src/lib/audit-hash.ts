@@ -53,13 +53,23 @@ export function verifyChain(logs: AuditLog[]): {
     isValid: boolean,
     brokenAt: string | null
 } {
+    return verifyChainSegment(logs, null)
+}
+
+export function verifyChainSegment(
+    logs: AuditLog[],
+    expectedStartingPrevHash: string | null
+): {
+    isValid: boolean,
+    brokenAt: string | null
+} {
     if (logs.length === 0) return { isValid: true, brokenAt: null }
 
     const sorted = [...logs].sort(
         (a, b) => new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
     )
 
-    let expectedPrevHash: string | null = null
+    let expectedPrevHash: string | null = expectedStartingPrevHash
 
     for (const log of sorted) {
         if (expectedPrevHash !== null && log.prev_hash !== expectedPrevHash) {
@@ -105,25 +115,30 @@ export function buildGlobalMerkleTree(allEntityLogs: AuditLog[]): MerkleTree {
     })
 }
 
-export function verifySpecificLogProof(
-    allEntityLogs: AuditLog[], 
+export function generateMerkleProofForEntry(
+    logs: AuditLog[],
     targetLog: AuditLog
-): { isValid: boolean, proof: string[], root: string } {
-    
-    // Build the global merkle tree
-    const tree = buildGlobalMerkleTree(allEntityLogs)
-    const root = tree.getHexRoot()
+): {
+    isValid: boolean
+    proofArray: string[]
+    root: string
+} {
+    if (logs.length === 0) {
+        return {
+            isValid: false,
+            proofArray: [],
+            root: '',
+        }
+    }
 
-    // Extract the proof for just this one specific log
+    const tree = buildGlobalMerkleTree(logs)
+    const root = tree.getHexRoot()
     const leaf = Buffer.from(targetLog.hash, 'hex')
     const proof = tree.getProof(leaf)
 
-    // Verify it against the global root
-    const isValid = tree.verify(proof, leaf, root)
-
-    return { 
-        isValid, 
-        proof: proof.map(p => p.data.toString('hex')), 
-        root 
+    return {
+        isValid: tree.verify(proof, leaf, root),
+        proofArray: proof.map((entry) => entry.data.toString('hex')),
+        root,
     }
 }

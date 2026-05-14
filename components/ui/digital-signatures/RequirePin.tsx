@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getPrivateKey } from '@/src/lib/device-key-store'
+import { findLocalActiveSigningKey, findLocalSigningKeyById } from '@/src/lib/device-key-store'
 import { verifySigningPin, getUserKeys } from '@/src/actions/keys'
 import { AuditEventType } from '@/src/types/audit'
 import { signData } from '@/src/lib/crypto'
@@ -20,6 +20,7 @@ export type ActionPayload = {
 type Props = {
     userId: string
     entityId: string
+    userKeyId?: string
     actionPayload: ActionPayload
     buttonLabel?: string
     onSuccess: (data: { signature: string; timestamp: Date; signingPayload: string, event_type: AuditEventType, table_name: string | null, record_id: string | null }) => Promise<void>
@@ -29,6 +30,7 @@ type Props = {
 export function RequirePin({ 
     userId, 
     entityId,
+    userKeyId,
     actionPayload, 
     buttonLabel = 'Confirm Signature',
     onSuccess, 
@@ -51,14 +53,22 @@ export function RequirePin({
         setIsVerifying(true)
 
         try {
-            const privateKey = await getPrivateKey(userId)
-            if (!privateKey) throw new Error('No digital signature key found. Please register this device first.')
+            if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
 
             const keys = await getUserKeys()
-            const activeKey = keys.find(k => k.status === 'active')
-            if (!activeKey) throw new Error('No active digital signature key. Please register or renew your device key.')
-    
-            if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
+            const activeKeys = keys.filter(k => k.status === 'active')
+            const requestedSigningKey = userKeyId
+                ? keys.find(k => k.id === userKeyId) ?? null
+                : null
+            const localSigningKey = userKeyId
+                ? await findLocalSigningKeyById(keys, userKeyId)
+                : await findLocalActiveSigningKey(keys)
+
+            if (activeKeys.length === 0 || (userKeyId && !requestedSigningKey)) throw new Error('No active digital signature key. Please register or renew your device key.')
+            if (requestedSigningKey && requestedSigningKey.status !== 'active') throw new Error('Key is no longer active.')
+            if (!localSigningKey) throw new Error('No digital signature key found for this registered device. Please use correct device for this key or register this device.')
+
+            const { privateKey } = localSigningKey
 
             // Create a timestamp
             const date = new Date()

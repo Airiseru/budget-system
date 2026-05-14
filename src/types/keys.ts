@@ -2,8 +2,10 @@ import {
     Generated,
     Insertable,
     Selectable,
-    Updateable
+    Updateable,
 } from 'kysely'
+import type { SignedAuditEventType } from './audit'
+import type { UserAccessLevel, UserWorkflowRole } from './entities'
 
 export interface UserKeyTable {
     id: Generated<string>
@@ -24,12 +26,23 @@ export const UserKeyStatuses = ['active', 'revoked', 'expired']
 
 export interface SignatoryTable {
     id: Generated<string>
-    form_id: string
+    target_table: 'forms' | 'budget_cycles'
+    target_record_id: string
     user_id: string
     role: string // prepared by, certified correct, approved by
+    event_type: SignedAuditEventType
     key_id: string
     public_key_snapshot: string
     signature: string
+    signature_payload: string
+    form_state_hash: string
+    from_status: string
+    to_status: string
+    remarks: string | null
+    signer_workflow_role: UserWorkflowRole | null
+    signer_access_level: UserAccessLevel
+    signer_entity_id: string | null
+    signer_is_admin: boolean
     created_at: Generated<Date>
 }
 

@@ -33,6 +33,8 @@ export type SignoffData = {
     authStatus: string
     signatoryRole: string
     userId: string
+    fiscalYear: number
+    signoffType: 'nep' | 'gaa'
     codename: string
     formData: object
     signatories: {

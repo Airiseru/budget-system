@@ -82,6 +82,8 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(summary.fiscal_year)
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForYear && !allowClosedCycleActions
+    const canVerifyIntegrity =
+        session.user.role === 'dbm' || session.user.is_admin === true
 
     // Server Actions
     const updateAuthStatus = async () => {
@@ -123,6 +125,7 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
             }}
             ownerEntityName={ownerEntityName || "Unknown Agency"}
             overrideHistory={overrideHistory}
+            canVerifyIntegrity={canVerifyIntegrity}
         />
     )
 }

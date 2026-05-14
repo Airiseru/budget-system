@@ -8,7 +8,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('user_id', 'varchar', (col) => col.references('users.id').notNull())
         .addColumn('event_type', 'varchar', (col) => col.notNull())
         .addColumn('table_name', 'varchar')
-        .addColumn('record_id', 'uuid')
+        .addColumn('record_id', 'varchar')
         .addColumn('payload', 'jsonb')
         .addColumn('changed_at', 'timestamptz', (col) => col.defaultTo(sql`now()`).notNull())
         .addColumn('nonce', 'varchar')
@@ -31,6 +31,11 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     await db.schema.createIndex('audit_logs_target_idx')
         .on('audit_logs')
         .columns(['table_name', 'record_id'])
+        .execute()
+
+    await db.schema.createIndex('audit_logs_entity_changed_at_idx')
+        .on('audit_logs')
+        .columns(['entity_id', 'changed_at'])
         .execute()
 
     await db.schema.createIndex('idx_merkle_roots_entity_id_created_at')
@@ -85,15 +90,24 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         FOR EACH STATEMENT
         EXECUTE FUNCTION make_table_append_only();
     `.execute(db)
+
+    await sql`
+        CREATE TRIGGER trg_signatories_append_only
+        BEFORE UPDATE OR DELETE ON signatories
+        FOR EACH STATEMENT
+        EXECUTE FUNCTION make_table_append_only();
+    `.execute(db)
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop triggers
     await sql`DROP TRIGGER IF EXISTS trg_prevent_status_rollback ON forms`.execute(db)
     await sql`DROP TRIGGER IF EXISTS trg_audit_logs_append_only ON audit_logs`.execute(db)
+    await sql`DROP TRIGGER IF EXISTS trg_signatories_append_only ON signatories`.execute(db)
 
     // Drop indexes
     await db.schema.dropIndex('idx_audit_logs_entity_id').execute()
+    await db.schema.dropIndex('audit_logs_entity_changed_at_idx').execute()
     await db.schema.dropIndex('idx_merkle_roots_entity_id_created_at').execute()
     await db.schema.dropIndex('audit_logs_target_idx').execute()
     await db.schema.dropIndex('idx_audit_logs_changed_at').execute()

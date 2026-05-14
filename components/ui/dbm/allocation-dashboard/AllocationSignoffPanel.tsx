@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ShieldCheck } from 'lucide-react'
+import { ChevronDown, ShieldCheck } from 'lucide-react'
 import { SignButton } from '@/components/ui/digital-signatures/SignButton'
 import type { BudgetCyclePhase } from '@/src/types/budget_settings'
 import type { SignoffData } from './shared'
@@ -23,6 +23,7 @@ export default function AllocationSignoffPanel({
     onApproved,
 }: Props) {
     const [certified, setCertified] = useState(false)
+    const [open, setOpen] = useState(false)
 
     if (!signoff) return null
 
@@ -37,83 +38,98 @@ export default function AllocationSignoffPanel({
         : signingBlockedMessage
 
     return (
-        <section className="rounded-2xl border border-border bg-background p-5 shadow-sm">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+        <section className="rounded-2xl border border-border bg-background shadow-sm overflow-hidden">
+            <button
+                type="button"
+                onClick={() => setOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition-colors hover:bg-muted/20"
+            >
+                <div className="min-w-0">
                     <h2 className="text-xl font-semibold text-secondary-foreground">{title}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                         A DBM approver signature locks this stage and advances the budget cycle automatically.
                     </p>
                 </div>
-                <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-                    {signoff.codename}
+                <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                        {signoff.codename}
+                    </div>
+                    <ChevronDown
+                        className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`}
+                    />
                 </div>
-            </div>
+            </button>
 
-            {signoff.signatories.length > 0 ? (
-                <div className="mt-4 rounded-xl border border-border bg-muted/20 px-4 py-3">
-                    <p className="text-sm font-medium text-secondary-foreground">Current signatories</p>
-                    <div className="mt-2 space-y-2">
-                        {signoff.signatories.map((signatory) => (
-                            <div key={signatory.id} className="flex items-center justify-between gap-3 text-sm">
-                                <span>{signatory.user_name}</span>
-                                <span className="text-muted-foreground">
-                                    {formatDateTime(signatory.created_at)}
-                                </span>
+            {open ? (
+                <div className="border-t border-border p-5 space-y-4">
+                    {signoff.signatories.length > 0 ? (
+                        <div className="space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                Current signatories
+                            </p>
+                            <div className="space-y-1.5 mt-2">
+                                {signoff.signatories.map((signatory) => (
+                                    <div key={signatory.id} className="flex items-center justify-between gap-3 text-sm">
+                                        <span>{signatory.user_name}</span>
+                                        <span className="text-muted-foreground">
+                                            {formatDateTime(signatory.created_at)}
+                                        </span>
+                                    </div>
+                                ))}
                             </div>
-                        ))}
+                        </div>
+                    ) : null}
+
+                    <label className="flex items-center gap-3 rounded-lg bg-muted/40 text-sm cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={certified}
+                            onChange={(event) => setCertified(event.target.checked)}
+                            className="h-4 w-4 rounded border-border"
+                        />
+                        <span className="text-secondary-foreground">
+                            I certify that these allocations are final and authorized.
+                        </span>
+                    </label>
+
+                    <div className="mt-4">
+                        {missingValidity ? (
+                            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                                {signoff.missingValidityCount} allocation{signoff.missingValidityCount === 1 ? '' : 's'} still need a complete validity period before this stage can be signed.
+                            </div>
+                        ) : null}
+                        {signoff.authStatus === 'approved' ? (
+                            <div className="inline-flex items-center gap-2 text-emerald-700 font-medium">
+                                <ShieldCheck className="h-4 w-4" />
+                                Stage already signed and approved.
+                            </div>
+                        ) : signoff.alreadySigned ? (
+                            <div className="inline-flex items-center gap-2 text-emerald-700 font-medium">
+                                <ShieldCheck className="h-4 w-4" />
+                                You have already signed this stage.
+                            </div>
+                        ) : signoff.userCanSign ? (
+                            <SignButton
+                                entityId={signoff.entityId}
+                                tableName="budget_allocations"
+                                formId={signoff.formId}
+                                formData={signoff.formData}
+                                userId={signoff.userId}
+                                signatoryRole={signoff.signatoryRole}
+                                fromAuthStatus={signoff.authStatus}
+                                toAuthStatus="approved"
+                                onApproved={onApproved}
+                                disabled={disabled}
+                                disabledMessage={disabledMessage}
+                            />
+                        ) : (
+                            <p className="text-sm text-muted-foreground italic">
+                                Only DBM approvers can sign this stage.
+                            </p>
+                        )}
                     </div>
                 </div>
             ) : null}
-
-            <label className="mt-4 flex items-start gap-3 rounded-xl border border-border/70 bg-secondary/5 px-4 py-3 text-sm">
-                <input
-                    type="checkbox"
-                    checked={certified}
-                    onChange={(event) => setCertified(event.target.checked)}
-                    className="mt-1 h-4 w-4 rounded border-border"
-                />
-                <span className="text-secondary-foreground">
-                    I certify that these allocations are final and authorized.
-                </span>
-            </label>
-
-            <div className="mt-4">
-                {missingValidity ? (
-                    <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        {signoff.missingValidityCount} allocation{signoff.missingValidityCount === 1 ? '' : 's'} still need a complete validity period before this stage can be signed.
-                    </div>
-                ) : null}
-                {signoff.authStatus === 'approved' ? (
-                    <div className="inline-flex items-center gap-2 text-emerald-700 font-medium">
-                        <ShieldCheck className="h-4 w-4" />
-                        Stage already signed and approved.
-                    </div>
-                ) : signoff.alreadySigned ? (
-                    <div className="inline-flex items-center gap-2 text-emerald-700 font-medium">
-                        <ShieldCheck className="h-4 w-4" />
-                        You have already signed this stage.
-                    </div>
-                ) : signoff.userCanSign ? (
-                    <SignButton
-                        entityId={signoff.entityId}
-                        tableName="budget_allocations"
-                        formId={signoff.formId}
-                        formData={signoff.formData}
-                        userId={signoff.userId}
-                        signatoryRole={signoff.signatoryRole}
-                        fromAuthStatus={signoff.authStatus}
-                        toAuthStatus="approved"
-                        onApproved={onApproved}
-                        disabled={disabled}
-                        disabledMessage={disabledMessage}
-                    />
-                ) : (
-                    <p className="text-sm text-muted-foreground italic">
-                        Only DBM approvers can sign this stage.
-                    </p>
-                )}
-            </div>
         </section>
     )
 }

@@ -28,7 +28,7 @@ const BaseSchema = z.object({
     myca_issuance: z.boolean().nullable().optional(),
     for_ict: z.boolean().nullable().optional(),
     total_proposal_currency: z.string().default("PHP"),
-    total_proposal_cost: z.union([z.number(), z.string()]),
+    total_proposal_cost: z.coerce.number(),
     cost_by_components: z
         .array(
             z.object({

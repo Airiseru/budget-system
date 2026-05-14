@@ -18,13 +18,15 @@ export const FORM_TYPES: Record<string, string> = {
     bp_local_proposal_expanded: 'BP Form 202 (Expanded)',
     bp_foreign_proposal_new: 'BP Form 203 (New)',
     bp_foreign_proposal_expanded: 'BP Form 203 (Expanded)',
-    nep: 'National Expenditure Program',
-    gaa: 'General Appropriations Act',
 }
 
 export const FORM_ROUTE_MAP: Record<string, string> = {
     'bp_staffing': '/forms/staff',
-    'bp_retiree': '/forms/retirees'
+    'bp_retiree': '/forms/retirees',
+    'bp_local_proposal_new': '/forms/proposals',
+    'bp_local_proposal_expanded': '/forms/proposals',
+    'bp_foreign_proposal_new': '/forms/proposals',
+    'bp_foreign_proposal_expanded': '/forms/proposals',
 }
 
 export const FORM_NAMES: Record<string, string> = {
@@ -34,8 +36,6 @@ export const FORM_NAMES: Record<string, string> = {
     bp_local_proposal_expanded: 'Expanded Local Proposal',
     bp_foreign_proposal_new: 'New Foreign Proposal',
     bp_foreign_proposal_expanded: 'Expanded Foreign Proposal',
-    nep: 'NEP Sign-Off',
-    gaa: 'GAA Sign-Off',
 }
 
 export const STATUS_LABELS: Record<string, string> = {

@@ -63,12 +63,26 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .on('budget_allocations')
         .columns(['entity_id', 'budget_cycle_year', 'pap_code', 'fund_code', 'item_catalog_id', 'tier'])
         .execute()
+
+    await sql`
+        CREATE UNIQUE INDEX budget_allocations_unique_line_item_key
+        ON budget_allocations (
+            budget_cycle_year,
+            entity_id,
+            COALESCE(pap_code::text, '__NULL__'),
+            COALESCE(fund_code, '__NULL__'),
+            item_catalog_id
+        );
+    `.execute(db)
     
     await db.schema.createIndex('idx_allocation_logs_id').on('allocation_workflow_logs').column('allocation_id').execute()
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
     await db.schema.dropIndex('budget_allocations_idx').execute()
+    await sql`
+        DROP INDEX IF EXISTS budget_allocations_unique_line_item_key;
+    `.execute(db)
     await db.schema.dropIndex('idx_allocation_logs_id').execute()
     await db.schema.dropTable('allocation_workflow_logs').execute()
     await db.schema.dropTable('budget_allocations').execute()

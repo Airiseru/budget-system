@@ -6,9 +6,7 @@ import { ShieldCheck, ShieldX, Shield } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 type Props = {
-    entityId: string;
     tableName: string;
-    formId: string;
     signatoryId: string;
     formData: object;
     signerName: string;
@@ -16,9 +14,7 @@ type Props = {
 };
 
 export function SignatureVerificationBadge({
-    entityId,
     tableName,
-    formId,
     signatoryId,
     formData,
     signerName,
@@ -30,7 +26,7 @@ export function SignatureVerificationBadge({
     const [details, setDetails] = useState<string | null>(null);
 
     useEffect(() => {
-        verifyFormSignature(entityId, formId, tableName, signatoryId, formData)
+        verifyFormSignature(signatoryId, tableName, formData)
             .then((result) => {
                 if (result.isValid) {
                     setStatus("valid");
@@ -51,7 +47,7 @@ export function SignatureVerificationBadge({
                 setStatus("invalid");
                 setDetails("Verification failed");
             });
-    }, [entityId, formId, tableName, signatoryId, formData]);
+    }, [tableName, signatoryId, formData]);
 
     return (
         <div className="flex items-start gap-3 p-3 rounded-lg border border-border">

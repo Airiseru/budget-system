@@ -1,8 +1,12 @@
 import { db } from '../database'
 import { NewAllocationWorkflowLog, NewBudgetAllocation, BudgetAllocation, BudgetAllocationUpdate } from '@/src/types/line_items'
-import { sql } from 'kysely'
+import { Kysely, Transaction, sql } from 'kysely'
 import type { BudgetCyclePhase } from '@/src/types/budget_settings'
 import type { ExpenseClass } from '@/src/types/line_items'
+import type { Database } from '@/src/types'
+import { formatDateOnlyForInput } from '@/src/lib/dateOnly'
+
+type DbExecutor = Kysely<Database> | Transaction<Database>
 
 const ALLOCATION_STATUS_ORDER = [
     'draft',
@@ -108,6 +112,32 @@ export type AllocationSignoffSummary = {
     last_updated_at: Date | null
 }
 
+export type AllocationSignoffType = 'nep' | 'gaa'
+
+export type AllocationSignoffSnapshotRow = {
+    allocation_id: string
+    entity_id: string
+    pap_code: string | null
+    fund_code: string | null
+    item_catalog_id: string
+    tier: 1 | 2
+    specific_description: string | null
+    quantity: number
+    currency: string
+    amount: number
+    valid_from?: string | null
+    valid_until?: string | null
+}
+
+export type AllocationSignoffSnapshot = {
+    fiscal_year: number
+    signoff_type: AllocationSignoffType
+    snapshot_version: 'allocation_stage_v1'
+    allocation_count: number
+    total_amount: number
+    allocations: AllocationSignoffSnapshotRow[]
+}
+
 export type BulkValidityUpdateOptions = {
     fiscalYear: number
     expenseClass?: ExpenseClass
@@ -131,36 +161,145 @@ type PreviousYearGaaLookup = {
     itemCatalogId: string
 }
 
+type DuplicateAllocationLookup = {
+    fiscalYear: number
+    entityId: string
+    papCode: string | null
+    fundCode: string | null
+    itemCatalogId: string
+    excludeId?: string
+}
+
+function isUniqueViolation(error: unknown, constraintName: string) {
+    return (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        (error as { code?: string }).code === '23505' &&
+        'constraint' in error &&
+        (error as { constraint?: string }).constraint === constraintName
+    )
+}
+
+function buildDuplicateAllocationError() {
+    return new Error(
+        'A budget allocation already exists for this entity, PAP, item catalog, fund source, and fiscal year.'
+    )
+}
+
+export async function findDuplicateBudgetAllocation({
+    fiscalYear,
+    entityId,
+    papCode,
+    fundCode,
+    itemCatalogId,
+    excludeId,
+}: DuplicateAllocationLookup) {
+    let query = db
+        .selectFrom('budget_allocations')
+        .select(['id'])
+        .where('budget_cycle_year', '=', fiscalYear)
+        .where('entity_id', '=', entityId)
+        .where('item_catalog_id', '=', itemCatalogId)
+
+    query = papCode === null
+        ? query.where('pap_code', 'is', null)
+        : query.where('pap_code', '=', papCode)
+
+    query = fundCode === null
+        ? query.where('fund_code', 'is', null)
+        : query.where('fund_code', '=', fundCode)
+
+    if (excludeId) {
+        query = query.where('id', '!=', excludeId)
+    }
+
+    return await query.executeTakeFirst()
+}
+
 export async function createBudgetAllocation(values: NewBudgetAllocation) {
-    return await db
-        .insertInto('budget_allocations')
-        .values(values)
-        .returningAll()
-        .executeTakeFirstOrThrow()
+    const duplicate = await findDuplicateBudgetAllocation({
+        fiscalYear: values.budget_cycle_year,
+        entityId: values.entity_id,
+        papCode: values.pap_code,
+        fundCode: values.fund_code,
+        itemCatalogId: values.item_catalog_id,
+    })
+
+    if (duplicate) {
+        throw buildDuplicateAllocationError()
+    }
+
+    try {
+        return await db
+            .insertInto('budget_allocations')
+            .values(values)
+            .returningAll()
+            .executeTakeFirstOrThrow()
+    } catch (error) {
+        if (isUniqueViolation(error, 'budget_allocations_unique_line_item_key')) {
+            throw buildDuplicateAllocationError()
+        }
+
+        throw error
+    }
 }
 
 export async function updateBudgetAllocation(id: string, values: BudgetAllocationUpdate) {
-    if (values.auth_status) {
-        const existing = await db
-            .selectFrom('budget_allocations')
-            .select(['auth_status'])
-            .where('id', '=', id)
-            .executeTakeFirstOrThrow()
+    const existing = await db
+        .selectFrom('budget_allocations')
+        .select([
+            'auth_status',
+            'budget_cycle_year',
+            'entity_id',
+            'pap_code',
+            'fund_code',
+            'item_catalog_id',
+        ])
+        .where('id', '=', id)
+        .executeTakeFirstOrThrow()
 
+    if (values.auth_status) {
         if (!isValidAllocationStatusTransition(existing.auth_status, values.auth_status)) {
             throw new Error(`Invalid allocation status transition from ${existing.auth_status} to ${values.auth_status}.`)
         }
     }
 
-    return await db
-        .updateTable('budget_allocations')
-        .set({
-            ...values,
-            updated_at: new Date(),
-        })
-        .where('id', '=', id)
-        .returningAll()
-        .executeTakeFirstOrThrow()
+    const nextEntityId = values.entity_id ?? existing.entity_id
+    const nextPapCode = values.pap_code !== undefined ? values.pap_code : existing.pap_code
+    const nextFundCode = values.fund_code !== undefined ? values.fund_code : existing.fund_code
+    const nextItemCatalogId = values.item_catalog_id ?? existing.item_catalog_id
+
+    const duplicate = await findDuplicateBudgetAllocation({
+        fiscalYear: existing.budget_cycle_year,
+        entityId: nextEntityId,
+        papCode: nextPapCode,
+        fundCode: nextFundCode,
+        itemCatalogId: nextItemCatalogId,
+        excludeId: id,
+    })
+
+    if (duplicate) {
+        throw buildDuplicateAllocationError()
+    }
+
+    try {
+        return await db
+            .updateTable('budget_allocations')
+            .set({
+                ...values,
+                updated_at: new Date(),
+            })
+            .where('id', '=', id)
+            .returningAll()
+            .executeTakeFirstOrThrow()
+    } catch (error) {
+        if (isUniqueViolation(error, 'budget_allocations_unique_line_item_key')) {
+            throw buildDuplicateAllocationError()
+        }
+
+        throw error
+    }
 }
 
 export async function getBudgetAllocationById(id: string) {
@@ -364,9 +503,16 @@ export async function seedAllocationPhaseDefaults(
     fiscalYear: number,
     phase: BudgetCyclePhase
 ) {
+    return await seedAllocationPhaseDefaultsWithExecutor(fiscalYear, phase, db)
+}
+
+export async function seedAllocationPhaseDefaultsWithExecutor(
+    fiscalYear: number,
+    phase: BudgetCyclePhase,
+    executor: DbExecutor
+) {
     if (phase === 'presidential_approval') {
-        await db.transaction().execute(async (trx) => {
-            await trx
+        await executor
                 .updateTable('budget_allocations')
                 .set({
                     nep_amt: sql`budget_allocations.dbm_rec_amt`,
@@ -386,7 +532,7 @@ export async function seedAllocationPhaseDefaults(
                 )
                 .execute()
 
-            await trx
+        await executor
                 .updateTable('budget_allocations')
                 .set({
                     auth_status: 'dbm_approved',
@@ -396,7 +542,7 @@ export async function seedAllocationPhaseDefaults(
                 .where('auth_status', '=', 'proposed')
                 .execute()
 
-            await trx
+        await executor
                 .updateTable('budget_allocations')
                 .set({
                     auth_status: 'dbm_approved',
@@ -406,11 +552,10 @@ export async function seedAllocationPhaseDefaults(
                 .where('tier', '=', 1)
                 .where('auth_status', '=', 'draft')
                 .execute()
-        })
     }
 
     if (phase === 'legislative_deliberation') {
-        await db
+        await executor
             .updateTable('budget_allocations')
             .set({
                 gaa_amt: sql`budget_allocations.nep_amt`,
@@ -437,9 +582,18 @@ export async function updateAllocationStatusForYear(
     fromStatuses: BudgetAllocation['auth_status'][],
     toStatus: BudgetAllocation['auth_status']
 ) {
+    return await updateAllocationStatusForYearWithExecutor(fiscalYear, fromStatuses, toStatus, db)
+}
+
+export async function updateAllocationStatusForYearWithExecutor(
+    fiscalYear: number,
+    fromStatuses: BudgetAllocation['auth_status'][],
+    toStatus: BudgetAllocation['auth_status'],
+    executor: DbExecutor
+) {
     if (fromStatuses.length === 0) return
 
-    await db
+    await executor
         .updateTable('budget_allocations')
         .set({
             auth_status: toStatus,
@@ -472,6 +626,71 @@ export async function getAllocationSignoffSummary(fiscalYear: number) {
         gaa_total: Number(summary?.gaa_total ?? 0),
         last_updated_at: summary?.last_updated_at ?? null,
     } as AllocationSignoffSummary
+}
+
+export async function getAllocationSignoffSnapshot(
+    fiscalYear: number,
+    signoffType: AllocationSignoffType
+): Promise<AllocationSignoffSnapshot> {
+    let query = db
+        .selectFrom('budget_allocations')
+        .select([
+            'id',
+            'entity_id',
+            'pap_code',
+            'fund_code',
+            'item_catalog_id',
+            'tier',
+            'specific_description',
+            'quantity',
+            'currency',
+            'nep_amt',
+            'gaa_amt',
+            'valid_from',
+            'valid_until',
+        ])
+        .where('budget_cycle_year', '=', fiscalYear)
+
+    if (signoffType === 'nep') {
+        query = query.where('origin_tag', '!=', 'legislative_insertion')
+    }
+
+    const rows = await query
+        .orderBy('entity_id', 'asc')
+        .orderBy('pap_code', 'asc')
+        .orderBy('fund_code', 'asc')
+        .orderBy('item_catalog_id', 'asc')
+        .orderBy('tier', 'asc')
+        .orderBy('id', 'asc')
+        .execute()
+
+    const allocations = rows.map((row) => ({
+        allocation_id: row.id,
+        entity_id: row.entity_id,
+        pap_code: row.pap_code,
+        fund_code: row.fund_code,
+        item_catalog_id: row.item_catalog_id,
+        tier: row.tier,
+        specific_description: row.specific_description,
+        quantity: Number(row.quantity ?? 0),
+        currency: row.currency,
+        amount: Number(signoffType === 'nep' ? row.nep_amt ?? 0 : row.gaa_amt ?? 0),
+        ...(signoffType === 'gaa'
+            ? {
+                valid_from: row.valid_from ? formatDateOnlyForInput(row.valid_from) : null,
+                valid_until: row.valid_until ? formatDateOnlyForInput(row.valid_until) : null,
+            }
+            : {}),
+    }))
+
+    return {
+        fiscal_year: fiscalYear,
+        signoff_type: signoffType,
+        snapshot_version: 'allocation_stage_v1',
+        allocation_count: allocations.length,
+        total_amount: allocations.reduce((sum, row) => sum + Number(row.amount ?? 0), 0),
+        allocations,
+    }
 }
 
 export async function countAllocationsMissingValidityByYear(fiscalYear: number) {
