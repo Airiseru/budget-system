@@ -18,8 +18,6 @@ export const FORM_TYPES: Record<string, string> = {
     bp_local_proposal_expanded: 'BP Form 202 (Expanded)',
     bp_foreign_proposal_new: 'BP Form 203 (New)',
     bp_foreign_proposal_expanded: 'BP Form 203 (Expanded)',
-    nep: 'National Expenditure Program',
-    gaa: 'General Appropriations Act',
 }
 
 export const FORM_ROUTE_MAP: Record<string, string> = {
