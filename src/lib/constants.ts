@@ -29,8 +29,6 @@ export const FORM_ROUTE_MAP: Record<string, string> = {
     'bp_local_proposal_expanded': '/forms/proposals',
     'bp_foreign_proposal_new': '/forms/proposals',
     'bp_foreign_proposal_expanded': '/forms/proposals',
-    'nep': '/dbm/allocations',
-    'gaa': '/dbm/allocations',
 }
 
 export const FORM_NAMES: Record<string, string> = {
@@ -40,8 +38,6 @@ export const FORM_NAMES: Record<string, string> = {
     bp_local_proposal_expanded: 'Expanded Local Proposal',
     bp_foreign_proposal_new: 'New Foreign Proposal',
     bp_foreign_proposal_expanded: 'Expanded Foreign Proposal',
-    nep: 'NEP Sign-Off',
-    gaa: 'GAA Sign-Off',
 }
 
 export const STATUS_LABELS: Record<string, string> = {
