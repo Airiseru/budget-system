@@ -1,4 +1,5 @@
 import { openDB } from 'idb'
+import type { UserKey } from '@/src/types/keys'
 
 const DB_NAME = process.env.NEXT_PUBLIC_INDEXED_DB_NAME ?? "device-key-store"
 const STORE_NAME = process.env.NEXT_PUBLIC_INDEXED_STORE_NAME ?? "device-keys"
@@ -45,6 +46,34 @@ export async function hasPrivateKey(userKeyId: string): Promise<boolean> {
     const db = await initIndexedDB()
     const key = await db.get(STORE_NAME, `${KEY_PREFIX}${userKeyId}`)
     return key !== undefined 
+}
+
+export type LocalSigningKey = {
+    key: UserKey
+    privateKey: CryptoKey
+}
+
+export async function findLocalActiveSigningKey(keys: UserKey[]): Promise<LocalSigningKey | null> {
+    const activeKeys = keys.filter(key => key.status === 'active')
+
+    for (const key of activeKeys) {
+        const privateKey = await getPrivateKey(key.id)
+        if (privateKey) {
+            return { key, privateKey }
+        }
+    }
+
+    return null
+}
+
+export async function findLocalSigningKeyById(keys: UserKey[], userKeyId: string): Promise<LocalSigningKey | null> {
+    const key = keys.find(candidate => candidate.id === userKeyId)
+    if (!key || key.status !== 'active') return null
+
+    const privateKey = await getPrivateKey(key.id)
+    if (!privateKey) return null
+
+    return { key, privateKey }
 }
 
 export function getDeviceName(): string {

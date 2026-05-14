@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getPrivateKey } from '@/src/lib/device-key-store'
+import { findLocalActiveSigningKey } from '@/src/lib/device-key-store'
 import { signData } from '@/src/lib/crypto'
 import { sha256, buildSignaturePayload } from '@/src/lib/audit-hash'
 import { verifyAndRejectSignature, getUserKeys, verifySigningPin } from '@/src/actions/keys'
@@ -57,19 +57,22 @@ export function RejectButton({ formId, tableName, formData, userId, entityId, si
             }
 
             const keys = await getUserKeys()
-            const activeKey = keys.find(k => k.status === 'active')
-            if (!activeKey) {
+            const activeKeys = keys.filter(k => k.status === 'active')
+            const localSigningKey = await findLocalActiveSigningKey(keys)
+
+            if (activeKeys.length === 0) {
                 setError('No active digital signature key. Please register or renew your device key.')
                 setStep('pin')
                 return
             }
 
-            const privateKey = await getPrivateKey(activeKey.id)
-            if (!privateKey) {
-                setError('No digital signature key found for this registered device. Please use correct device for this key.')
+            if (!localSigningKey) {
+                setError('No digital signature key found for this registered device. Please use correct device for this key or register this device.')
                 setStep('pin')
                 return
             }
+
+            const { key: activeKey, privateKey } = localSigningKey
 
             const date = new Date()
             const cleanFormData = cleanDataBasedOnTable(tableName, formData)

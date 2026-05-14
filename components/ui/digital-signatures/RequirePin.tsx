@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { getPrivateKey } from '@/src/lib/device-key-store'
+import { findLocalActiveSigningKey, findLocalSigningKeyById } from '@/src/lib/device-key-store'
 import { verifySigningPin, getUserKeys } from '@/src/actions/keys'
 import { AuditEventType } from '@/src/types/audit'
 import { signData } from '@/src/lib/crypto'
@@ -56,14 +56,19 @@ export function RequirePin({
             if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
 
             const keys = await getUserKeys()
-            const signingKey = userKeyId
-                ? keys.find(k => k.id === userKeyId)
-                : keys.find(k => k.status === 'active')
-            if (!signingKey) throw new Error('No active digital signature key. Please register or renew your device key.')
-            if (signingKey.status !== 'active') throw new Error('Key is no longer active.')
-    
-            const privateKey = await getPrivateKey(signingKey.id)
-            if (!privateKey) throw new Error('No digital signature key found for this registered device. Please use correct device for this key.')
+            const activeKeys = keys.filter(k => k.status === 'active')
+            const requestedSigningKey = userKeyId
+                ? keys.find(k => k.id === userKeyId) ?? null
+                : null
+            const localSigningKey = userKeyId
+                ? await findLocalSigningKeyById(keys, userKeyId)
+                : await findLocalActiveSigningKey(keys)
+
+            if (activeKeys.length === 0 || (userKeyId && !requestedSigningKey)) throw new Error('No active digital signature key. Please register or renew your device key.')
+            if (requestedSigningKey && requestedSigningKey.status !== 'active') throw new Error('Key is no longer active.')
+            if (!localSigningKey) throw new Error('No digital signature key found for this registered device. Please use correct device for this key or register this device.')
+
+            const { privateKey } = localSigningKey
 
             // Create a timestamp
             const date = new Date()

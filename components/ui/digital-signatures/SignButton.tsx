@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { getPrivateKey } from "@/src/lib/device-key-store"
+import { findLocalActiveSigningKey } from "@/src/lib/device-key-store"
 import { signData } from "@/src/lib/crypto"
 import { sha256, buildSignaturePayload } from "@/src/lib/audit-hash"
 import {
@@ -70,26 +70,27 @@ export function SignButton({
                 return
             }
 
-            // Find active key
             const keys = await getUserKeys()
-            const activeKey = keys.find((k) => k.status === "active")
-            if (!activeKey) {
+            const activeKeys = keys.filter((k) => k.status === "active")
+            const localSigningKey = await findLocalActiveSigningKey(keys)
+
+            if (activeKeys.length === 0) {
                 setError(
                     "No active digital signature key. Please register or renew your device key.",
                 )
                 setStep("pin")
                 return
             }
-            
-            // Get the local private key that matches the active DB key.
-            const privateKey = await getPrivateKey(activeKey.id)
-            if (!privateKey) {
+
+            if (!localSigningKey) {
                 setError(
-                    "No digital signature key found for this registered device. Please use correct device for this key.",
+                    "No digital signature key found for this registered device. Please use correct device for this key or register this device.",
                 )
                 setStep("pin")
                 return
             }
+
+            const { key: activeKey, privateKey } = localSigningKey
 
             const date = new Date()
 

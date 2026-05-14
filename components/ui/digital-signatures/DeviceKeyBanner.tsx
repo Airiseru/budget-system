@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { generateKeyPair } from '@/src/lib/crypto'
-import { hasPrivateKey, storePrivateKey, getDeviceName } from '@/src/lib/device-key-store'
+import { findLocalActiveSigningKey, storePrivateKey, getDeviceName } from '@/src/lib/device-key-store'
 import { getUserKeys, registerDeviceKey } from '@/src/actions/keys'
 import { Button } from '@/components/ui/button'
 import {
@@ -42,13 +42,11 @@ export function DeviceKeyBanner({ userId }: { userId: string }) {
 
     useEffect(() => {
         getUserKeys().then(async keys => {
-            const activeKey = keys.find(key => key.status === 'active')
-            const hasLocalPrivateKey = activeKey
-                ? await hasPrivateKey(activeKey.id)
-                : false
+            const activeKeys = keys.filter(key => key.status === 'active')
+            const localSigningKey = await findLocalActiveSigningKey(keys)
 
-            setNeedsKey(!activeKey || !hasLocalPrivateKey)
-            if (!activeKey || !hasLocalPrivateKey) setExpanded(true)
+            setNeedsKey(activeKeys.length === 0 || !localSigningKey)
+            if (activeKeys.length === 0 || !localSigningKey) setExpanded(true)
         })
         setDeviceName(getDeviceName())
     }, [userId])
