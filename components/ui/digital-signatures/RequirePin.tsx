@@ -20,6 +20,7 @@ export type ActionPayload = {
 type Props = {
     userId: string
     entityId: string
+    userKeyId?: string
     actionPayload: ActionPayload
     buttonLabel?: string
     onSuccess: (data: { signature: string; timestamp: Date; signingPayload: string, event_type: AuditEventType, table_name: string | null, record_id: string | null }) => Promise<void>
@@ -29,6 +30,7 @@ type Props = {
 export function RequirePin({ 
     userId, 
     entityId,
+    userKeyId,
     actionPayload, 
     buttonLabel = 'Confirm Signature',
     onSuccess, 
@@ -51,14 +53,17 @@ export function RequirePin({
         setIsVerifying(true)
 
         try {
-            const privateKey = await getPrivateKey(userId)
-            if (!privateKey) throw new Error('No digital signature key found. Please register this device first.')
+            if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
 
             const keys = await getUserKeys()
-            const activeKey = keys.find(k => k.status === 'active')
-            if (!activeKey) throw new Error('No active digital signature key. Please register or renew your device key.')
+            const signingKey = userKeyId
+                ? keys.find(k => k.id === userKeyId)
+                : keys.find(k => k.status === 'active')
+            if (!signingKey) throw new Error('No active digital signature key. Please register or renew your device key.')
+            if (signingKey.status !== 'active') throw new Error('Key is no longer active.')
     
-            if (!await verifySigningPin(pin)) throw new Error('Incorrect PIN')
+            const privateKey = await getPrivateKey(signingKey.id)
+            if (!privateKey) throw new Error('No digital signature key found for this registered device. Please use correct device for this key.')
 
             // Create a timestamp
             const date = new Date()

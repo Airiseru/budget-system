@@ -265,6 +265,7 @@ export async function registerDeviceKey(
 
     if (!logResult.success) throw new Error('Failed to log user key creation')
 
+    return key
 }
 
 export async function revokeDeviceKey(keyId: string, signature: string, date: Date, signaturePayload: string) {

@@ -15,35 +15,35 @@ async function initIndexedDB() {
 }
 
 export async function storePrivateKey(
-    keyName: string,
+    userKeyId: string,
     privateKey: CryptoKey
 ): Promise<void> {
     const db = await initIndexedDB()
     const tx = db.transaction(STORE_NAME, 'readwrite')
     await Promise.all([
-        tx.store.put(privateKey, `${KEY_PREFIX}${keyName}`),
+        tx.store.put(privateKey, `${KEY_PREFIX}${userKeyId}`),
         tx.done
     ])
 }
 
-export async function getPrivateKey(userId: string): Promise<CryptoKey | null> {
+export async function getPrivateKey(userKeyId: string): Promise<CryptoKey | null> {
     const db = await initIndexedDB()
-    const key = await db.get(STORE_NAME, `${KEY_PREFIX}${userId}`)
+    const key = await db.get(STORE_NAME, `${KEY_PREFIX}${userKeyId}`)
     return key
 }
 
-export async function removePrivateKey(userId: string): Promise<void> {
+export async function removePrivateKey(userKeyId: string): Promise<void> {
     const db = await initIndexedDB()
     const tx = db.transaction(STORE_NAME, 'readwrite')
     await Promise.all([
-        tx.store.delete(`${KEY_PREFIX}${userId}`),
+        tx.store.delete(`${KEY_PREFIX}${userKeyId}`),
         tx.done
     ])
 }
 
-export async function hasPrivateKey(userId: string): Promise<boolean> {
+export async function hasPrivateKey(userKeyId: string): Promise<boolean> {
     const db = await initIndexedDB()
-    const key = await db.get(STORE_NAME, `${KEY_PREFIX}${userId}`)
+    const key = await db.get(STORE_NAME, `${KEY_PREFIX}${userKeyId}`)
     return key !== undefined 
 }
 

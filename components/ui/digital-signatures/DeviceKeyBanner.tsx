@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { generateKeyPair } from '@/src/lib/crypto'
 import { hasPrivateKey, storePrivateKey, getDeviceName } from '@/src/lib/device-key-store'
-import { registerDeviceKey } from '@/src/actions/keys'
+import { getUserKeys, registerDeviceKey } from '@/src/actions/keys'
 import { Button } from '@/components/ui/button'
 import {
     Select,
@@ -41,9 +41,14 @@ export function DeviceKeyBanner({ userId }: { userId: string }) {
     }
 
     useEffect(() => {
-        hasPrivateKey(userId).then(has => {
-            setNeedsKey(!has)
-            if (!has) setExpanded(true)
+        getUserKeys().then(async keys => {
+            const activeKey = keys.find(key => key.status === 'active')
+            const hasLocalPrivateKey = activeKey
+                ? await hasPrivateKey(activeKey.id)
+                : false
+
+            setNeedsKey(!activeKey || !hasLocalPrivateKey)
+            if (!activeKey || !hasLocalPrivateKey) setExpanded(true)
         })
         setDeviceName(getDeviceName())
     }, [userId])
@@ -59,8 +64,8 @@ export function DeviceKeyBanner({ userId }: { userId: string }) {
 
         try {
             const { publicKeyBase64, privateKey } = await generateKeyPair()
-            await storePrivateKey(userId, privateKey)
-            await registerDeviceKey(publicKeyBase64, deviceName, expiresInDays)
+            const key = await registerDeviceKey(publicKeyBase64, deviceName, expiresInDays)
+            await storePrivateKey(key.id, privateKey)
             setSuccess(true)
             setNeedsKey(false)
         } catch {

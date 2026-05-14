@@ -50,13 +50,6 @@ export function RejectButton({ formId, tableName, formData, userId, entityId, si
         setStep('rejecting')
 
         try {
-            const privateKey = await getPrivateKey(userId)
-            if (!privateKey) {
-                setError('No digital signature key found. Please register this device first.')
-                setStep('pin')
-                return
-            }
-
             if (!await verifySigningPin(pin)) {
                 setError('Incorrect PIN')
                 setStep('pin')
@@ -67,6 +60,13 @@ export function RejectButton({ formId, tableName, formData, userId, entityId, si
             const activeKey = keys.find(k => k.status === 'active')
             if (!activeKey) {
                 setError('No active digital signature key. Please register or renew your device key.')
+                setStep('pin')
+                return
+            }
+
+            const privateKey = await getPrivateKey(activeKey.id)
+            if (!privateKey) {
+                setError('No digital signature key found for this registered device. Please use correct device for this key.')
                 setStep('pin')
                 return
             }

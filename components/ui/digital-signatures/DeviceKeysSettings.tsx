@@ -91,6 +91,7 @@ export function DeviceKeysSettings({ keys, userId, entityId }: Props) {
                                     <RequirePin 
                                         userId={userId}
                                         entityId={entityId}
+                                        userKeyId={key.id}
                                         buttonLabel="Authorize Revocation"
                                         actionPayload={{
                                             event_type: 'REVOKE_KEY',
@@ -100,7 +101,7 @@ export function DeviceKeysSettings({ keys, userId, entityId }: Props) {
                                         }}
                                         onSuccess={async ({ signature, timestamp, signingPayload }) => {
                                             await revokeDeviceKey(key.id, signature, timestamp, signingPayload)
-                                            await removePrivateKey(userId)
+                                            await removePrivateKey(key.id)
                                             window.location.reload()
                                         }}
                                         onCancel={() => setRevokingKeyId(null)}
