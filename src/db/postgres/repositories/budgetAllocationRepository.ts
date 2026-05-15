@@ -122,7 +122,6 @@ export type AllocationSignoffSnapshotRow = {
     item_catalog_id: string
     tier: 1 | 2
     specific_description: string | null
-    quantity: number
     currency: string
     amount: number
     valid_from?: string | null
@@ -221,8 +220,8 @@ export async function createBudgetAllocation(values: NewBudgetAllocation) {
     const duplicate = await findDuplicateBudgetAllocation({
         fiscalYear: values.budget_cycle_year,
         entityId: values.entity_id,
-        papCode: values.pap_code,
-        fundCode: values.fund_code,
+        papCode: values.pap_code ?? null,
+        fundCode: values.fund_code ?? null,
         itemCatalogId: values.item_catalog_id,
     })
 
@@ -642,7 +641,6 @@ export async function getAllocationSignoffSnapshot(
             'item_catalog_id',
             'tier',
             'specific_description',
-            'quantity',
             'currency',
             'nep_amt',
             'gaa_amt',
@@ -672,7 +670,6 @@ export async function getAllocationSignoffSnapshot(
         item_catalog_id: row.item_catalog_id,
         tier: row.tier,
         specific_description: row.specific_description,
-        quantity: Number(row.quantity ?? 0),
         currency: row.currency,
         amount: Number(signoffType === 'nep' ? row.nep_amt ?? 0 : row.gaa_amt ?? 0),
         ...(signoffType === 'gaa'
