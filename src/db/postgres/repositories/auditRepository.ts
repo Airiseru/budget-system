@@ -49,15 +49,6 @@ function didTimestampsMatch(left: Date | string, right: Date | string) {
     return new Date(left).getTime() === new Date(right).getTime()
 }
 
-function getSourceRecordIdFromSignaturePayload(signaturePayload: string): string | null {
-    try {
-        const parsed = JSON.parse(signaturePayload) as { record_id?: unknown }
-        return typeof parsed.record_id === 'string' ? parsed.record_id : null
-    } catch {
-        return null
-    }
-}
-
 function findMatchingPreloadedSignatory(params: {
     signatories: Signatory[]
     userId: string
@@ -141,6 +132,7 @@ async function verifySignedAuditEventAgainstSignatory(params: {
     const signatorySnapshotMatches =
         matchingSignatory.target_table === 'forms' &&
         matchingSignatory.target_record_id === (log.record_id ?? '') &&
+        matchingSignatory.source_record_id === (log.record_id ?? '') &&
         matchingSignatory.user_id === log.user_id &&
         matchingSignatory.event_type === log.event_type &&
         matchingSignatory.signature === log.signature &&
@@ -643,8 +635,7 @@ export async function verifyAllocationSignoffIntegrity(
             matchingSignatory.public_key_snapshot
         )
 
-        const sourceRecordIdMatches =
-            getSourceRecordIdFromSignaturePayload(matchingSignatory.signature_payload) === signoffRecordId
+        const sourceRecordIdMatches = matchingSignatory.source_record_id === signoffRecordId
 
         if (!signatureStillValid) {
             cryptographicValid = false

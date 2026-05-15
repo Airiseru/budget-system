@@ -65,6 +65,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('id', 'uuid', (col) => col.primaryKey().defaultTo(sql`gen_random_uuid()`))
         .addColumn('target_table', 'varchar', (col) => col.notNull().check(sql`target_table IN ('forms', 'budget_cycles')`))
         .addColumn('target_record_id', 'varchar', (col) => col.notNull())
+        .addColumn('source_record_id', 'varchar', (col) => col.notNull())
         .addColumn('user_id', 'varchar', (col) => col.references('users.id').onDelete('cascade').notNull())
         .addColumn('role', 'varchar', (col) => col.notNull())
         .addColumn('event_type', 'varchar', (col) => col.notNull().check(sql`event_type IN ('SIGN', 'APPROVE_FORM', 'REJECT_FORM')`))
@@ -211,6 +212,20 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .on('signatories')
         .columns(['target_table', 'target_record_id', 'user_id', 'event_type', 'signature', 'created_at'])
         .execute()
+
+    await db.schema
+        .createIndex('idx_signatories_target_source_created_at_idx')
+        .on('signatories')
+        .columns(['target_table', 'target_record_id', 'source_record_id', 'created_at'])
+        .execute()
+
+    await db.schema
+        .createIndex('idx_signatories_unique_event_idx')
+        .on('signatories')
+        .unique()
+        .columns(['target_table', 'target_record_id', 'source_record_id', 'user_id', 'event_type', 'from_status', 'to_status'])
+        .execute()
+    
     await db.schema.createIndex('idx_sessions_token').on('sessions').column('token').execute()
     await db.schema.createIndex('idx_sessions_user_id').on('sessions').column('user_id').execute()
     await db.schema.createIndex('idx_accounts_user_id').on('accounts').column('user_id').execute()
@@ -227,6 +242,8 @@ export async function down(db: Kysely<unknown>): Promise<void> {
     await db.schema.dropIndex('idx_user_keys_status').execute()
     await db.schema.dropIndex('idx_signatories_target_created_at_idx').execute()
     await db.schema.dropIndex('idx_signatories_event_match_idx').execute()
+    await db.schema.dropIndex('idx_signatories_target_source_created_at_idx').execute()
+    await db.schema.dropIndex('idx_signatories_unique_event_idx').execute()
     await db.schema.dropIndex('idx_sessions_token').execute()
     await db.schema.dropIndex('idx_sessions_user_id').execute()
     await db.schema.dropIndex('idx_accounts_user_id').execute()

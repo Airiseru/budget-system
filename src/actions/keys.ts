@@ -29,6 +29,8 @@ const proposalRepository = createProposalRepository(process.env.DATABASE_TYPE ||
 const budgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
 const budgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 
+type SignatureEventType = 'SIGN' | 'REJECT_FORM'
+
 async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
     const activeCycle = await getActiveBudgetPrepCycle()
     return (
@@ -65,12 +67,14 @@ function getSignatoryTarget(formType: string, formId: string, fiscalYear: number
         return {
             targetTable: 'budget_cycles' as const,
             targetRecordId: String(fiscalYear),
+            sourceRecordId: formId,
         }
     }
 
     return {
         targetTable: 'forms' as const,
         targetRecordId: formId,
+        sourceRecordId: formId,
     }
 }
 
@@ -91,9 +95,10 @@ function parseAllocationSignoffRecordId(recordId: string): { formType: 'nep' | '
     }
 }
 
-async function buildAuthoritativeSignaturePayload(params: {
+async function buildAuthoritativeFormPayload(params: {
     tableName: string
     formId: string
+    formData?: object | string
     fromStatus: string
     toStatus: string
     remarks?: string
@@ -119,7 +124,19 @@ async function buildAuthoritativeSignaturePayload(params: {
         } satisfies FormSignaturePayload
     }
 
-    throw new Error(`No authoritative signature payload builder for table ${params.tableName}.`)
+    if (params.formData === undefined) {
+        throw new Error(`Form data is required to prepare a signature payload for ${params.tableName}.`)
+    }
+
+    const cleanFormData = cleanDataBasedOnTable(params.tableName, params.formData)
+    return {
+        from_status: params.fromStatus,
+        to_status: params.toStatus,
+        form_state_hash: sha256(canonicalStringify(cleanFormData)),
+        ...(typeof params.remarks === 'string' && params.remarks.trim()
+            ? { remarks: params.remarks.trim() }
+            : {}),
+    } satisfies FormSignaturePayload
 }
 
 async function advanceAllocationPhaseAfterApproval(formType: string, fiscalYear: number, changedBy: string) {
@@ -182,24 +199,65 @@ async function getFormFiscalYear(tableName: string, formId: string): Promise<num
     return null
 }
 
-export async function getCurrentAuthoritativeSignaturePayload(
-    tableName: string,
-    formId: string,
-    fromStatus: string,
+export async function prepareSignaturePayload({
+    tableName,
+    formId,
+    formData,
+    eventType,
+    fromStatus,
+    toStatus,
+    remarks,
+}: {
+    tableName: string
+    formId: string
+    formData?: object | string
+    eventType: SignatureEventType
+    fromStatus: string
     toStatus: string
-) {
+    remarks?: string
+}) {
     const session = await sessionWithEntity()
     if (!session) redirect('/login')
-    if (session.user.role !== 'dbm') {
-        throw new Error('Unauthorized')
-    }
 
-    return await buildAuthoritativeSignaturePayload({
+    const parsedAllocationSignoff =
+        tableName === 'budget_allocations'
+            ? parseAllocationSignoffRecordId(formId)
+            : null
+    const form = parsedAllocationSignoff
+        ? {
+            entity_id: session.user.entity_id ?? '',
+            type: parsedAllocationSignoff.formType,
+        }
+        : await formRepository.getFormAuthStatus(formId)
+    const fiscalYear = parsedAllocationSignoff?.fiscalYear ?? await getFormFiscalYear(tableName, formId)
+    const target = getSignatoryTarget(form.type, formId, fiscalYear)
+    const payload = await buildAuthoritativeFormPayload({
         tableName,
         formId,
+        formData,
         fromStatus,
         toStatus,
+        remarks,
     })
+    const changedAt = new Date()
+    const signaturePayload = buildSignaturePayload({
+        entity_id: form.entity_id,
+        user_id: session.user.id,
+        event_type: eventType,
+        table_name: tableName,
+        record_id: formId,
+        payload,
+        changed_at: changedAt,
+    })
+
+    return {
+        payload,
+        signaturePayload,
+        changedAt: changedAt.toISOString(),
+        targetTable: target.targetTable,
+        targetRecordId: target.targetRecordId,
+        sourceRecordId: target.sourceRecordId,
+    }
 }
 
 export async function setSigningPin(pin: string) {
@@ -370,7 +428,7 @@ export async function verifyAndSubmitSignature(
 
             const nextStatus = getNextStatus(currentAuthStatus, workflow, 'approve') ?? ''
             const authoritativePayload = parsedAllocationSignoff
-                ? await buildAuthoritativeSignaturePayload({
+                ? await buildAuthoritativeFormPayload({
                     tableName,
                     formId,
                     fromStatus: currentAuthStatus,
@@ -379,11 +437,11 @@ export async function verifyAndSubmitSignature(
                 : payload as FormSignaturePayload
 
             if (
-                authoritativePayload.from_status !== (payload as FormSignaturePayload).from_status ||
-                authoritativePayload.to_status !== (payload as FormSignaturePayload).to_status ||
+                authoritativePayload.from_status !== currentAuthStatus ||
+                authoritativePayload.to_status !== nextStatus ||
                 authoritativePayload.form_state_hash !== (payload as FormSignaturePayload).form_state_hash
             ) {
-                throw new Error('The allocation sign-off data changed before signing completed. Please try again.')
+                throw new Error('The signable data changed before signing completed. Please try again.')
             }
 
             const expectedSignaturePayload = buildSignaturePayload({
@@ -416,7 +474,7 @@ export async function verifyAndSubmitSignature(
                     signatoryTarget.targetRecordId,
                     session.user.id,
                     trx,
-                    formId
+                    signatoryTarget.sourceRecordId
                 )
 
             if (existingCurrentCycleSignature) {
@@ -426,6 +484,7 @@ export async function verifyAndSubmitSignature(
             const createdSignatory = await keyRepository.createSignatoryWithExecutor({
                 target_table: signatoryTarget.targetTable,
                 target_record_id: signatoryTarget.targetRecordId,
+                source_record_id: signatoryTarget.sourceRecordId,
                 user_id: session.user.id,
                 role: signatoryRole,
                 event_type: 'SIGN',
@@ -540,9 +599,39 @@ export async function verifyAndRejectSignature(
                 throw new Error('This form cannot be rejected at this stage')
             }
 
+            const authoritativePayload = payload as FormSignaturePayload
+            const expectedSignaturePayload = buildSignaturePayload({
+                entity_id: lockedForm.entity_id,
+                user_id: session.user.id,
+                event_type: 'REJECT_FORM',
+                table_name: tableName,
+                record_id: formId,
+                payload: authoritativePayload,
+                changed_at: changedAt,
+            })
+
+            if (
+                authoritativePayload.from_status !== (lockedForm.auth_status ?? '') ||
+                authoritativePayload.to_status !== rejectStatus ||
+                stringSignaturePayload !== expectedSignaturePayload
+            ) {
+                throw new Error('Signature payload mismatch.')
+            }
+
+            const signatureStillValid = await verifySignature(
+                stringSignaturePayload,
+                signature,
+                key.public_key,
+            )
+
+            if (!signatureStillValid) {
+                throw new Error('Invalid signature.')
+            }
+
             await keyRepository.createSignatoryWithExecutor({
                 target_table: signatoryTarget.targetTable,
                 target_record_id: signatoryTarget.targetRecordId,
+                source_record_id: signatoryTarget.sourceRecordId,
                 user_id: session.user.id,
                 role: signatoryRole,
                 event_type: 'REJECT_FORM',

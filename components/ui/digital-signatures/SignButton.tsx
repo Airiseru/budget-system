@@ -3,16 +3,12 @@
 import { useState } from "react"
 import { findLocalActiveSigningKey } from "@/src/lib/device-key-store"
 import { signData } from "@/src/lib/crypto"
-import { sha256, buildSignaturePayload } from "@/src/lib/audit-hash"
 import {
     verifyAndSubmitSignature,
     getUserKeys,
     verifySigningPin,
-    getCurrentAuthoritativeSignaturePayload,
+    prepareSignaturePayload,
 } from "@/src/actions/keys"
-import { FormSignaturePayload } from "@/src/types/audit"
-import { canonicalStringify } from "@/src/lib/canonical"
-import { cleanDataBasedOnTable } from "@/src/lib/validations"
 import { Button } from "@/components/ui/button"
 import { PenLine, ShieldCheck, Eye, EyeOff } from "lucide-react"
 
@@ -37,8 +33,6 @@ export function SignButton({
     formId,
     tableName,
     formData,
-    userId,
-    entityId,
     signatoryRole,
     fromAuthStatus,
     toAuthStatus,
@@ -92,45 +86,29 @@ export function SignButton({
 
             const { key: activeKey, privateKey } = localSigningKey
 
-            const date = new Date()
-
-            const payload: FormSignaturePayload = tableName === "budget_allocations"
-                ? await getCurrentAuthoritativeSignaturePayload(
-                    tableName,
-                    formId,
-                    fromAuthStatus ?? signatoryRole,
-                    toAuthStatus ?? "approved",
-                )
-                : {
-                    from_status: fromAuthStatus ?? signatoryRole,
-                    to_status: toAuthStatus ?? "approved",
-                    form_state_hash: sha256(canonicalStringify(cleanDataBasedOnTable(tableName, formData))),
-                }
-
-            const signaturePayload = buildSignaturePayload({
-                entity_id: entityId,
-                user_id: userId,
-                event_type: "SIGN",
-                table_name: tableName,
-                record_id: formId,
-                payload: payload,
-                changed_at: date,
+            const prepared = await prepareSignaturePayload({
+                tableName,
+                formId,
+                formData,
+                eventType: "SIGN",
+                fromStatus: fromAuthStatus ?? signatoryRole,
+                toStatus: toAuthStatus ?? "approved",
             })
 
-            const output = await signData(signaturePayload, privateKey, true)
+            const output = await signData(prepared.signaturePayload, privateKey, true)
             const signature = output.signature
 
             await verifyAndSubmitSignature(
                 pin,
                 tableName,
                 formId,
-                payload,
+                prepared.payload,
                 activeKey.id,
                 activeKey.public_key,
-                date,
+                new Date(prepared.changedAt),
                 signatoryRole,
                 signature,
-                signaturePayload as string,
+                prepared.signaturePayload,
                 allowClosedCycleAction,
             )
 

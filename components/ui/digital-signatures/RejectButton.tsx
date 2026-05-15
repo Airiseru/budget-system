@@ -4,11 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { findLocalActiveSigningKey } from '@/src/lib/device-key-store'
 import { signData } from '@/src/lib/crypto'
-import { sha256, buildSignaturePayload } from '@/src/lib/audit-hash'
-import { verifyAndRejectSignature, getUserKeys, verifySigningPin } from '@/src/actions/keys'
-import { FormSignaturePayload } from '@/src/types/audit'
-import { canonicalStringify } from '@/src/lib/canonical'
-import { cleanDataBasedOnTable } from '@/src/lib/validations'
+import { verifyAndRejectSignature, getUserKeys, verifySigningPin, prepareSignaturePayload } from '@/src/actions/keys'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, RotateCcw } from 'lucide-react'
 
@@ -26,7 +22,7 @@ type Props = {
 
 type Step = 'idle' | 'pin' | 'rejecting' | 'rejected'
 
-export function RejectButton({ formId, tableName, formData, userId, entityId, signatoryRole, fromAuthStatus, toAuthStatus, allowClosedCycleAction = false }: Props) {
+export function RejectButton({ formId, tableName, formData, signatoryRole, fromAuthStatus, toAuthStatus, allowClosedCycleAction = false }: Props) {
     const router = useRouter()
     const [step, setStep] = useState<Step>('idle')
     const [pin, setPin] = useState('')
@@ -74,39 +70,29 @@ export function RejectButton({ formId, tableName, formData, userId, entityId, si
 
             const { key: activeKey, privateKey } = localSigningKey
 
-            const date = new Date()
-            const cleanFormData = cleanDataBasedOnTable(tableName, formData)
-
-            const payload: FormSignaturePayload = {
-                from_status: fromAuthStatus ?? signatoryRole,
-                to_status: toAuthStatus ?? 'draft',
-                form_state_hash: sha256(canonicalStringify(cleanFormData)),
+            const prepared = await prepareSignaturePayload({
+                tableName,
+                formId,
+                formData,
+                eventType: 'REJECT_FORM',
+                fromStatus: fromAuthStatus ?? signatoryRole,
+                toStatus: toAuthStatus ?? 'draft',
                 remarks: remarks.trim(),
-            }
-
-            const signaturePayload = buildSignaturePayload({
-                entity_id: entityId,
-                user_id: userId,
-                event_type: 'REJECT_FORM',
-                table_name: tableName,
-                record_id: formId,
-                payload: payload,
-                changed_at: date,
             })
 
-            const output = await signData(signaturePayload, privateKey, true)
+            const output = await signData(prepared.signaturePayload, privateKey, true)
 
             await verifyAndRejectSignature(
                 pin,
                 tableName,
                 formId,
-                payload,
+                prepared.payload,
                 activeKey.id,
                 activeKey.public_key,
-                date,
+                new Date(prepared.changedAt),
                 signatoryRole,
                 output.signature,
-                signaturePayload as string,
+                prepared.signaturePayload,
                 allowClosedCycleAction
             )
 
