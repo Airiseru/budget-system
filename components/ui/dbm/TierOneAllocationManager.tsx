@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/select'
 import { createTierOneAllocationAction, updateTierOneAllocationAction } from '@/src/actions/budgetAllocations'
 import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '@/src/lib/constants'
+import { BUDGET_PHASE_LABELS } from '@/src/lib/constants'
 import type { BudgetCycle } from '@/src/types/budget_settings'
 import type { ItemCatalogScope } from '@/src/types/line_items'
 import type { AllocationWorkflowLogEntry, BudgetAllocationListItem } from '@/src/db/postgres/repositories/budgetAllocationRepository'
@@ -58,14 +59,6 @@ const REMARK_STAGE_OPTIONS: { value: BUDGET_PREP_WORKFLOW_STAGES_TYPE; label: st
     { value: 'dbm_review', label: 'DBM Review' },
     { value: 'dbm_appeal', label: 'DBM Appeal' },
 ]
-
-const PHASE_LABELS = {
-    preparation: 'Preparation',
-    dbm_review: 'DBM Review',
-    presidential_approval: 'Presidential Approval',
-    legislative_deliberation: 'Legislative Deliberation',
-    enacted_gaa: 'Enacted GAA',
-} as const
 
 const SELECT_TRIGGER_CLASSNAME =
     "border px-3 py-5 w-full rounded border-border text-base bg-background mb-0 min-h-12 max-w-full overflow-hidden *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate"
@@ -331,7 +324,7 @@ export function TierOneAllocationManager({
                     <BudgetPrepClosedBanner
                         message={
                             activeCycle
-                                ? `The current budget cycle is in the ${PHASE_LABELS[activeCycle.current_phase]} phase. Tier One allocations are view-only right now.`
+                                ? `The current budget cycle is in the ${BUDGET_PHASE_LABELS[activeCycle.current_phase]} phase. Tier One allocations are view-only right now.`
                                 : 'There is no active budget cycle. Select a fiscal year below to view Tier One allocations.'
                         }
                     />
@@ -341,7 +334,7 @@ export function TierOneAllocationManager({
                     <div className="rounded-lg border border-border bg-accent/30 px-4 py-3 text-sm text-secondary-foreground">
                         Creating allocations for Fiscal Year <span className="font-bold">{activeCycle.fiscal_year}</span>.
                         <div className="mt-1 text-xs text-muted-foreground">
-                            Current phase: <span className="font-semibold text-secondary-foreground">{PHASE_LABELS[activeCycle.current_phase]}</span>
+                            Current phase: <span className="font-semibold text-secondary-foreground">{BUDGET_PHASE_LABELS[activeCycle.current_phase]}</span>
                         </div>
                     </div>
                 ) : availableYears.length > 0 ? (

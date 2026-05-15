@@ -1,4 +1,5 @@
 import { ItemCatalogScope } from "../types/line_items"
+import { BudgetCyclePhase } from "../types/budget_settings"
 
 export const ENTITY_TYPE_LABELS: Record<string, string> = {
     department: 'Department',
@@ -162,3 +163,19 @@ export const ITEM_EXPENSE_CLASS_OPTIONS = Object.entries(EXPENSE_CLASSES).map(([
 }))
 
 export type BUDGET_PREP_WORKFLOW_STAGES_TYPE = 'entity_proposal' | 'dbm_review' | 'dbm_appeal' | 'presidential_review' | 'congressional_bicam'
+
+export const BUDGET_PHASE_LABELS: Record<BudgetCyclePhase, string> = {
+    preparation: 'Preparation',
+    dbm_review: 'DBM Review',
+    presidential_approval: 'Presidential Approval',
+    legislative_deliberation: 'Legislative Deliberation',
+    enacted_gaa: 'Enacted GAA',
+}
+
+export const BUDGET_PHASE_OPTIONS: { value: BudgetCyclePhase; label: string }[] = [
+    { value: 'preparation', label: 'Preparation' },
+    { value: 'dbm_review', label: 'DBM Review' },
+    { value: 'presidential_approval', label: 'Presidential Approval' },
+    { value: 'legislative_deliberation', label: 'Legislative Deliberation' },
+    { value: 'enacted_gaa', label: 'Enacted GAA' },
+]

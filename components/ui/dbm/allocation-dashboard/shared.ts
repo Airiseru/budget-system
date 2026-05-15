@@ -92,14 +92,6 @@ export type BulkValidityState = {
     valid_until: string
 }
 
-export const PHASE_LABELS = {
-    preparation: 'Preparation',
-    dbm_review: 'DBM Review',
-    presidential_approval: 'NEP',
-    legislative_deliberation: 'GAA',
-    enacted_gaa: 'Enacted GAA',
-} as const
-
 export const initialInsertionState: LegislativeInsertionState = {
     entity_id: '',
     pap_code: '',

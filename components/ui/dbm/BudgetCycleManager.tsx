@@ -17,28 +17,13 @@ import {
     editBudgetCycleAction,
 } from '@/src/actions/budgetSettings'
 import { BudgetCycle, BudgetCyclePhase } from '@/src/types/budget_settings'
+import { BUDGET_PHASE_LABELS, BUDGET_PHASE_OPTIONS } from '@/src/lib/constants'
 
 const STATUS_STYLES: Record<BudgetCycle['prep_status'], string> = {
     closed: 'bg-slate-100 text-slate-700',
     active: 'bg-emerald-600 text-white',
     locked: 'bg-amber-600 text-white',
 }
-
-const PHASE_LABELS: Record<BudgetCyclePhase, string> = {
-    preparation: 'Preparation',
-    dbm_review: 'DBM Review',
-    presidential_approval: 'Presidential Approval',
-    legislative_deliberation: 'Legislative Deliberation',
-    enacted_gaa: 'Enacted GAA',
-}
-
-const ACTIVE_PHASE_OPTIONS: { value: BudgetCyclePhase; label: string }[] = [
-    { value: 'preparation', label: 'Preparation' },
-    { value: 'dbm_review', label: 'DBM Review' },
-    { value: 'presidential_approval', label: 'Presidential Approval' },
-    { value: 'legislative_deliberation', label: 'Legislative Deliberation' },
-    { value: 'enacted_gaa', label: 'Enacted GAA' },
-]
 
 export function BudgetCycleManager({
     cycles,
@@ -143,7 +128,7 @@ export function BudgetCycleManager({
                                 Opened: {activeCycle.prep_opened_at ? new Date(activeCycle.prep_opened_at).toLocaleString() : '—'}
                             </p>
                             <p className="text-sm text-muted-foreground">
-                                Current phase: {PHASE_LABELS[activeCycle.current_phase]}
+                                Current phase: {BUDGET_PHASE_LABELS[activeCycle.current_phase]}
                             </p>
                             <p className="text-sm text-muted-foreground">
                                 Legal basis: {activeCycle.legal_basis_ref || '—'}
@@ -166,11 +151,11 @@ export function BudgetCycleManager({
                                         >
                                             <SelectTrigger id="current_phase_select" className="w-full border-border py-5 text-base">
                                                 <SelectValue placeholder="Select a phase">
-                                                    {PHASE_LABELS[selectedPhase]}
+                                                    {BUDGET_PHASE_LABELS[selectedPhase]}
                                                 </SelectValue>
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {ACTIVE_PHASE_OPTIONS.map((option) => (
+                                                {BUDGET_PHASE_OPTIONS.map((option) => (
                                                     <SelectItem key={option.value} value={option.value}>
                                                         {option.label}
                                                     </SelectItem>
@@ -230,7 +215,7 @@ export function BudgetCycleManager({
                                             Opened: {cycle.prep_opened_at ? new Date(cycle.prep_opened_at).toLocaleString() : '—'}
                                         </p>
                                         <p className="text-sm text-muted-foreground">
-                                            Phase: {PHASE_LABELS[cycle.current_phase]}
+                                            Phase: {BUDGET_PHASE_LABELS[cycle.current_phase]}
                                         </p>
                                         <p className="text-sm text-muted-foreground">
                                             Locked: {cycle.prep_locked_at ? new Date(cycle.prep_locked_at).toLocaleString() : '—'}
