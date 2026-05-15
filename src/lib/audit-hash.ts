@@ -20,7 +20,7 @@ export function computeAuditEntryHash(entry: AuditLogEntryPayload): string {
     const stringEntry = canonicalStringify(entry)
 
     // Create hash
-    return createHash('sha256').update(stringEntry).digest('hex')
+    return sha256(stringEntry)
 }
 
 export function buildSignaturePayload(log: {
@@ -41,12 +41,6 @@ export function buildSignaturePayload(log: {
         changed_at: log.changed_at,
         payload: log.payload ?? null,
     })
-}
-
-export function hashFormData(data: Record<string, unknown>): string {
-    return createHash('sha256')
-        .update(canonicalStringify(data))
-        .digest('hex')
 }
 
 export function verifyChain(logs: AuditLog[]): {
