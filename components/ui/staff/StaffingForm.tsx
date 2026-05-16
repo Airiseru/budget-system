@@ -307,7 +307,7 @@ export default function StaffForm({
             result.error.issues.forEach((err) => {
                 newErrors[err.path.join(".")] = err.message;
             });
-            console.log(newErrors);
+            console.log(`Validation errors: ${JSON.stringify(newErrors)}`);
             setFieldErrors(newErrors);
             setError("Validation failed. Please check the highlighted fields.");
             setIsLoading(false);

@@ -1,14 +1,17 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/src/lib/auth";
-import { headers } from "next/headers";
-import { createProposalRepository } from "@/src/db/factory";
+import { NextResponse } from "next/server"
+import { logSaveFormEdits, logSubmitForm } from '@/src/actions/audit'
+import { auth } from "@/src/lib/auth"
+import { headers } from "next/headers"
+import { createProposalRepository, createFormRepository } from "@/src/db/factory"
 import {
     getBudgetPrepClosedError,
     isBudgetPrepActiveForYear,
     isDbmFormActionPhaseForYear,
-} from "@/src/lib/budget-cycle";
+} from "@/src/lib/budget-cycle"
+import { normalizeProposalPayload } from "@/src/lib/validations/proposal.schema"
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
+const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export async function PUT(
     req: Request,
@@ -69,7 +72,44 @@ export async function PUT(
 
         // updateProjectProposal should handle deleting and re-inserting child arrays
         console.log("Updating proposal with payload:", body);
-        const result = await repo.updateProjectProposal(id, body);
+        const previousAuditPayload = normalizeProposalPayload(existing)
+        const nextAuditPayload = normalizeProposalPayload(body.payload)
+        const result = await repo.updateProjectProposal(id, body)
+
+        // Log form edit
+        const logResult = await logSaveFormEdits(
+            body.userId,
+            existing.entity_id,
+            'project_proposals',
+            id,
+            previousAuditPayload,
+            nextAuditPayload,
+            body.updated_at,
+        )
+
+        if (!logResult.success) {
+            return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
+        }
+
+        if (body.auth_status === 'pending_budget') {
+            const formUpdate = await FormRepository.updateFormAuthStatus(id, body.auth_status)
+
+            // Log form update
+
+            const submitResult = await logSubmitForm(
+                body.userId,
+                existing.entity_id,
+                'project_proposals',
+                id,
+                nextAuditPayload,
+                formUpdate.updated_at,
+            )
+
+            if (!submitResult.success) {
+                return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
+            }
+        }
+
         return NextResponse.json(result);
     } catch (error) {
         console.error("PUT PROJECT ERROR:", error);
@@ -78,6 +118,7 @@ export async function PUT(
             { status: 500 },
         );
     }
+
 }
 
 export async function DELETE(
@@ -103,7 +144,7 @@ export async function DELETE(
 
         await repo.deleteProjectProposal(id);
         return new NextResponse(null, { status: 204 });
-    } catch (error) {
+    } catch {
         return NextResponse.json(
             { error: "Failed to delete" },
             { status: 500 },

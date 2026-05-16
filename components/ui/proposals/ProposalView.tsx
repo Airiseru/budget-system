@@ -269,16 +269,16 @@ export default function ProposalView({
                                 ? "Edit Form"
                                 : "Overwrite Form"}
                         </Link>
-                        <form action={updateAuthStatus}>
-                            <button
-                                type="submit"
-                                className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
-                            >
-                                {session.user.role !== "dbm"
-                                    ? "Submit Form"
-                                    : "Finalize Overwrite"}
-                            </button>
-                        </form>
+                        {session.user.role !== "dbm" && (    
+                            <form action={updateAuthStatus}>
+                                <button
+                                    type="submit"
+                                    className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
+                                >
+                                    Submit Form
+                                </button>
+                            </form>
+                        )}
                     </>
                 )}
                 </div>

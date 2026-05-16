@@ -9,6 +9,7 @@ import SearchableComboboxField, {
 } from "@/components/ui/dbm/SearchableComboboxField";
 import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
 import type { UacsFundingSource } from "@/src/types/uacs";
+import type { FullProjectProposal } from "@/src/types/project_proposals";
 
 interface AttributionYearTier {
     year: number;
@@ -117,8 +118,8 @@ type MatrixField = "cost_by_components" | "foreign_physical_targets";
 
 interface ExpenseRow {
     expense_class: "PS" | "MOOE" | "CO" | "FINEX";
-    fund_category?: "LP" | "Grant" | "GOP"; // for BP 203
-    fund_method?: "cash" | "non_cash" | "imprest" | "direct_payment"; // for BP 203
+    fund_category?: "LP" | "Grant" | "GOP" | null; // for BP 203
+    fund_method?: "cash" | "non_cash" | "non-cash" | "imprest" | "direct_payment" | null; // for BP 203
     currency: string;
     amount: number;
 }
@@ -183,9 +184,35 @@ interface ProjectProposalPayload {
     foreign_physical_targets: { name: string; costs: ExpenseRow[] }[];
 }
 
+type ProposalFormProject = Omit<
+    FullProjectProposal,
+    | "cost_by_components"
+    | "foreign_physical_targets"
+    | "pap_prerequisites"
+    | "local_locations"
+    | "local_financial_attributions"
+    | "local_physical_targets"
+    | "local_infrastructure_requirements"
+    | "foreign_financial_targets"
+> & {
+    pap_prerequisites?: ProjectProposalPayload["pap_prerequisites"];
+    cost_by_components?: (Omit<CostingComponent, "costs"> & {
+        costs?: ExpenseRow[];
+    })[];
+    local_locations?: ProjectProposalPayload["local_locations"];
+    local_financial_attributions?: ProjectProposalPayload["local_financial_attributions"];
+    local_physical_targets?: ProjectProposalPayload["local_physical_targets"];
+    local_infrastructure_requirements?: ProjectProposalPayload["local_infrastructure_requirements"];
+    foreign_financial_targets?: ProjectProposalPayload["foreign_financial_targets"];
+    foreign_physical_targets?: (Omit<
+        ProjectProposalPayload["foreign_physical_targets"][number],
+        "costs"
+    > & { costs?: ExpenseRow[] })[];
+};
+
 type ProposalPrerequisite = ProjectProposalPayload["pap_prerequisites"][number];
 type ArrayFieldKey = {
-    [K in keyof ProjectProposalPayload]: ProjectProposalPayload[K] extends any[]
+    [K in keyof ProjectProposalPayload]: ProjectProposalPayload[K] extends unknown[]
         ? K
         : never;
 }[keyof ProjectProposalPayload] &
@@ -302,7 +329,7 @@ const PrerequisiteRow = ({
 );
 
 interface WrapperProps {
-    project?: any;
+    project?: ProposalFormProject;
     type: "202" | "203";
     userId: string;
     entityName: string;
@@ -349,7 +376,11 @@ export default function ProposalForm({
         type: type,
 
         pap_prerequisites: project?.pap_prerequisites || DEFAULT_PREREQUISITES,
-        cost_by_components: project?.cost_by_components || [],
+        cost_by_components:
+            project?.cost_by_components?.map((component) => ({
+                ...component,
+                costs: component.costs ?? [],
+            })) || [],
 
         local_locations: project?.local_locations?.length
             ? project?.local_locations?.length > 0
@@ -363,7 +394,11 @@ export default function ProposalForm({
         local_infrastructure_requirements:
             project?.local_infrastructure_requirements || [],
         foreign_financial_targets: project?.foreign_financial_targets || [],
-        foreign_physical_targets: project?.foreign_physical_targets || [],
+        foreign_physical_targets:
+            project?.foreign_physical_targets?.map((target) => ({
+                ...target,
+                costs: target.costs ?? [],
+            })) || [],
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -388,7 +423,7 @@ export default function ProposalForm({
     const getErrorsForPath = (pathPrefix: string) => {
         return Object.entries(errors)
             .filter(([key]) => key.startsWith(pathPrefix))
-            .map(([_, message]) => message);
+            .map(([, message]) => message);
     };
 
     const getFriendlyErrorMessage = (path: string, message: string) => {
@@ -417,7 +452,7 @@ export default function ProposalForm({
         const match = path.match(/^(.+?)\.(\d+)\.(.+)$/);
 
         if (match) {
-            const [_, tableKey, index, field] = match;
+            const [, tableKey, index, field] = match;
             const tableName = tableNames[tableKey] || toTitleCase(tableKey);
             const fieldName = toTitleCase(field);
             const position = ordinal(parseInt(index) + 1);
@@ -492,8 +527,7 @@ export default function ProposalForm({
 
     const removeRow = <K extends ArrayFieldKey>(field: K, index: number) => {
         setPayload((prev) => {
-            // We cast to any[] here because we know K is an ArrayFieldKey
-            const currentArray = prev[field] as any[];
+            const currentArray = prev[field] as unknown[];
             if (Array.isArray(currentArray)) {
                 return {
                     ...prev,
@@ -609,8 +643,8 @@ export default function ProposalForm({
                 const data = await res.json()
                 router.refresh()
                 router.push(
-                    data.papId || project.id
-                        ? `/forms/proposals/${data.formId ?? project.id}`
+                    data.papId || project?.id
+                        ? `/forms/proposals/${data.formId ?? project?.id}`
                         : "/forms/proposals",
                 )
             } else {
@@ -664,7 +698,7 @@ export default function ProposalForm({
 
     const handleMatrixChange203 = (
         componentIdx: number,
-        expenseClass: string,
+        expenseClass: "PS" | "MOOE" | "CO" | "FINEX",
         category: "LP" | "Grant" | "GOP",
         value: number,
         field: MatrixField,
@@ -690,7 +724,7 @@ export default function ProposalForm({
                 };
             } else {
                 currentCosts.push({
-                    expense_class: expenseClass as any,
+                    expense_class: expenseClass,
                     fund_category: category,
                     fund_method: method,
                     currency: "PHP",
@@ -2482,7 +2516,7 @@ export default function ProposalForm({
                                             <th className="py-4 px-4 border-r w-64">
                                                 Components
                                             </th>
-                                            {["PS", "MOOE", "CO", "FINEX"].map(
+                                            {(["PS", "MOOE", "CO", "FINEX"] as const).map(
                                                 (ec) => (
                                                     <th
                                                         key={ec}
@@ -2523,12 +2557,12 @@ export default function ProposalForm({
                                                             }
                                                         />
                                                     </td>
-                                                    {[
+                                                    {([
                                                         "PS",
                                                         "MOOE",
                                                         "CO",
                                                         "FINEX",
-                                                    ].map((ec) => {
+                                                    ] as const).map((ec) => {
                                                         // HELPER: Find specific cost objects by class, category, and method
                                                         const getCost = (
                                                             cat: "LP" | "GOP",
@@ -2545,7 +2579,11 @@ export default function ProposalForm({
                                                                     (cat !==
                                                                         "LP" ||
                                                                         c.fund_method ===
-                                                                            method),
+                                                                            method ||
+                                                                        (method ===
+                                                                            "non_cash" &&
+                                                                            c.fund_method ===
+                                                                                "non-cash")),
                                                             )?.amount || "";
 
                                                         const lpCash = Number(
@@ -2832,6 +2870,7 @@ export default function ProposalForm({
                                                             <input
                                                                 type="number"
                                                                 className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                min={payload.proposal_year}
                                                                 value={
                                                                     target.year
                                                                 }
@@ -2855,6 +2894,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.lp_imprest ||
                                                                     ""
@@ -2865,12 +2905,13 @@ export default function ProposalForm({
                                                                         i,
                                                                         {
                                                                             lp_imprest:
-                                                                                parseInt(
+                                                                                Number(
                                                                                     e
                                                                                         .target
-                                                                                        .value,
+                                                                                        .value ||
+                                                                                        0,
                                                                                 ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -2880,6 +2921,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.lp_direct ||
                                                                     ""
@@ -2890,12 +2932,13 @@ export default function ProposalForm({
                                                                         i,
                                                                         {
                                                                             lp_direct:
-                                                                                parseInt(
+                                                                                Number(
                                                                                     e
                                                                                         .target
-                                                                                        .value,
+                                                                                        .value ||
+                                                                                        0,
                                                                                 ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -2905,6 +2948,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.grant ||
                                                                     ""
@@ -2914,12 +2958,13 @@ export default function ProposalForm({
                                                                         "foreign_financial_targets",
                                                                         i,
                                                                         {
-                                                                            grant: parseInt(
+                                                                            grant: Number(
                                                                                 e
                                                                                     .target
-                                                                                    .value,
+                                                                                    .value ||
+                                                                                    0,
                                                                             ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -2929,6 +2974,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground-600"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.gop ||
                                                                     ""
@@ -2938,12 +2984,13 @@ export default function ProposalForm({
                                                                         "foreign_financial_targets",
                                                                         i,
                                                                         {
-                                                                            gop: parseInt(
+                                                                            gop: Number(
                                                                                 e
                                                                                     .target
-                                                                                    .value,
+                                                                                    .value ||
+                                                                                    0,
                                                                             ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -3032,7 +3079,7 @@ export default function ProposalForm({
                                             <th className="py-4 px-4 border-r w-64">
                                                 Components
                                             </th>
-                                            {["PS", "MOOE", "CO", "FINEX"].map(
+                                            {(["PS", "MOOE", "CO", "FINEX"] as const).map(
                                                 (ec) => (
                                                     <th
                                                         key={ec}
@@ -3065,17 +3112,17 @@ export default function ProposalForm({
                                                                         name: e
                                                                             .target
                                                                             .value,
-                                                                    } as any,
+                                                                    },
                                                                 )
                                                             }
                                                         />
                                                     </td>
-                                                    {[
+                                                    {([
                                                         "PS",
                                                         "MOOE",
                                                         "CO",
                                                         "FINEX",
-                                                    ].map((ec) => {
+                                                    ] as const).map((ec) => {
                                                         // HELPER: Find specific cost objects by class, category, and method
                                                         const getCost = (
                                                             cat: "LP" | "GOP",
@@ -3092,7 +3139,11 @@ export default function ProposalForm({
                                                                     (cat !==
                                                                         "LP" ||
                                                                         c.fund_method ===
-                                                                            method),
+                                                                            method ||
+                                                                        (method ===
+                                                                            "non_cash" &&
+                                                                            c.fund_method ===
+                                                                                "non-cash")),
                                                             )?.amount || "";
 
                                                         const lpCash = Number(
@@ -3131,6 +3182,7 @@ export default function ProposalForm({
                                                                         <input
                                                                             type="number"
                                                                             className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            min={0}
                                                                             value={getCost(
                                                                                 "LP",
                                                                                 "cash",
@@ -3162,6 +3214,7 @@ export default function ProposalForm({
                                                                         <input
                                                                             type="number"
                                                                             className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            min={0}
                                                                             value={getCost(
                                                                                 "LP",
                                                                                 "non_cash",
@@ -3192,6 +3245,7 @@ export default function ProposalForm({
                                                                         <input
                                                                             type="number"
                                                                             className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            min={0}
                                                                             value={getCost(
                                                                                 "GOP",
                                                                             )}
@@ -3336,16 +3390,18 @@ export default function ProposalForm({
             )}
 
             <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 flex justify-end gap-3 z-50">
-                <button
-                    type="submit"
-                    disabled={isLoading}
-                    onClick={() =>
-                        setSubmitAction(isDbmOverwrite ? "pending_dbm" : "draft")
-                    }
-                    className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
-                >
-                    {isDbmOverwrite ? "Save Overwrite" : "Save Draft"}
-                </button>
+                {!isDbmOverwrite && (
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        onClick={() =>
+                            setSubmitAction("draft")
+                        }
+                        className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
+                    >
+                        Save Draft
+                    </button>
+                )}
                 <button
                     type="submit"
                     disabled={isLoading}

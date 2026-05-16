@@ -414,7 +414,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                         const historyMatch = isEqual(cleanedReconstructedState, cleanedPayload)
                         if (!historyMatch) {
                             snapshotsMatchHistory = false
-                            console.log(`[AUDIT] Broken Snapshot: Log ${log.id} expected state ${JSON.stringify(cleanedReconstructedState)} but got ${JSON.stringify(cleanedPayload)}`)
+                            console.log(`[AUDIT] Broken Snapshot: Log ${log.id} expected state ${JSON.stringify(cleanedReconstructedState)} BUT GOT ${JSON.stringify(cleanedPayload)}`)
                         }
                     } else {
                         snapshotsMatchHistory = false
@@ -442,6 +442,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                     })
 
                     if (!verificationResult.formStateHashValid) {
+                        console.log(`[AUDIT] Broken Approval Hash: Log ${log.id} with event type ${log.event_type} expected reconstructed state hash to match signed form_state_hash ${payload?.form_state_hash ?? 'missing'}. Reconstructed state: ${JSON.stringify(reconstructedState)}`)
                         approvalHashesValid = false
                     }
                     if (!verificationResult.cryptographicValid) {
@@ -460,9 +461,13 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                 ? cleanDataBasedOnTable(tableName, reconstructedState)
                 : null
 
+            const cleanedCurrentState = currentState
+                ? cleanDataBasedOnTable(tableName, currentState)
+                : null
+
             isDataMatch =
                 !!cleanedReconstructedState &&
-                isEqual(cleanedReconstructedState, currentState) &&
+                isEqual(cleanedReconstructedState, cleanedCurrentState) &&
                 approvalHashesValid &&
                 snapshotsMatchHistory &&
                 signatureEventsValid &&
