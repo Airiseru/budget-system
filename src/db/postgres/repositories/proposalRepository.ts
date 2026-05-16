@@ -118,6 +118,25 @@ const normalizeFundMethod = (
     method: ProposalExpenseClass["fund_method"],
 ) => (method === "non_cash" ? "non-cash" : method);
 
+async function assertProposalRankAvailable(
+    trx: Transaction<Database>,
+    entityId: string,
+    priorityRank: number,
+    rootFormId: string,
+) {
+    const conflictingProposal = await trx
+        .selectFrom("project_proposals")
+        .select("id")
+        .where("entity_id", "=", entityId)
+        .where("priority_rank", "=", priorityRank)
+        .where("root_form_id", "!=", rootFormId)
+        .executeTakeFirst();
+
+    if (conflictingProposal) {
+        throw new Error("unique_entity_rank");
+    }
+}
+
 async function insertCostSourceEntity(
     trx: Transaction<Database>,
     tableName: CostSourceTableName,
@@ -357,12 +376,22 @@ export async function createProjectProposal(
             })
             .returning("id")
             .executeTakeFirstOrThrow();
+        const rootFormId = parent_form_id ?? form.id;
+
+        await assertProposalRankAvailable(
+            trx,
+            entityId,
+            payload.priority_rank,
+            rootFormId,
+        );
 
         // 2. Insert into Project Proposals
         const project = await trx
             .insertInto("project_proposals")
             .values({
                 id: form.id,
+                parent_form_id: parent_form_id ?? null,
+                root_form_id: rootFormId,
                 entity_id: entityId,
                 title: payload.title,
                 proposal_year: payload.proposal_year,
@@ -514,7 +543,11 @@ export async function getProjectProposalById(
         .selectFrom("project_proposals")
         .innerJoin("forms", "forms.id", "project_proposals.id")
         .selectAll("project_proposals")
-        .select("forms.auth_status as auth_status")
+        .select([
+            "forms.auth_status as auth_status",
+            "forms.parent_form_id as parent_form_id",
+            "forms.version as version",
+        ])
         .where("project_proposals.id", "=", id)
         .executeTakeFirst();
 
@@ -721,6 +754,19 @@ export async function updateProjectProposal(
             p,
         );
 
+        const currentProposal = await trx
+            .selectFrom("project_proposals")
+            .select(["entity_id", "root_form_id"])
+            .where("id", "=", proposalId)
+            .executeTakeFirstOrThrow();
+
+        await assertProposalRankAvailable(
+            trx,
+            currentProposal.entity_id,
+            p.priority_rank,
+            currentProposal.root_form_id,
+        );
+
         // 1. Update form status
         if (auth_status) {
             await trx
@@ -871,6 +917,55 @@ export async function updateProjectProposal(
     });
 }
 
+export async function createDbmProjectProposalOverwrite(
+    sourceFormId: string,
+    payload: { payload: ProposalWritePayload; auth_status?: string },
+) {
+    const sourceForm = await db
+        .selectFrom("forms")
+        .select([
+            "id",
+            "entity_id",
+            "parent_form_id",
+            "version",
+            "auth_status",
+        ])
+        .where("id", "=", sourceFormId)
+        .executeTakeFirstOrThrow();
+
+    const parentFormId = sourceForm.parent_form_id ?? sourceForm.id;
+
+    const existingOverwrite = await db
+        .selectFrom("forms")
+        .select(["id"])
+        .where("parent_form_id", "=", parentFormId)
+        .orderBy("version", "desc")
+        .executeTakeFirst();
+
+    if (existingOverwrite) {
+        await updateProjectProposal(existingOverwrite.id, payload);
+
+        return {
+            formId: existingOverwrite.id,
+            created: false,
+        };
+    }
+
+    const created = await createProjectProposal(
+        sourceForm.entity_id,
+        payload.payload,
+        payload.auth_status ?? sourceForm.auth_status ?? "pending_dbm",
+        payload.payload.proposal_year,
+        parentFormId,
+        (sourceForm.version ?? 1) + 1,
+    );
+
+    return {
+        formId: created.formId,
+        created: true,
+    };
+}
+
 export async function swapProposalRanks(
     entityId: string,
     proposalIdA: string,
@@ -878,7 +973,39 @@ export async function swapProposalRanks(
     proposalIdB: string,
     rankB: number,
 ) {
+    void rankA;
+    void rankB;
+
     return await db.transaction().execute(async (trx) => {
+        const proposals = await trx
+            .selectFrom("project_proposals")
+            .innerJoin("forms", "forms.id", "project_proposals.id")
+            .select([
+                "project_proposals.id",
+                "project_proposals.entity_id",
+                "project_proposals.priority_rank",
+                "project_proposals.root_form_id",
+                "forms.auth_status",
+            ])
+            .where("project_proposals.id", "in", [proposalIdA, proposalIdB])
+            .forUpdate()
+            .execute();
+
+        const proposalA = proposals.find((proposal) => proposal.id === proposalIdA);
+        const proposalB = proposals.find((proposal) => proposal.id === proposalIdB);
+
+        if (!proposalA || !proposalB) {
+            throw new Error("proposal_not_found");
+        }
+
+        if (proposalA.entity_id !== entityId || proposalB.entity_id !== entityId) {
+            throw new Error("proposal_entity_mismatch");
+        }
+
+        if (proposalA.auth_status !== "draft" || proposalB.auth_status !== "draft") {
+            throw new Error("submitted_rank_change");
+        }
+
         // 1. Move A to a temporary placeholder rank to free up rankA
         await trx
             .updateTable("project_proposals")
@@ -889,18 +1016,110 @@ export async function swapProposalRanks(
         // 2. Move B to A's old rank
         await trx
             .updateTable("project_proposals")
-            .set({ priority_rank: rankA })
+            .set({ priority_rank: Number(proposalA.priority_rank) })
             .where("id", "=", proposalIdB)
             .execute();
 
         // 3. Move A to B's old rank
         await trx
             .updateTable("project_proposals")
-            .set({ priority_rank: rankB })
+            .set({ priority_rank: Number(proposalB.priority_rank) })
             .where("id", "=", proposalIdA)
             .execute();
 
         return { success: true };
+    });
+}
+
+export async function moveProposalToRank(
+    entityId: string,
+    proposalId: string,
+    targetRank: number,
+) {
+    return await db.transaction().execute(async (trx) => {
+        const proposals = await trx
+            .selectFrom("project_proposals")
+            .innerJoin("forms", "forms.id", "project_proposals.id")
+            .select([
+                "project_proposals.id",
+                "project_proposals.priority_rank",
+                "forms.auth_status",
+            ])
+            .where("project_proposals.entity_id", "=", entityId)
+            .where("project_proposals.parent_form_id", "is", null)
+            .orderBy("project_proposals.priority_rank", "asc")
+            .forUpdate()
+            .execute();
+
+        const movingProposal = proposals.find(
+            (proposal) => proposal.id === proposalId,
+        );
+
+        if (!movingProposal) {
+            throw new Error("proposal_not_found");
+        }
+
+        if (movingProposal.auth_status !== "draft") {
+            throw new Error("submitted_rank_change");
+        }
+
+        const boundedTargetRank = Math.max(
+            1,
+            Math.min(Math.trunc(targetRank), proposals.length),
+        );
+        const currentRank = Number(movingProposal.priority_rank);
+
+        if (currentRank === boundedTargetRank) {
+            return { success: true, changedIds: [] as string[] };
+        }
+
+        const affectedProposals = proposals.filter((proposal) => {
+            const rank = Number(proposal.priority_rank);
+
+            return currentRank < boundedTargetRank
+                ? rank >= currentRank && rank <= boundedTargetRank
+                : rank >= boundedTargetRank && rank <= currentRank;
+        });
+
+        if (
+            affectedProposals.some(
+                (proposal) => proposal.auth_status !== "draft",
+            )
+        ) {
+            throw new Error("submitted_rank_change");
+        }
+
+        for (const [index, proposal] of affectedProposals.entries()) {
+            await trx
+                .updateTable("project_proposals")
+                .set({ priority_rank: -(index + 1) })
+                .where("id", "=", proposal.id)
+                .execute();
+        }
+
+        for (const proposal of affectedProposals) {
+            const rank = Number(proposal.priority_rank);
+            let nextRank = rank;
+
+            if (proposal.id === proposalId) {
+                nextRank = boundedTargetRank;
+            } else if (currentRank < boundedTargetRank) {
+                nextRank = rank - 1;
+            } else {
+                nextRank = rank + 1;
+            }
+
+            await trx
+                .updateTable("project_proposals")
+                .set({ priority_rank: nextRank })
+                .where("id", "=", proposal.id)
+                .execute();
+        }
+
+        return {
+            success: true,
+            changedIds: affectedProposals.map((proposal) => proposal.id),
+        };
     });
 }
 

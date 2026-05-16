@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft } from "lucide-react";
 
 // You can put this at the top of your file
 interface ProposalSummary {
@@ -33,19 +33,48 @@ export default function RankManager({
         initialProposals || [],
     );
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [targetRank, setTargetRank] = useState("");
 
-    const handleMove = async (
-        currentIndex: number,
-        direction: "up" | "down",
-    ) => {
-        const targetIndex =
-            direction === "up" ? currentIndex - 1 : currentIndex + 1;
+    const selectedProposals = selectedIds
+        .map((id) => proposals.find((proposal) => proposal.id === id))
+        .filter((proposal): proposal is ProposalSummary => Boolean(proposal));
 
-        if (targetIndex < 0 || targetIndex >= proposals.length) return;
+    const toggleSelection = (proposal: ProposalSummary) => {
+        if (proposal.auth_status !== "draft" || loading) return;
+
+        setError(null);
+        setSelectedIds((current) => {
+            if (current.includes(proposal.id)) {
+                return current.filter((id) => id !== proposal.id);
+            }
+
+            return [...current.slice(-1), proposal.id];
+        });
+    };
+
+    const refreshProposals = async () => {
+        const response = await fetch(`/api/proposals?entityId=${entityId}`);
+        const updatedData = await response.json();
+        setProposals(updatedData);
+    };
+
+    const handleSwapSelected = async () => {
+        if (selectedProposals.length !== 2) {
+            setError("Select two draft proposals to swap their priority ranks.");
+            return;
+        }
 
         setLoading(true);
-        const propA = proposals[currentIndex];
-        const propB = proposals[targetIndex];
+        setError(null);
+        const [propA, propB] = selectedProposals;
+
+        if (propA.auth_status !== "draft" || propB.auth_status !== "draft") {
+            setError("Priority ranks can only be changed while both proposals are drafts.");
+            setLoading(false);
+            return;
+        }
 
         try {
             const res = await fetch("/api/proposals/swap", {
@@ -61,15 +90,60 @@ export default function RankManager({
             });
 
             if (res.ok) {
-                // Refresh the list from the server to get the updated ranks
-                const response = await fetch(
-                    `/api/proposals?entityId=${entityId}`,
-                );
-                const updatedData = await response.json();
-                setProposals(updatedData);
+                await refreshProposals();
+                setSelectedIds([]);
+            } else {
+                const payload = await res.json();
+                setError(payload.error || "Failed to swap ranks.");
             }
         } catch (err) {
             console.error("Swap failed:", err);
+            setError("Failed to swap ranks.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleMoveSelectedToRank = async () => {
+        if (selectedProposals.length !== 1) {
+            setError("Select one draft proposal to bring it to a target rank.");
+            return;
+        }
+
+        const parsedRank = Number(targetRank);
+
+        if (!Number.isInteger(parsedRank) || parsedRank < 1) {
+            setError("Enter a valid target rank.");
+            return;
+        }
+
+        setLoading(true);
+        setError(null);
+        const [proposal] = selectedProposals;
+
+        try {
+            const res = await fetch("/api/proposals/swap", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    action: "move",
+                    entityId,
+                    proposalId: proposal.id,
+                    targetRank: parsedRank,
+                }),
+            });
+
+            if (res.ok) {
+                await refreshProposals();
+                setSelectedIds([]);
+                setTargetRank("");
+            } else {
+                const payload = await res.json();
+                setError(payload.error || "Failed to move proposal rank.");
+            }
+        } catch (err) {
+            console.error("Move failed:", err);
+            setError("Failed to move proposal rank.");
         } finally {
             setLoading(false);
         }
@@ -87,48 +161,143 @@ export default function RankManager({
                 </Link>
             </div>
             <h2 className="text-lg font-bold">Proposal Priority Ranking</h2>
+            <p className="text-sm text-muted-foreground">
+                Submitted proposals are locked. Only draft proposals can be moved.
+            </p>
+            {error && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {error}
+                </div>
+            )}
+            <div className="rounded-lg border bg-card p-4 shadow-sm">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <div className="text-sm font-semibold">
+                            Select two draft proposals to swap ranks
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            {selectedProposals.length === 0
+                                ? "No proposal selected."
+                                : selectedProposals
+                                      .map(
+                                          (proposal) =>
+                                              `#${proposal.priority_rank} ${proposal.title}`,
+                                      )
+                                      .join(" ↔ ")}
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={loading || selectedIds.length === 0}
+                            onClick={() => {
+                                setSelectedIds([]);
+                                setTargetRank("");
+                                setError(null);
+                            }}
+                        >
+                            Clear
+                        </Button>
+                        <Button
+                            type="button"
+                            disabled={loading || selectedProposals.length !== 2}
+                            onClick={handleSwapSelected}
+                            className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
+                        >
+                            <ArrowRightLeft size={16} />
+                            {loading ? "Swapping..." : "Swap Selected Ranks"}
+                        </Button>
+                    </div>
+                </div>
+                <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+                    <div>
+                        <label
+                            htmlFor="target-rank"
+                            className="text-sm font-semibold"
+                        >
+                            Bring selected proposal to rank
+                        </label>
+                        <p className="text-xs text-muted-foreground">
+                            Select one draft proposal, enter a rank, and the draft proposals in between shift automatically.
+                        </p>
+                    </div>
+                    <input
+                        id="target-rank"
+                        type="number"
+                        min={1}
+                        max={proposals.length}
+                        value={targetRank}
+                        onChange={(event) => setTargetRank(event.target.value)}
+                        placeholder="Rank"
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm md:w-32"
+                        disabled={loading}
+                    />
+                    <Button
+                        type="button"
+                        variant="secondary"
+                        disabled={
+                            loading ||
+                            selectedProposals.length !== 1 ||
+                            targetRank.trim() === ""
+                        }
+                        className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
+                        onClick={handleMoveSelectedToRank}
+                    >
+                        Move to Rank
+                    </Button>
+                </div>
+            </div>
             <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b">
                         <tr>
+                            <th className="p-3 text-left w-28">Select</th>
                             <th className="p-3 text-left w-20">Rank</th>
                             <th className="p-3 text-left">Project Title</th>
-                            <th className="p-3 text-center w-40">Actions</th>
+                            <th className="p-3 text-left w-36">Status</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {proposals.map((p, i) => (
+                        {proposals.map((p) => {
+                            const isDraft = p.auth_status === "draft";
+                            const isSelected = selectedIds.includes(p.id);
+
+                            return (
                             <tr
                                 key={p.id}
-                                className="border-b last:border-0 hover:bg-slate-50"
+                                className={`border-b last:border-0 hover:bg-slate-50 ${
+                                    isSelected ? "bg-primary/10" : ""
+                                } ${!isDraft ? "opacity-70" : ""}`}
                             >
+                                <td className="p-3">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant={isSelected ? "default" : "outline"}
+                                        disabled={!isDraft || loading}
+                                        onClick={() => toggleSelection(p)}
+                                    >
+                                        {isSelected ? "Selected" : "Select"}
+                                    </Button>
+                                </td>
                                 <td className="p-3 font-bold text-blue-600">
                                     #{p.priority_rank}
                                 </td>
-                                <td className="p-3">{p.title}</td>
-                                <td className="p-3 flex justify-center gap-2">
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={i === 0 || loading}
-                                        onClick={() => handleMove(i, "up")}
-                                    >
-                                        ↑
-                                    </Button>
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        disabled={
-                                            i === proposals.length - 1 ||
-                                            loading
-                                        }
-                                        onClick={() => handleMove(i, "down")}
-                                    >
-                                        ↓
-                                    </Button>
+                                <td className="p-3">
+                                    <div className="font-medium">{p.title}</div>
+                                    {p.auth_status !== "draft" && (
+                                        <div className="text-xs text-muted-foreground">
+                                            Submitted ranks are locked.
+                                        </div>
+                                    )}
+                                </td>
+                                <td className="p-3 capitalize text-muted-foreground">
+                                    {p.auth_status?.replace(/_/g, " ") ?? "Unknown"}
                                 </td>
                             </tr>
-                        ))}
+                            );
+                        })}
                     </tbody>
                 </table>
             </div>

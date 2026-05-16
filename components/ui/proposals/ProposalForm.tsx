@@ -355,6 +355,7 @@ export default function ProposalForm({
     const [submitAction, setSubmitAction] = useState<
         "draft" | "pending_budget" | "pending_dbm"
     >(isDbmOverwrite ? "pending_dbm" : "draft");
+    const [overrideRemarks, setOverrideRemarks] = useState("");
 
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         title: project?.title || "",
@@ -635,6 +636,8 @@ export default function ProposalForm({
                         entityId: entityId,
                         payload: result.data, // Send the version with the calculated total
                         auth_status: submitAction,
+                        isDbm: isDbmOverwrite,
+                        overrideRemarks: isDbmOverwrite ? overrideRemarks : undefined,
                     }),
                 },
             );
@@ -656,6 +659,10 @@ export default function ProposalForm({
                     setErrors({
                         priority_rank:
                             "This priority rank is already taken by another proposal.",
+                    });
+                } else {
+                    setErrors({
+                        general: errorData.error || "Failed to save proposal.",
                     });
                 }
                 window.scrollTo({ top: 0, behavior: "smooth" })
@@ -3389,6 +3396,28 @@ export default function ProposalForm({
                 </div>
             )}
 
+            {isDbmOverwrite && (
+                <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+                    <label
+                        htmlFor="override-remarks"
+                        className="text-sm font-bold text-secondary-foreground"
+                    >
+                        DBM Override Remarks
+                    </label>
+                    <textarea
+                        id="override-remarks"
+                        value={overrideRemarks}
+                        onChange={(event) => setOverrideRemarks(event.target.value)}
+                        className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                        placeholder="State why this DBM overwrite or change is being made."
+                        required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Required for DBM overrides and recorded in the administrative override history.
+                    </p>
+                </div>
+            )}
+
             <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 flex justify-end gap-3 z-50">
                 {!isDbmOverwrite && (
                     <button
@@ -3412,7 +3441,7 @@ export default function ProposalForm({
                     }
                     className="px-6 py-2 bg-secondary-foreground-600 text-primary-foreground font-bold rounded-lg shadow-md hover:bg-secondary-foreground-700"
                 >
-                    {isDbmOverwrite ? "Finalize Overwrite" : "Submit Proposal"}
+                    {isDbmOverwrite ? "Overwrite Form" : "Submit Proposal"}
                 </button>
             </div>
         </form>

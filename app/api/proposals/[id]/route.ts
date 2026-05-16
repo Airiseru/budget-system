@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { logSaveFormEdits, logSubmitForm } from '@/src/actions/audit'
+import { logFormOverwrite, logNewForm, logSaveFormEdits, logSubmitForm } from '@/src/actions/audit'
 import { auth } from "@/src/lib/auth"
 import { headers } from "next/headers"
 import { createProposalRepository, createFormRepository } from "@/src/db/factory"
@@ -25,6 +25,9 @@ export async function PUT(
 
     try {
         const body = await req.json();
+        const isDbm = body.isDbm ?? body.isDBM ?? false
+        const overrideRemarks =
+            typeof body.overrideRemarks === "string" ? body.overrideRemarks.trim() : ""
         const existing = await repo.getProjectProposalById(id);
 
         console.log("Existing proposal:", existing);
@@ -35,9 +38,8 @@ export async function PUT(
                 { status: 404 },
             );
 
-        // LOCKING LOGIC: Same as Retirees/Staffing
         const isDbmOverwrite =
-            session.user.role === "dbm" && existing.auth_status === "pending_dbm";
+            isDbm && session.user.role === "dbm" && existing.auth_status === "pending_dbm";
 
         if (existing.auth_status !== "draft" && !isDbmOverwrite) {
             return NextResponse.json(
@@ -70,21 +72,58 @@ export async function PUT(
             );
         }
 
-        // updateProjectProposal should handle deleting and re-inserting child arrays
+        if (isDbmOverwrite && !overrideRemarks) {
+            return NextResponse.json(
+                { error: "DBM remarks are required when overwriting or changing this form." },
+                { status: 400 },
+            );
+        }
+
+        if (isDbmOverwrite && (await FormRepository.hasApprovedFormInFamily(id))) {
+            return NextResponse.json(
+                { error: "This form version family is locked because a DBM-approved version already exists." },
+                { status: 403 },
+            );
+        }
+
         console.log("Updating proposal with payload:", body);
         const previousAuditPayload = normalizeProposalPayload(existing)
-        const nextAuditPayload = normalizeProposalPayload(body.payload)
-        const result = await repo.updateProjectProposal(id, body)
+        const result = isDbmOverwrite
+            ? await repo.createDbmProjectProposalOverwrite(id, body)
+            : {
+                  ...(await repo.updateProjectProposal(id, body)),
+                  formId: id,
+                  created: false,
+              }
+        const targetFormId = result.formId
+        const updated = await repo.getProjectProposalById(targetFormId)
+        const nextAuditPayload = normalizeProposalPayload(updated ?? body.payload)
+        const changedAt = updated?.updated_at ?? new Date()
+
+        if (result.created && updated) {
+            const logCreateResult = await logNewForm(
+                body.userId,
+                existing.entity_id,
+                'project_proposals',
+                targetFormId,
+                nextAuditPayload,
+                updated.created_at,
+            )
+
+            if (!logCreateResult.success) {
+                return NextResponse.json({ error: "Failed to log overwritten form creation" }, { status: 500 })
+            }
+        }
 
         // Log form edit
         const logResult = await logSaveFormEdits(
             body.userId,
             existing.entity_id,
             'project_proposals',
-            id,
+            targetFormId,
             previousAuditPayload,
             nextAuditPayload,
-            body.updated_at,
+            changedAt,
         )
 
         if (!logResult.success) {
@@ -92,7 +131,7 @@ export async function PUT(
         }
 
         if (body.auth_status === 'pending_budget') {
-            const formUpdate = await FormRepository.updateFormAuthStatus(id, body.auth_status)
+            const formUpdate = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
 
             // Log form update
 
@@ -100,7 +139,7 @@ export async function PUT(
                 body.userId,
                 existing.entity_id,
                 'project_proposals',
-                id,
+                targetFormId,
                 nextAuditPayload,
                 formUpdate.updated_at,
             )
@@ -109,10 +148,37 @@ export async function PUT(
                 return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
             }
         }
+        else if (body.auth_status === 'pending_dbm') {
+            const formUpdate = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
+            const overwriteLogResult = await logFormOverwrite(
+                body.userId,
+                existing.entity_id,
+                'project_proposals',
+                targetFormId,
+                previousAuditPayload,
+                nextAuditPayload,
+                formUpdate.updated_at,
+                overrideRemarks,
+            )
 
-        return NextResponse.json(result);
+            if (!overwriteLogResult.success) {
+                return NextResponse.json({ error: "Failed to log form overwrite" }, { status: 500 })
+            }
+        }
+
+        return NextResponse.json({ ...result, formId: targetFormId });
     } catch (error) {
         console.error("PUT PROJECT ERROR:", error);
+        if (error instanceof Error && error.message === "unique_entity_rank") {
+            return NextResponse.json(
+                {
+                    code: "23505",
+                    error: "This priority rank is already taken by another proposal.",
+                },
+                { status: 409 },
+            );
+        }
+
         return NextResponse.json(
             { error: "Failed to update project" },
             { status: 500 },

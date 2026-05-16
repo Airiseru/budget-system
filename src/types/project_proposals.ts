@@ -8,6 +8,8 @@ import {
 
 export interface ProjectProposalTable {
     id: Generated<string>;
+    parent_form_id: string | null;
+    root_form_id: string;
     entity_id: string;
     title: string;
     proposal_year: number;
@@ -134,6 +136,7 @@ export interface FullProjectProposal extends ProjectProposal {
     foreign_financials?: ForeignFinancialTarget[];
     foreign_physical_targets?: ForeignPhysicalTarget[];
     auth_status: string | null;
+    version?: number | null;
 }
 
 export interface CostSourceTable {

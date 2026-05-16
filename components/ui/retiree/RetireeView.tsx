@@ -183,9 +183,7 @@ export default function RetireeView({
                                         type="submit"
                                         className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
                                     >
-                                        {session.user.role !== "dbm"
-                                            ? "Submit Form"
-                                            : "Finalize Overwrite"}
+                                        Submit Form
                                     </button>
                                 </form>
                             </div>

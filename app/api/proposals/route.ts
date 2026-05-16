@@ -80,10 +80,14 @@ export async function POST(req: Request) {
         const pgError = error as PgError;
 
         // If it's a unique constraint violation, send a specific response
-        if (pgError.code === "23505") {
+        if (
+            pgError.code === "23505" ||
+            (error instanceof Error && error.message === "unique_entity_rank")
+        ) {
             return NextResponse.json(
                 {
                     code: "23505",
+                    error: "This priority rank is already taken by another proposal.",
                     message: "Duplicate priority rank detected.",
                     detail: pgError.detail,
                 },
