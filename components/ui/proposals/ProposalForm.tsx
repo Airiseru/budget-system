@@ -199,6 +199,7 @@ type NonArrayFieldKey = Exclude<keyof ProjectProposalPayload, ArrayFieldKey>;
 
 interface PrerequisiteRowProps {
     pre: ProposalPrerequisite;
+    placeholder: string;
     index: number;
     updateRow: <K extends ArrayFieldKey & keyof ProjectProposalPayload>(
         field: K,
@@ -213,6 +214,7 @@ interface PrerequisiteRowProps {
 
 const PrerequisiteRow = ({
     pre,
+    placeholder,
     index,
     updateRow,
     removeRow,
@@ -221,7 +223,7 @@ const PrerequisiteRow = ({
         <td className="py-3 px-4 text-sm text-muted-700 font-medium border-r bg-background">
             <input
                 className="w-full bg-transparent text-sm outline-none border-b border-transparent focus:border-blue-200"
-                placeholder="Approver"
+                placeholder={placeholder}
                 value={pre.name ?? ""}
                 onChange={(e) =>
                     updateRow("pap_prerequisites", index, {
@@ -604,7 +606,13 @@ export default function ProposalForm({
             );
 
             if (res.ok) {
-                router.push("/forms/proposals");
+                const data = await res.json()
+                router.refresh()
+                router.push(
+                    data.papId || project.id
+                        ? `/forms/proposals/${data.formId ?? project.id}`
+                        : "/forms/proposals",
+                )
             } else {
                 const errorData = await res.json();
                 if (
@@ -616,9 +624,13 @@ export default function ProposalForm({
                             "This priority rank is already taken by another proposal.",
                     });
                 }
+                window.scrollTo({ top: 0, behavior: "smooth" })
             }
         } catch {
             // toast.error("An unexpected error occurred. Please try again.");
+            setErrors({
+                general: "An unexpected error occurred. Please try again.",
+            })
         } finally {
             setIsLoading(false);
         }
@@ -1042,7 +1054,7 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={payload.priority_rank}
+                            value={payload.priority_rank || ""}
                             onChange={(e) =>
                                 setPayload({
                                     ...payload,
@@ -1221,6 +1233,7 @@ export default function ProposalForm({
                                         <PrerequisiteRow
                                             key={`auth-${i}`}
                                             pre={pre}
+                                            placeholder="Approver"
                                             index={i}
                                             updateRow={updateRow}
                                             removeRow={removeRow}
@@ -1261,6 +1274,7 @@ export default function ProposalForm({
                                         <PrerequisiteRow
                                             key={`doc-${i}`}
                                             pre={pre}
+                                            placeholder="Document"
                                             index={i}
                                             updateRow={updateRow}
                                             removeRow={removeRow}
@@ -2038,7 +2052,7 @@ export default function ProposalForm({
                                                                                                 e.expense_class ===
                                                                                                 expClass,
                                                                                         ) // Added ?. here
-                                                                                        ?.amount
+                                                                                        ?.amount ?? ""
                                                                                 }
                                                                                 onChange={(
                                                                                     e,

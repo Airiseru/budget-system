@@ -125,6 +125,7 @@ export interface FullProjectProposal extends ProjectProposal {
     prerequisites: PAPPrerequisite[];
     components: CostComponent[];
     cost_by_components?: (CostComponent & {
+        fund_description?: string | null;
         costs?: CostByExpenseClass[];
     })[];
     financial_attributions?: LocalFinancialAttribution[];
@@ -144,7 +145,7 @@ export type CostSource = Selectable<CostSourceTable>;
 export interface CostByExpenseClassTable {
     id: Generated<string>;
     cost_source_id: string;
-    expense_class: "PS" | "MOOE" | "CO" | "FE";
+    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
     fund_category: "LP" | "Grant" | "GOP" | null;
     fund_method: "cash" | "non-cash" | null;
     currency: string;

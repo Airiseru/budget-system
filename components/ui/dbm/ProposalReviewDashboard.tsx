@@ -261,7 +261,7 @@ export default function ProposalReviewDashboard(props: Props) {
                                                             <tr key={component.id}>
                                                                 <td className="px-3 py-2">{component.component_name}</td>
                                                                 <td className="px-3 py-2">{component.item_name ?? 'Missing item catalog'} {component.expense_class ? `(${component.expense_class})` : ''}</td>
-                                                                <td className="px-3 py-2">{component.fund_code || 'Default fund source'}</td>
+                                                                <td className="px-3 py-2">{component.fund_description || component.fund_code || 'Default fund source'}</td>
                                                                 <td className="px-3 py-2 text-right font-mono">{component.currency} {formatAmount(Number(component.proposed_amt))}</td>
                                                                 <td className="px-3 py-2">
                                                                     <input

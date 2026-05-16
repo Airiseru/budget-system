@@ -223,7 +223,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .createIndex('idx_signatories_unique_event_idx')
         .on('signatories')
         .unique()
-        .columns(['target_table', 'target_record_id', 'source_record_id', 'user_id', 'event_type', 'from_status', 'to_status'])
+        .columns(['target_table', 'target_record_id', 'source_record_id', 'user_id', 'event_type', 'from_status', 'to_status', 'signature_payload'])
         .execute()
     
     await db.schema.createIndex('idx_sessions_token').on('sessions').column('token').execute()

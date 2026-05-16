@@ -7,14 +7,23 @@ import { getOperatingUnitDescendantIds } from "./entityRepository";
 
 type ProposalExpenseClass = {
     amount: number | string;
-    expense_class: string;
+    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
     currency?: string;
+    fund_category?: "LP" | "Grant" | "GOP" | null;
+    fund_method?: "cash" | "non_cash" | "non-cash" | null;
 };
 
 type ProposalCostSourceItem = Record<string, unknown> & {
     costs?: ProposalExpenseClass[];
+    component_name?: string;
+    description?: string;
+    location?: string;
+    name?: string;
+    year?: number | string;
+    total_amt?: number | string;
     item_catalog_id?: string | null;
     fund_code?: string | null;
+    fund_description?: string | null;
     specific_description?: string | null;
     currency?: string;
     proposed_amt?: number | string;
@@ -30,6 +39,27 @@ type ProposalAttributionEntry = {
 type ProposalAttribution = {
     description: string;
     attribution_costs: ProposalAttributionEntry[];
+};
+
+type ProposalPrerequisitePayload = {
+    name: string;
+    type: string;
+    status: string;
+    remarks?: string | null;
+};
+
+type ProposalPhysicalTargetPayload = {
+    year: number;
+    tier: 1 | 2;
+    target_description: string;
+};
+
+type ProposalForeignFinancialPayload = {
+    year: number;
+    lp_imprest: number;
+    lp_direct: number;
+    grant: number;
+    gop: number;
 };
 
 // type ProposalSummaryData = {
@@ -64,13 +94,13 @@ type ProposalWritePayload = {
     total_proposal_currency?: string;
     total_proposal_cost: number;
     type: "202" | "203";
-    pap_prerequisites?: Array<Record<string, unknown>>;
+    pap_prerequisites?: ProposalPrerequisitePayload[];
     cost_by_components: ProposalCostSourceItem[];
     local_financial_attributions?: ProposalAttribution[];
     local_infrastructure_requirements?: ProposalCostSourceItem[];
     local_locations?: ProposalCostSourceItem[];
-    local_physical_targets?: Array<Record<string, unknown>>;
-    foreign_financial_targets?: ProposalCostSourceItem[];
+    local_physical_targets?: ProposalPhysicalTargetPayload[];
+    foreign_financial_targets?: ProposalForeignFinancialPayload[];
     foreign_physical_targets?: Array<Record<string, unknown>>;
 };
 
@@ -81,11 +111,80 @@ type CostSourceTableName =
     | "foreign_financial_targets"
     | "foreign_physical_targets";
 
+const toNumber = (value: number | string | undefined, fallback = 0) =>
+    value === undefined || value === "" ? fallback : Number(value);
+
+const normalizeFundMethod = (
+    method: ProposalExpenseClass["fund_method"],
+) => (method === "non_cash" ? "non-cash" : method);
+
+async function insertCostSourceEntity(
+    trx: Transaction<Database>,
+    tableName: CostSourceTableName,
+    proposalId: string,
+    sourceId: string,
+    item: ProposalCostSourceItem,
+) {
+    switch (tableName) {
+        case "cost_by_components":
+            await trx
+                .insertInto("cost_by_components")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    component_name: item.component_name ?? "",
+                    item_catalog_id: item.item_catalog_id ?? null,
+                    fund_code: item.fund_code ?? null,
+                    specific_description: item.specific_description ?? null,
+                    currency: item.currency ?? "PHP",
+                    proposed_amt: toNumber(item.proposed_amt),
+                    tier: item.tier ?? 2,
+                })
+                .execute();
+            return;
+        case "local_infrastructure_requirements":
+            await trx
+                .insertInto("local_infrastructure_requirements")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    description: item.description ?? "",
+                    year: toNumber(item.year),
+                    total_amt: toNumber(item.total_amt),
+                })
+                .execute();
+            return;
+        case "local_locations":
+            await trx
+                .insertInto("local_locations")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    location: item.location ?? "",
+                })
+                .execute();
+            return;
+        case "foreign_physical_targets":
+            await trx
+                .insertInto("foreign_physical_targets")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    name: item.name ?? "",
+                })
+                .execute();
+            return;
+        default:
+            throw new Error(`Unsupported cost source table: ${tableName}`);
+    }
+}
+
 export type DbmProposalComponent = {
     id: string;
     component_name: string;
     item_catalog_id: string | null;
     fund_code: string | null;
+    fund_description: string | null;
     specific_description: string | null;
     currency: string;
     proposed_amt: number;
@@ -148,34 +247,22 @@ async function insertWithCostSource(
 
         // 2. Separate costs array from the entity metadata (like component_name or location)
         const costs = item.costs;
-        const entityData: Record<string, unknown> = { ...item };
-        delete entityData.costs;
-        delete entityData.id;
-        delete entityData.proposal_id;
-        delete entityData.cost_source_id;
 
         // 3. Insert the entity (e.g., the Component Row)
-        await trx
-            .insertInto(tableName as any)
-            .values({
-                ...entityData,
-                proposal_id: proposalId,
-                cost_source_id: source.id,
-            })
-            .execute();
+        await insertCostSourceEntity(trx, tableName, proposalId, source.id, item);
 
         // 4. Insert the nested expense classes (PS, MOOE, CO, FE)
         if (costs && costs.length > 0) {
             await trx
                 .insertInto("cost_by_expense_class")
                 .values(
-                    costs.map((c: any) => ({
-                        amount: c.amount,
+                    costs.map((c: ProposalExpenseClass) => ({
+                        amount: Number(c.amount),
                         expense_class: c.expense_class,
                         currency: c.currency || "PHP",
                         cost_source_id: source.id,
                         fund_category: c.fund_category || null,
-                        fund_method: c.fund_method || null,
+                        fund_method: normalizeFundMethod(c.fund_method) || null,
                     })),
                 )
                 .execute();
@@ -227,10 +314,10 @@ async function insertAttributions(
             await trx
                 .insertInto("cost_by_expense_class")
                 .values(
-                    entry.costs.map((c: any) => ({
+                    entry.costs.map((c: ProposalExpenseClass) => ({
                         cost_source_id: source.id,
                         expense_class: c.expense_class,
-                        amount: c.amount || 0,
+                        amount: Number(c.amount || 0),
                         currency: c.currency || "PHP",
                         // fund_category, fund_component, etc. if provided
                     })),
@@ -334,7 +421,7 @@ export async function createProjectProposal(
             await trx
                 .insertInto("pap_prerequisites")
                 .values(
-                    payload.pap_prerequisites.map((p: any) => ({
+                    payload.pap_prerequisites.map((p) => ({
                         ...p,
                         proposal_id: form.id,
                     })),
@@ -382,7 +469,7 @@ export async function createProjectProposal(
                 await trx
                     .insertInto("local_physical_targets")
                     .values(
-                        payload.local_physical_targets.map((p: any) => ({
+                        payload.local_physical_targets.map((p) => ({
                             ...p,
                             proposal_id: form.id,
                         })),
@@ -394,7 +481,7 @@ export async function createProjectProposal(
                 await trx
                     .insertInto("foreign_financial_targets")
                     .values(
-                        payload.foreign_financial_targets.map((p: any) => ({
+                        payload.foreign_financial_targets.map((p) => ({
                             ...p,
                             proposal_id: form.id,
                         })),
@@ -434,11 +521,26 @@ export async function getProjectProposalById(
     if (!project) return null;
 
     const fetchWithCosts = async (tableName: CostSourceTableName) => {
-        const items = await db
-            .selectFrom(tableName)
-            .where("proposal_id", "=", id)
-            .selectAll()
-            .execute();
+        const items =
+            tableName === "cost_by_components"
+                ? await db
+                      .selectFrom("cost_by_components")
+                      .leftJoin(
+                          "uacs_funding_sources",
+                          "uacs_funding_sources.code",
+                          "cost_by_components.fund_code",
+                      )
+                      .where("cost_by_components.proposal_id", "=", id)
+                      .selectAll("cost_by_components")
+                      .select(
+                          "uacs_funding_sources.description as fund_description",
+                      )
+                      .execute()
+                : await db
+                      .selectFrom(tableName)
+                      .where("proposal_id", "=", id)
+                      .selectAll()
+                      .execute();
         return await Promise.all(
             items.map(async (item) => {
                 const costs = await db
@@ -520,7 +622,7 @@ export async function getProjectProposalById(
         foreign_physical_targets: await fetchWithCosts(
             "foreign_physical_targets",
         ),
-    } as any;
+    } as unknown as FullProjectProposal;
 }
 
 export async function getAllProposalSummaries(
@@ -528,7 +630,7 @@ export async function getAllProposalSummaries(
     entityType: string,
     entityId: string,
 ) {
-    let query = db
+    const query = db
         .selectFrom("project_proposals as pp")
         .innerJoin("forms as f", "f.id", "pp.id")
         .select([
@@ -688,7 +790,7 @@ export async function updateProjectProposal(
             await trx
                 .insertInto("pap_prerequisites")
                 .values(
-                    p.pap_prerequisites.map((i: any) => ({
+                    p.pap_prerequisites.map((i) => ({
                         ...i,
                         proposal_id: proposalId,
                     })),
@@ -734,7 +836,7 @@ export async function updateProjectProposal(
                 await trx
                     .insertInto("local_physical_targets")
                     .values(
-                        p.local_physical_targets.map((i: any) => ({
+                        p.local_physical_targets.map((i) => ({
                             ...i,
                             proposal_id: proposalId,
                         })),
@@ -746,7 +848,7 @@ export async function updateProjectProposal(
                 await trx
                     .insertInto("foreign_financial_targets")
                     .values(
-                        p.foreign_financial_targets.map((i: any) => ({
+                        p.foreign_financial_targets.map((i) => ({
                             ...i,
                             proposal_id: proposalId,
                         })),
@@ -941,12 +1043,18 @@ export async function listDbmProposalReviewRows(
                   "cec.cost_source_id",
                   "cbc.cost_source_id",
               )
+              .leftJoin(
+                  "uacs_funding_sources as fund_sources",
+                  "fund_sources.code",
+                  "cbc.fund_code",
+              )
               .select([
                   "cbc.id",
                   "cbc.proposal_id",
                   "cbc.component_name",
                   "cbc.item_catalog_id",
                   "cbc.fund_code",
+                  "fund_sources.description as fund_description",
                   "cbc.specific_description",
                   "cbc.currency",
                   "cbc.proposed_amt",

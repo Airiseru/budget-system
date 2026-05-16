@@ -443,7 +443,7 @@ export default function StaffForm({
                             min="1"
                             max="12"
                             className={`w-full p-1 border rounded text-center text-sm ${getFieldStyle(`${path}.months_employed`)}`}
-                            value={pos.months_employed}
+                            value={pos.months_employed ?? ""}
                             onChange={(e) =>
                                 handlePositionChange(
                                     index,
@@ -458,7 +458,7 @@ export default function StaffForm({
                             type="number"
                             min="1"
                             className={`w-full p-1 border rounded text-center text-sm ${getFieldStyle(`${path}.num_positions`)}`}
-                            value={pos.num_positions}
+                            value={pos.num_positions ?? ""}
                             onChange={(e) =>
                                 handlePositionChange(
                                     index,
@@ -475,7 +475,7 @@ export default function StaffForm({
                             max={highestSG}
                             placeholder="SG"
                             className={`w-full p-1 border rounded text-center text-sm ${getFieldStyle(`${path}.salary_grade`)}`}
-                            value={pos.salary_grade}
+                            value={pos.salary_grade ?? ""}
                             onChange={(e) =>
                                 handlePositionChange(
                                     index,
@@ -489,14 +489,14 @@ export default function StaffForm({
                         <input
                             placeholder="Step"
                             className={`w-full p-1 border rounded text-center bg-muted/50 text-sm ${getFieldStyle(`${path}.step`)}`}
-                            value={pos.step}
+                            value={pos.step ?? ""}
                             disabled
                         />
                     </td>
                     <td className="p-2 align-top relative group">
                         <input
                             className={`w-full p-1 border rounded text-center bg-muted/50 font-mono text-sm ${getFieldStyle(`${path}.total_salary`)}`}
-                            value={formatCurrency(pos.total_salary)}
+                            value={formatCurrency(pos.total_salary ?? 0)}
                             disabled
                         />
                         <button

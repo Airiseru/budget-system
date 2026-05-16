@@ -164,6 +164,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
       } else {
         const err = await response.json();
         setError(err.error || "Failed to save");
+        window.scrollTo({ top: 0, behavior: "smooth" })
       }
     } catch {
       setError("A network error occurred.");
@@ -436,7 +437,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
         <div className="flex justify-between items-start text-xs text-muted-500 px-2">
           <p>* Ensure &quot;Effectivity Date&quot; falls within FY {fiscalYear} for TLP eligibility.</p>
           <div className="text-right">
-              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary) * (Number(r.number_vacation_leave) + Number(r.number_sick_leave)) * TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary) * (Number(r.number_vacation_leave) + Number(r.number_sick_leave)) * TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
       </form>
