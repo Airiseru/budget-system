@@ -62,23 +62,6 @@ type ProposalForeignFinancialPayload = {
     gop: number;
 };
 
-// type ProposalSummaryData = {
-//     title: string;
-//     proposal_year: number;
-//     priority_rank: number;
-//     is_new?: boolean;
-//     is_infrastructure?: boolean;
-//     for_ict?: boolean | null;
-//     myca_issuance?: boolean | null;
-//     total_proposal_currency?: string;
-//     total_proposal_cost?: number;
-//     type: "202" | "203";
-//     org_outcome_id?: string;
-//     description?: string;
-//     purpose?: string;
-//     beneficiaries?: string;
-// };
-
 type ProposalWritePayload = {
     title: string;
     proposal_year: number;
