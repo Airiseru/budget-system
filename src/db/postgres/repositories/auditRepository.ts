@@ -1,5 +1,5 @@
 import { db } from "../database"
-import { Kysely, Transaction } from "kysely"
+import { Kysely, sql, Transaction } from "kysely"
 import {
     sha256,
     computeAuditEntryHash,
@@ -35,6 +35,26 @@ type DbExecutor = Kysely<Database> | Transaction<Database>
 type SignedAuditLog = AuditLog & {
     event_type: SignedAuditEventType
     payload: FormSignaturePayload | null
+}
+
+async function runInTransaction<T>(
+    executor: DbExecutor,
+    callback: (trx: Transaction<Database>) => Promise<T>
+): Promise<T> {
+    if (executor.isTransaction) {
+        return await callback(executor as Transaction<Database>)
+    }
+
+    return await executor.transaction().execute(callback)
+}
+
+async function acquireEntityAuditAdvisoryLock(
+    executor: Transaction<Database>,
+    entityId: string
+) {
+    await sql`
+        select pg_advisory_xact_lock(hashtextextended(${entityId}, 0))
+    `.execute(executor)
 }
 
 function isSignedAuditEvent(eventType: AuditEventType): eventType is SignedAuditEventType {
@@ -169,80 +189,93 @@ export async function createLogWithExecutor(
     log: Omit<NewAuditLog, 'hash'>,
     signingPayload: SignaturePayload | string | null
 ): Promise<AuditLog> {
-    const editedLog: NewAuditLog = {
-        ...log,
-        table_name: log.table_name ?? null,
-        record_id: log.record_id ?? null,
-        payload: log.payload ?? null,
-        public_key_snapshot: log.public_key_snapshot ?? null,
-        signature: log.signature ?? null,
-        hash: ''
-    }
-
-    const requiresSignature = REQUIRES_SIGNATURE.includes(log.event_type as AuditEventType)
-
-    if (requiresSignature) {
-        if (!log.public_key_snapshot || !log.signature || !signingPayload) {
-            throw new Error(`${log.event_type} requires a digital signature`)
+    return await runInTransaction(executor, async (trx) => {
+        const editedLog: NewAuditLog = {
+            ...log,
+            table_name: log.table_name ?? null,
+            record_id: log.record_id ?? null,
+            payload: log.payload ?? null,
+            public_key_snapshot: log.public_key_snapshot ?? null,
+            signature: log.signature ?? null,
+            hash: ''
         }
 
-        const isValid = await verifySignature(
-            signingPayload,
-            log.signature,
-            log.public_key_snapshot
-        )
+        const requiresSignature = REQUIRES_SIGNATURE.includes(log.event_type as AuditEventType)
 
-        if (!isValid) throw new Error('Invalid digital signature')
-    }
+        if (requiresSignature) {
+            if (!log.public_key_snapshot || !log.signature || !signingPayload) {
+                throw new Error(`${log.event_type} requires a digital signature`)
+            }
 
-    const lastLog = await executor
-        .selectFrom('audit_logs')
-        .select('hash')
-        .where('entity_id', '=', log.entity_id)
-        .orderBy('changed_at', 'desc')
-        .limit(1)
-        .forUpdate()
-        .executeTakeFirst()
+            const isValid = await verifySignature(
+                signingPayload,
+                log.signature,
+                log.public_key_snapshot
+            )
 
-    const prevHash = lastLog ? lastLog.hash : null
-    const changedAt = requiresSignature && log.changed_at
-        ? new Date(log.changed_at)
-        : new Date()
+            if (!isValid) throw new Error('Invalid digital signature')
+        }
 
-    const newHash = computeAuditEntryHash({
-        entity_id: log.entity_id,
-        user_id: log.user_id,
-        event_type: log.event_type as AuditLogEntryPayload['event_type'],
-        table_name: log.table_name ?? "NULL",
-        record_id: log.record_id ?? "NULL",
-        payload: log.payload ?? "NULL",
-        changed_at: changedAt.toISOString(),
-        prev_hash: prevHash ?? "NULL",
-        public_key_snapshot: log.public_key_snapshot ?? "NULL",
-        signature: log.signature ?? "NULL",
-    })
+        if ((process.env.AUDIT_DISABLE_ADVISORY_LOCK || '') !== 'true') {
+            await acquireEntityAuditAdvisoryLock(trx, log.entity_id)
+        }
 
-    editedLog.changed_at = changedAt
-    editedLog.prev_hash = prevHash
-    editedLog.hash = newHash
+        const lastLog = await trx
+            .selectFrom('audit_logs')
+            .select(['hash', 'changed_at'])
+            .where('entity_id', '=', log.entity_id)
+            .orderBy('changed_at', 'desc')
+            .orderBy('id', 'desc')
+            .limit(1)
+            .forUpdate()
+            .executeTakeFirst()
 
-    return await executor
-        .insertInto('audit_logs')
-        .values({
-            ...editedLog,
-            payload: log.payload ? canonicalStringify(log.payload) : null,
+        const prevHash = lastLog ? lastLog.hash : null
+        const changedAt = requiresSignature && log.changed_at
+            ? new Date(log.changed_at)
+            : new Date()
+
+        if (lastLog && changedAt.getTime() <= new Date(lastLog.changed_at).getTime()) {
+            if (requiresSignature) {
+                throw new Error(
+                    `${log.event_type} timestamp must be strictly newer than the latest audit log for this entity. Please retry the signature.`
+                )
+            }
+
+            changedAt.setTime(new Date(lastLog.changed_at).getTime() + 1)
+        }
+
+        const newHash = computeAuditEntryHash({
+            entity_id: log.entity_id,
+            user_id: log.user_id,
+            event_type: log.event_type as AuditLogEntryPayload['event_type'],
+            table_name: log.table_name ?? "NULL",
+            record_id: log.record_id ?? "NULL",
+            payload: log.payload ?? "NULL",
+            changed_at: changedAt.toISOString(),
+            prev_hash: prevHash ?? "NULL",
+            public_key_snapshot: log.public_key_snapshot ?? "NULL",
+            signature: log.signature ?? "NULL",
         })
-        .returningAll()
-        .executeTakeFirstOrThrow()
+
+        editedLog.changed_at = changedAt
+        editedLog.prev_hash = prevHash
+        editedLog.hash = newHash
+
+        return await trx
+            .insertInto('audit_logs')
+            .values({
+                ...editedLog,
+                payload: log.payload ? canonicalStringify(log.payload) : null,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow()
+    })
 }
 
 export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
-    return await db.transaction().execute(async (trx) => {
-        return await createLogWithExecutor(trx, log, signingPayload)
-    })
+    return await createLogWithExecutor(db, log, signingPayload)
 }
-
-// export { createLogWithExecutor }
 
 export async function getHistory(tableName: string, recordId: string) {
     return await db
@@ -260,6 +293,7 @@ export async function getHistory(tableName: string, recordId: string) {
         .where('audit_logs.table_name', '=', tableName)
         .where('audit_logs.record_id', '=', recordId)
         .orderBy('audit_logs.changed_at', 'asc')
+        .orderBy('audit_logs.id', 'asc')
         .execute()
 }
 
@@ -269,6 +303,7 @@ export async function verifyEntityChain(entityId: string) {
         .selectAll()
         .where('entity_id', '=', entityId)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     return await verifyChain(logs)
@@ -301,6 +336,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         .selectAll()
         .where('entity_id', '=', firstLog.entity_id)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     // Standard verification does not rebuild Merkle trees.
@@ -495,6 +531,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         isTimelineIntact: chainResult.isValid,
         isSealedRootValid: isSealedRootValid,
         timelineBrokenAt: chainResult.brokenAt,
+        chainFailureReport: chainResult.report ?? null,
         isDataMatch: stateResult.isMissingCurrentState ? false : stateResult.isDataMatch,
         currentGlobalRoot: currentGlobalRoot,
         lastSealedRoot: lastSeal?.root_hash || null,
@@ -534,6 +571,7 @@ export async function verifyAllocationSignoffIntegrity(
         .selectAll()
         .where('entity_id', '=', firstLog.entity_id)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     let isSealedRootValid = true
@@ -691,6 +729,7 @@ export async function verifyAllocationSignoffIntegrity(
         isTimelineIntact: chainResult.isValid,
         isSealedRootValid,
         timelineBrokenAt: chainResult.brokenAt,
+        chainFailureReport: chainResult.report ?? null,
         isDataMatch,
         currentGlobalRoot,
         lastSealedRoot: lastSeal?.root_hash || null,
@@ -714,6 +753,7 @@ export async function sealDailyAuditLog(entityId: string) {
         .selectAll()
         .where('entity_id', '=', entityId)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     if (allEntityLogs.length === 0) return { success: false, message: 'No logs to seal' }
@@ -763,6 +803,7 @@ export async function generateMerkleProofForEntry(entityId: string, logId: strin
         .selectAll()
         .where('entity_id', '=', entityId)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .limit(lastSeal.log_count)
         .execute()
 
@@ -799,6 +840,7 @@ export async function getPayloadOfFormSignEvent(
         ]))
         .select(['payload', 'event_type', 'user_id'])
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     console.log(`RESULT IN PAYLOAD OF SIGN EVENT: ${JSON.stringify(result)}`)
@@ -841,6 +883,7 @@ export async function getLatestFormRejection(tableName: string, recordId: string
         .where('audit_logs.record_id', '=', recordId)
         .where('audit_logs.event_type', '=', 'REJECT_FORM')
         .orderBy('audit_logs.changed_at', 'desc')
+        .orderBy('audit_logs.id', 'desc')
         .limit(1)
         .executeTakeFirst()
 

@@ -1,4 +1,5 @@
 import {
+    ColumnType,
     Generated,
     Insertable,
     Selectable
@@ -119,3 +120,17 @@ export interface MerkleRootTable {
     log_count: number
     created_at: Generated<Date>
 }
+
+export interface AuditConcurrencyTestTable {
+    id: Generated<string>
+    entity_id: string
+    user_id: string
+    batch_id: string
+    scenario: string
+    sequence_no: number
+    metadata: ColumnType<Record<string, unknown>, Record<string, unknown> | string, Record<string, unknown> | string>
+    created_at: Generated<Date>
+}
+
+export type AuditConcurrencyTest = Selectable<AuditConcurrencyTestTable>
+export type NewAuditConcurrencyTest = Insertable<AuditConcurrencyTestTable>

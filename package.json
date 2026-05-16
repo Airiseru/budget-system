@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
-    "migrate": "cross-env NODE_ENV=development tsx src/db/postgres/migrate.ts"
+    "migrate": "cross-env NODE_ENV=development tsx src/db/postgres/migrate.ts",
+    "test:audit-concurrency": "cross-env NODE_ENV=development tsx tests/audit-concurrency.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",
