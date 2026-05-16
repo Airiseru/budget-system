@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import PapDeleteButton from '@/components/ui/PapDeleteButton'
-import { FORM_TYPES, STATUS_LABELS, STATUS_COLOR_MAPPER } from '@/src/lib/constants'
+import { FORM_ROUTE_MAP, FORM_TYPES, STATUS_LABELS, STATUS_COLOR_MAPPER } from '@/src/lib/constants'
 import { ArrowLeft, Pencil } from '@/components/ui/Icons'
 import {
     Select,
@@ -47,6 +47,8 @@ type RelatedForm = {
     type: string
     codename: string | null
     fiscal_year: number
+    parent_form_id?: string | null
+    version?: number
     created_at: string | Date
     updated_at: string | Date
     auth_status: string | null
@@ -64,12 +66,8 @@ type PapViewProps = {
 }
 
 function getFormHref(form: RelatedForm) {
-    if (form.type === 'bp_staffing') return `/forms/staff/${form.id}`
-    if (form.type === 'bp_retiree') return `/forms/retirees/${form.id}`
-    if (form.type.startsWith('BP Form 202') || form.type.startsWith('BP Form 203')) {
-        return `/forms/proposals/${form.id}`
-    }
-    return '#'
+    const route = FORM_ROUTE_MAP[form.type]
+    return route ? `${route}/${form.id}` : '#'
 }
 
 function getFormTypeLabel(formType: string) {
@@ -299,6 +297,11 @@ export default function PapView({
                                                         <p className="text-xs text-gray-500 font-mono">
                                                             {form.codename || form.type}
                                                         </p>
+                                                        {form.version && form.version > 1 ? (
+                                                            <p className="text-xs font-medium text-secondary-foreground">
+                                                                Latest version • v{form.version}
+                                                            </p>
+                                                        ) : null}
                                                         <p className="text-xs text-gray-500">
                                                             FY {form.fiscal_year} • {new Date(form.updated_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
                                                         </p>

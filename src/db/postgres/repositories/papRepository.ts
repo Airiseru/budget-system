@@ -37,6 +37,8 @@ export type PapRelatedForm = {
     type: string
     codename: string | null
     fiscal_year: number
+    parent_form_id: string | null
+    version: number
     created_at: Date
     updated_at: Date
     auth_status: string | null
@@ -245,7 +247,7 @@ export async function getPap(criteria: Partial<Pap>): Promise<Pap[]> {
 }
 
 export async function getFormsByPapId(papId: string) {
-    return await db
+    const forms = await db
         .selectFrom('forms')
         .innerJoin('form_paps', 'forms.id', 'form_paps.form_id')
         .leftJoin('entities', 'entities.id', 'forms.entity_id')
@@ -258,6 +260,8 @@ export async function getFormsByPapId(papId: string) {
             'forms.type', 
             'forms.codename',
             'forms.fiscal_year',
+            'forms.parent_form_id',
+            'forms.version',
             'forms.auth_status', 
             'forms.created_at',
             'forms.updated_at',
@@ -267,6 +271,24 @@ export async function getFormsByPapId(papId: string) {
         ])
         .orderBy('forms.updated_at', 'desc')
         .execute();
+
+    const latestByFamily = new Map<string, PapRelatedForm>()
+
+    for (const form of forms) {
+        const familyId = form.parent_form_id ?? form.id
+        const current = latestByFamily.get(familyId)
+
+        if (!current || form.version > current.version || (
+            form.version === current.version &&
+            form.updated_at.getTime() > current.updated_at.getTime()
+        )) {
+            latestByFamily.set(familyId, form)
+        }
+    }
+
+    return [...latestByFamily.values()].sort(
+        (a, b) => b.updated_at.getTime() - a.updated_at.getTime()
+    )
 }
 
 export async function getFullCodeByPapId(papId: string) {
