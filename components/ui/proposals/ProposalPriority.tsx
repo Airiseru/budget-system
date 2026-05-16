@@ -23,11 +23,17 @@ interface ProposalSummary {
 interface ProposalPriorityProps {
     initialProposals: ProposalSummary[];
     entityId: string;
+    lockedYear?: number;
+    viewingYear?: number;
+    availableYears?: number[];
 }
 
 export default function RankManager({
     initialProposals,
     entityId,
+    lockedYear,
+    viewingYear,
+    availableYears = [],
 }: ProposalPriorityProps) {
     const [proposals, setProposals] = useState<ProposalSummary[]>(
         initialProposals || [],
@@ -164,6 +170,33 @@ export default function RankManager({
             <p className="text-sm text-muted-foreground">
                 Submitted proposals are locked. Only draft proposals can be moved.
             </p>
+            {lockedYear ? (
+                <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                    Showing proposals for active FY {lockedYear}.
+                </div>
+            ) : (
+                <form className="flex flex-wrap items-center gap-2 rounded-md border p-3">
+                    <label htmlFor="rank-year" className="text-sm font-medium">
+                        Fiscal year
+                    </label>
+                    <select
+                        id="rank-year"
+                        name="year"
+                        defaultValue={viewingYear ?? ""}
+                        className="rounded border border-border bg-background px-3 py-2 text-sm"
+                    >
+                        <option value="">All years</option>
+                        {availableYears.map((year) => (
+                            <option key={year} value={year}>
+                                FY {year}
+                            </option>
+                        ))}
+                    </select>
+                    <Button type="submit" variant="outline">
+                        Filter
+                    </Button>
+                </form>
+            )}
             {error && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {error}

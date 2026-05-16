@@ -224,7 +224,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
     await sql`
         CREATE UNIQUE INDEX unique_root_project_proposals_entity_rank
-        ON project_proposals (entity_id, priority_rank)
+        ON project_proposals (entity_id, proposal_year, priority_rank)
         WHERE parent_form_id IS NULL;
     `.execute(db)
 

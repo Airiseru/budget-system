@@ -2,70 +2,213 @@ import { createPapRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ModeToggle } from "@/components/ui/system-toggle"
+import PapFilters from '@/components/ui/paps/PapFilters'
 import Link from "next/link"
 import { sessionDetails } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 
-export const dynamic = 'force-dynamic';
-const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
+export const dynamic = 'force-dynamic'
 
-export default async function PapPage() {
+const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
+const PAGE_SIZE = 15
+
+const generatePageNumbers = (currentPage: number, totalPages: number) => {
+    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1)
+    if (currentPage <= 3) return [1, 2, 3, '...', totalPages]
+    if (currentPage >= totalPages - 2) return [1, '...', totalPages - 2, totalPages - 1, totalPages]
+    return [1, '...', currentPage, '...', totalPages]
+}
+
+const formatProjectStatus = (status: string | null | undefined) =>
+    status
+        ? status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
+        : 'N/A'
+
+const getProjectStatusClassName = (status: string | null | undefined) => {
+    switch (status) {
+        case 'approved':
+            return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+        case 'rejected':
+        case 'cancelled':
+            return 'border-red-200 bg-red-50 text-red-700'
+        case 'pending':
+        case 'under_review':
+            return 'border-amber-200 bg-amber-50 text-amber-700'
+        default:
+            return 'border-border bg-muted text-muted-foreground'
+    }
+}
+
+type PapsSearchParams = Promise<{
+    page?: string
+    formType?: string
+    search?: string
+}>
+
+export default async function PapPage({
+    searchParams,
+}: {
+    searchParams: PapsSearchParams
+}) {
     const session = await sessionDetails()
 
     if (!session) {
         return redirect('/login')
     }
 
-    const data = await PapRepository.getAllPaps()
+    const params = await searchParams
+    const page = Math.max(1, Number(params.page) || 1)
+    const formType = params.formType === '202' || params.formType === '203'
+        ? params.formType
+        : ''
+    const search = params.search?.trim() ?? ''
+    const category = formType === '202'
+        ? 'local'
+        : formType === '203'
+          ? 'foreign'
+          : undefined
+    const { paps, totalPages, totalCount } = await PapRepository.getPaginatedPaps({
+        category,
+        search,
+        limit: PAGE_SIZE,
+        offset: (page - 1) * PAGE_SIZE,
+    })
 
-    if (data.length === 0) {
-        return (
-            <div className='m-4'>
-                <ButtonGroup className='my-4'>
-                    <ModeToggle></ModeToggle>
+    const getPageHref = (targetPage: number) => {
+        const next = new URLSearchParams()
+        if (formType) next.set('formType', formType)
+        if (search) next.set('search', search)
+        next.set('page', String(targetPage))
+        return `/paps?${next.toString()}`
+    }
+
+    return (
+        <main className="mx-auto max-w-[1700px] space-y-6 px-4 py-8 pb-20">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <ButtonGroup>
+                    <ModeToggle />
                     <ButtonGroup>
                         <Link href="/home">
                             <Button variant="outline" aria-label="Go Back">Go Back</Button>
                         </Link>
                     </ButtonGroup>
-                    <ButtonGroup>
-                        <Link href="/paps/new">
-                            <Button variant="outline" >Create New PAP</Button>
-                        </Link>
-                    </ButtonGroup>
                 </ButtonGroup>
-                <h1>No Paps</h1>
+                <div className="text-center">
+                    <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">All PAPs</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Browse PAP records. New PAP creation is managed through DBM proposal review.
+                    </p>
+                </div>
+                <div className="w-[92px]" />
             </div>
-        )
-    }
 
-    return (
-        <div className='m-4'>
-            <ButtonGroup className='my-4'>
-                <ModeToggle></ModeToggle>
-                <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline" aria-label="Go Back">Go Back</Button>
-                    </Link>
-                </ButtonGroup>
-                <ButtonGroup>
-                    <Link href="/paps/new">
-                        <Button variant="outline" >Create New PAP</Button>
-                    </Link>
-                </ButtonGroup>
-            </ButtonGroup>
+            <PapFilters search={search} formType={formType} />
 
-            <h1 className="text-2xl font-bold">All PAPs</h1>
-            <div>
-                {data.map((pap) =>
-                    <Link href={`/paps/${pap.id}`} key={pap.id}>
-                        <div className="border rounded-md m-2 p-4">
-                            <h2 className="font-bold text-primary-foreground">{pap.title}</h2>
-                            <p>{pap.description}</p>
+            {paps.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                    No PAPs found.
+                </div>
+            ) : (
+                <section className="overflow-hidden rounded-2xl border border-border bg-background shadow-sm">
+                    <div className="max-h-[70vh] overflow-auto">
+                        <table className="w-full min-w-[1000px] text-left text-sm">
+                            <thead className="sticky top-0 z-10 bg-primary-foreground text-sm uppercase text-white shadow-[0_1px_0_0_rgba(0,0,0,0.08)]">
+                                <tr>
+                                    <th className="px-4 py-3">PAP</th>
+                                    <th className="px-4 py-3">Form Type</th>
+                                    <th className="px-4 py-3">Applicable Entity</th>
+                                    <th className="px-4 py-3">Project Type</th>
+                                    <th className="px-4 py-3">Status</th>
+                                    <th className="px-4 py-3">Full Code</th>
+                                    <th className="px-4 py-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                                {paps.map((pap) => (
+                                    <tr key={pap.id} className="transition-colors hover:bg-accent/60">
+                                        <td className="px-4 py-3">
+                                            <div className="font-semibold text-primary-foreground">{pap.title}</div>
+                                            <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                                                {pap.description || 'No description provided.'}
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            {pap.category === 'local' ? 'BP Form 202' : 'BP Form 203'}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <div>{pap.entity_name ?? 'All Entities'}</div>
+                                            {pap.department_name && (
+                                                <div className="text-xs text-muted-foreground">{pap.department_name}</div>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-3 uppercase text-muted-foreground">
+                                            {pap.project_type || 'N/A'}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getProjectStatusClassName(pap.project_status)}`}>
+                                                {formatProjectStatus(pap.project_status)}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                                            {pap.full_pap_code || 'Not set'}
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <Link
+                                                href={`/paps/${pap.id}`}
+                                                className="inline-flex rounded border border-border px-3 py-2 text-sm font-semibold hover:bg-background"
+                                            >
+                                                View
+                                            </Link>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-border/30 bg-muted p-4">
+                        <p className="text-sm text-muted-foreground">
+                            Showing page <span className="font-bold">{page}</span> of{' '}
+                            <span className="font-bold">{Math.max(1, totalPages)}</span> ({totalCount} PAPs)
+                        </p>
+                        <div className="flex items-center gap-1">
+                            <Link
+                                href={page > 1 ? getPageHref(page - 1) : '#'}
+                                aria-disabled={page <= 1}
+                                className={`rounded px-2.5 py-1.5 text-sm font-bold transition-colors ${page > 1 ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'pointer-events-none bg-accent/50 text-muted-foreground/40'}`}
+                            >
+                                &lt;
+                            </Link>
+                            {generatePageNumbers(page, totalPages).map((current, index) =>
+                                current === '...' ? (
+                                    <span key={`ellipsis-${index}`} className="px-2 py-1.5 text-sm font-bold text-muted-foreground">
+                                        ...
+                                    </span>
+                                ) : (
+                                    <Link
+                                        key={`page-${current}`}
+                                        href={getPageHref(current as number)}
+                                        className={`rounded border-b px-3 py-1.5 text-sm font-bold transition-colors ${
+                                            page === current
+                                                ? 'border-secondary-foreground bg-secondary-foreground text-accent'
+                                                : 'border-border/50 bg-accent text-secondary-foreground hover:bg-secondary'
+                                        }`}
+                                    >
+                                        {current}
+                                    </Link>
+                                )
+                            )}
+                            <Link
+                                href={page < totalPages ? getPageHref(page + 1) : '#'}
+                                aria-disabled={page >= totalPages}
+                                className={`rounded px-2.5 py-1.5 text-sm font-bold transition-colors ${page < totalPages ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'pointer-events-none bg-accent/50 text-muted-foreground/40'}`}
+                            >
+                                &gt;
+                            </Link>
                         </div>
-                    </Link>
-                )}
-            </div>
-        </div>
+                    </div>
+                </section>
+            )}
+        </main>
     )
 }

@@ -39,13 +39,35 @@ type ProposalSummary = {
     submission_date: Date | string | null;
 };
 
-export default async function ProposalsPage() {
+type ProposalsSearchParams = Promise<{
+    year?: string;
+}>;
+
+export default async function ProposalsPage({
+    searchParams,
+}: {
+    searchParams: ProposalsSearchParams;
+}) {
     const session = await sessionWithEntity();
 
     if (!session) return redirect("/login");
 
     try {
+        const params = await searchParams;
         const activeCycle = await getActiveBudgetPrepCycle();
+        const selectedYear = params.year ? Number(params.year) : undefined;
+        const lockedYear = activeCycle?.fiscal_year;
+        const allYearsData = lockedYear
+            ? []
+            : await ProposalRepo.getAllProposalSummaries(
+                  session.user.id ?? "",
+                  session.user_entity.entity_type ?? "",
+                  session.user.entity_id ?? "",
+              );
+        const availableYears = Array.from(
+            new Set(allYearsData.map((proposal) => proposal.proposal_year)),
+        ).sort((a, b) => b - a);
+        const viewingYear = lockedYear ?? selectedYear;
         const canCreate =
             session?.user.access_level === "encode" &&
             activeCycle?.current_phase === "preparation";
@@ -56,18 +78,44 @@ export default async function ProposalsPage() {
             session.user.id ?? "",
             session.user_entity.entity_type ?? "",
             session.user.entity_id ?? "",
+            viewingYear,
         );
 
         const renderHeader = () => (
-            <ButtonGroup className="my-4">
-                <ModeToggle />
+            <div className="my-4 flex flex-wrap items-center gap-3">
                 <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline">Go Back</Button>
-                    </Link>
+                    <ModeToggle />
+                    <ButtonGroup>
+                        <Link href="/home">
+                            <Button variant="outline">Go Back</Button>
+                        </Link>
+                    </ButtonGroup>
                 </ButtonGroup>
+                {lockedYear ? (
+                    <div className="rounded border px-3 py-2 text-sm text-muted-foreground">
+                        Showing active FY {lockedYear}
+                    </div>
+                ) : (
+                    <form className="flex items-center gap-2">
+                        <select
+                            name="year"
+                            defaultValue={viewingYear ?? ""}
+                            className="rounded border border-border bg-background px-3 py-2 text-sm"
+                        >
+                            <option value="">All years</option>
+                            {availableYears.map((year) => (
+                                <option key={year} value={year}>
+                                    FY {year}
+                                </option>
+                            ))}
+                        </select>
+                        <Button type="submit" variant="outline">
+                            Filter
+                        </Button>
+                    </form>
+                )}
                 {canCreate && (
-                    <div className="flex gap-2 ml-2">
+                    <div className="flex gap-2">
                         <Link href="/forms/proposals/new?type=202">
                             <Button variant="default">
                                 New BP 202 (Local)
@@ -85,7 +133,7 @@ export default async function ProposalsPage() {
                         </Link>
                     </div>
                 )}
-            </ButtonGroup>
+            </div>
         );
 
         if (data.length === 0) {

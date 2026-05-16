@@ -121,6 +121,7 @@ const normalizeFundMethod = (
 async function assertProposalRankAvailable(
     trx: Transaction<Database>,
     entityId: string,
+    proposalYear: number,
     priorityRank: number,
     rootFormId: string,
 ) {
@@ -128,6 +129,7 @@ async function assertProposalRankAvailable(
         .selectFrom("project_proposals")
         .select("id")
         .where("entity_id", "=", entityId)
+        .where("proposal_year", "=", proposalYear)
         .where("priority_rank", "=", priorityRank)
         .where("root_form_id", "!=", rootFormId)
         .executeTakeFirst();
@@ -358,6 +360,7 @@ export async function createProjectProposal(
     fiscal_year: number,
     parent_form_id?: string,
     version?: number,
+    existingPapId?: string,
 ) {
     return await db.transaction().execute(async (trx) => {
         // 1. Insert into Master Forms table
@@ -386,6 +389,7 @@ export async function createProjectProposal(
         await assertProposalRankAvailable(
             trx,
             entityId,
+            payload.proposal_year,
             payload.priority_rank,
             rootFormId,
         );
@@ -417,36 +421,52 @@ export async function createProjectProposal(
             .returningAll()
             .executeTakeFirstOrThrow();
 
-        // 3. Create the PAP record (Mapped to your specific schema)
-        const newPap = await trx
-            .insertInto("paps")
-            .values({
-                entity_id: entityId,
-                title: payload.title,
-                // These columns are NOT NULL in your schema,
-                // so ensure they exist in proposalData or use defaults:
-                org_outcome_id: payload.org_outcome_id || "O-1",
-                description: payload.description || "No description provided.",
-                purpose: payload.purpose || "No purpose provided.",
-                beneficiaries: payload.beneficiaries || "General Public",
+        // 3. Original proposals create a PAP. Versioned overwrites reuse the family PAP by default.
+        let papId = existingPapId;
 
-                project_type: payload.is_infrastructure
-                    ? "infrastructure"
-                    : "non-infrastructure",
-                project_status: "proposed",
-                auth_status: authStatus,
-                category: payload.type === "202" ? "local" : "foreign",
-                identifier_code: payload.type === "202" ? "2" : "3",
-            })
-            .returning("id")
-            .executeTakeFirstOrThrow();
+        if (!papId && parent_form_id) {
+            const familyPap = await trx
+                .selectFrom("form_paps")
+                .select("pap_id")
+                .where("form_id", "=", parent_form_id)
+                .executeTakeFirstOrThrow();
+
+            papId = familyPap.pap_id;
+        }
+
+        if (!papId) {
+            const newPap = await trx
+                .insertInto("paps")
+                .values({
+                    entity_id: entityId,
+                    title: payload.title,
+                    // These columns are NOT NULL in your schema,
+                    // so ensure they exist in proposalData or use defaults:
+                    org_outcome_id: payload.org_outcome_id || "O-1",
+                    description: payload.description || "No description provided.",
+                    purpose: payload.purpose || "No purpose provided.",
+                    beneficiaries: payload.beneficiaries || "General Public",
+
+                    project_type: payload.is_infrastructure
+                        ? "infrastructure"
+                        : "non-infrastructure",
+                    project_status: "proposed",
+                    auth_status: authStatus,
+                    category: payload.type === "202" ? "local" : "foreign",
+                    identifier_code: payload.type === "202" ? "2" : "3",
+                })
+                .returning("id")
+                .executeTakeFirstOrThrow();
+
+            papId = newPap.id;
+        }
 
         // 4. Link Form and PAP in the junction table
         await trx
             .insertInto("form_paps")
             .values({
                 form_id: form.id,
-                pap_id: newPap.id,
+                pap_id: papId,
             })
             .execute();
 
@@ -535,7 +555,7 @@ export async function createProjectProposal(
 
         return {
             formId: form.id,
-            papId: newPap.id,
+            papId,
             createdAt: project.created_at,
         };
     });
@@ -669,8 +689,9 @@ export async function getAllProposalSummaries(
     userId: string,
     entityType: string,
     entityId: string,
+    fiscalYear?: number,
 ) {
-    const query = db
+    let query = db
         .selectFrom("project_proposals as pp")
         .innerJoin("forms as f", "f.id", "pp.id")
         .select([
@@ -689,6 +710,10 @@ export async function getAllProposalSummaries(
             "pp.is_infrastructure",
             "pp.title",
         ]);
+
+    if (fiscalYear) {
+        query = query.where("pp.proposal_year", "=", fiscalYear);
+    }
 
     if (entityType === "national") {
         const rows = await query
@@ -946,6 +971,7 @@ export async function updateProjectProposal(
         await assertProposalRankAvailable(
             trx,
             currentProposal.entity_id,
+            p.proposal_year,
             p.priority_rank,
             currentProposal.root_form_id,
         );

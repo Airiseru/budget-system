@@ -4,6 +4,8 @@ import { sql } from 'kysely'
 
 export type PapListFilters = {
     entity_id?: string
+    category?: 'local' | 'foreign'
+    search?: string
     limit?: number
     offset?: number
 }
@@ -129,6 +131,29 @@ export async function getPaginatedPaps(filters: PapListFilters = {}) {
 
     if (filters.entity_id) {
         query = query.where('paps.entity_id', '=', filters.entity_id)
+    }
+
+    if (filters.category) {
+        query = query.where('paps.category', '=', filters.category)
+    }
+
+    if (filters.search?.trim()) {
+        const search = `%${filters.search.trim()}%`
+        query = query.where(({ eb, or }) => or([
+            eb('paps.title', 'ilike', search),
+            eb('paps.description', 'ilike', search),
+            eb('paps.purpose', 'ilike', search),
+            eb('paps.beneficiaries', 'ilike', search),
+            eb(sql<string>`CONCAT(
+                COALESCE(paps.cost_structure_code, ''),
+                COALESCE(paps.organizational_outcome_code, ''),
+                COALESCE(paps.program_code, ''),
+                COALESCE(paps.subprogram_code, ''),
+                COALESCE(paps.identifier_code, ''),
+                COALESCE(paps.project_title_code, ''),
+                COALESCE(paps.reserved_codes, '')
+            )`, 'ilike', search),
+        ]))
     }
 
     const allPaps = await query
