@@ -1,4 +1,5 @@
 import { createPapRepository } from '@/src/db/factory'
+import { createEntityRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
 import { ModeToggle } from "@/components/ui/system-toggle"
@@ -10,6 +11,7 @@ import { redirect } from 'next/navigation'
 export const dynamic = 'force-dynamic'
 
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
+const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 const PAGE_SIZE = 15
 
 const generatePageNumbers = (currentPage: number, totalPages: number) => {
@@ -67,7 +69,13 @@ export default async function PapPage({
         : formType === '203'
           ? 'foreign'
           : undefined
+    const accessibleEntityIds = session.user.role === 'dbm'
+        ? undefined
+        : session.user.entity_id
+          ? await EntityRepository.getAccessibleEntityIds(session.user.entity_id)
+          : []
     const { paps, totalPages, totalCount } = await PapRepository.getPaginatedPaps({
+        entity_ids: accessibleEntityIds,
         category,
         search,
         limit: PAGE_SIZE,

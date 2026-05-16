@@ -4,6 +4,7 @@ import { sql } from 'kysely'
 
 export type PapListFilters = {
     entity_id?: string
+    entity_ids?: string[]
     category?: 'local' | 'foreign'
     search?: string
     limit?: number
@@ -122,6 +123,16 @@ export async function getPapByEntityId(entityId: string): Promise<Pap[]> {
 }
 
 export async function getPaginatedPaps(filters: PapListFilters = {}) {
+    if (filters.entity_ids && filters.entity_ids.length === 0) {
+        const limit = filters.limit ?? 15
+
+        return {
+            paps: [],
+            totalCount: 0,
+            totalPages: Math.ceil(0 / limit),
+        }
+    }
+
     let query = createPapBaseQuery()
         .selectAll('paps')
         .select([
@@ -131,7 +142,9 @@ export async function getPaginatedPaps(filters: PapListFilters = {}) {
             sql<string | null>`COALESCE(entities.type, '')`.as('entity_type'),
         ])
 
-    if (filters.entity_id) {
+    if (filters.entity_ids) {
+        query = query.where('paps.entity_id', 'in', filters.entity_ids)
+    } else if (filters.entity_id) {
         query = query.where('paps.entity_id', '=', filters.entity_id)
     }
 
