@@ -547,11 +547,13 @@ export async function getProjectProposalById(
     const project = await db
         .selectFrom("project_proposals")
         .innerJoin("forms", "forms.id", "project_proposals.id")
+        .leftJoin("form_paps", "form_paps.form_id", "project_proposals.id")
         .selectAll("project_proposals")
         .select([
             "forms.auth_status as auth_status",
             "forms.parent_form_id as parent_form_id",
             "forms.version as version",
+            "form_paps.pap_id as pap_id",
         ])
         .where("project_proposals.id", "=", id)
         .executeTakeFirst();

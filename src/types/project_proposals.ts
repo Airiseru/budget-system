@@ -136,6 +136,7 @@ export interface FullProjectProposal extends ProjectProposal {
     foreign_financials?: ForeignFinancialTarget[];
     foreign_physical_targets?: ForeignPhysicalTarget[];
     auth_status: string | null;
+    pap_id?: string | null;
     version?: number | null;
 }
 

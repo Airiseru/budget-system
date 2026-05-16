@@ -117,6 +117,7 @@ type ProposalViewData = FullProjectProposal & {
     local_infrastructure_requirements?: ProposalCostedItem[];
     foreign_financial_targets?: ProposalForeignFinancialTarget[];
     foreign_physical_targets?: ProposalForeignPhysicalTarget[];
+    pap_id?: string | null;
 };
 
 interface ProposalViewProps {
@@ -238,6 +239,12 @@ export default function ProposalView({
             (data.auth_status === "pending_dbm" && isDbmEvaluator));
 
     const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign;
+    const approvedRedirectHref =
+        session.user.role === "dbm" &&
+        data.auth_status === "pending_dbm" &&
+        data.pap_id
+            ? `/dbm/paps/${data.pap_id}`
+            : undefined;
 
     const signSectionStatusMessage =
         familyHasApprovedVersion && data.auth_status !== "approved"
@@ -1255,6 +1262,7 @@ export default function ProposalView({
                 latestRejection={latestRejection}
                 workflow={PROPOSAL_WORKFLOW}
                 allowClosedCycleAction={allowClosedCycleActions}
+                approvedRedirectHref={approvedRedirectHref}
             />
 
             {/* DANGER ZONE */}

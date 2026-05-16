@@ -1,6 +1,7 @@
 "use client"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { findLocalActiveSigningKey } from "@/src/lib/device-key-store"
 import { signData } from "@/src/lib/crypto"
 import {
@@ -22,6 +23,7 @@ type Props = {
     fromAuthStatus?: string
     toAuthStatus?: string
     onApproved?: () => void
+    approvedRedirectHref?: string
     allowClosedCycleAction?: boolean
     disabled?: boolean
     disabledMessage?: string
@@ -37,10 +39,12 @@ export function SignButton({
     fromAuthStatus,
     toAuthStatus,
     onApproved,
+    approvedRedirectHref,
     allowClosedCycleAction = false,
     disabled = false,
     disabledMessage,
 }: Props) {
+    const router = useRouter()
     const [step, setStep] = useState<Step>("idle")
     const [pin, setPin] = useState("")
     const [showPin, setShowPin] = useState(false)
@@ -115,6 +119,9 @@ export function SignButton({
             setStep("signed")
             setPin("")
             onApproved?.()
+            if (approvedRedirectHref) {
+                router.push(approvedRedirectHref)
+            }
         } catch (err: unknown) {
             setError(
                 err instanceof Error
