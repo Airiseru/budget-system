@@ -135,6 +135,7 @@ interface ProposalViewProps {
     userInWorkflow: boolean;
     userCanSign: boolean;
     budgetPrepClosedForEntityActions?: boolean;
+    allowClosedCycleActions?: boolean;
     currentSignatoryRole: string | null;
     existingSignature: ExistingProposalSignature | null;
     allSignatures: ProposalSignatureSummary[];
@@ -212,6 +213,7 @@ export default function ProposalView({
     userInWorkflow,
     userCanSign,
     budgetPrepClosedForEntityActions = false,
+    allowClosedCycleActions = false,
     currentSignatoryRole,
     existingSignature,
     allSignatures,
@@ -1252,6 +1254,7 @@ export default function ProposalView({
                 pastSignatories={pastSignatures}
                 latestRejection={latestRejection}
                 workflow={PROPOSAL_WORKFLOW}
+                allowClosedCycleAction={allowClosedCycleActions}
             />
 
             {/* DANGER ZONE */}

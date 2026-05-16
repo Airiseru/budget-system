@@ -45,6 +45,7 @@ export default async function RetireesPage() {
         const listsWithDisplayStatus = await Promise.all(
             data.map(async (list: RetireeListSummary) => {
                 const versionFamily = await FormRepo.getFormVersionFamily(list.id)
+                const latestVersion = versionFamily.forms.at(-1)
                 const displayStatus = versionFamily.forms.some((form) => form.auth_status === 'approved')
                     ? 'approved'
                     : versionFamily.forms.some((form) => form.auth_status === 'rejected')
@@ -53,7 +54,8 @@ export default async function RetireesPage() {
 
                 return {
                     ...list,
-                    displayStatus
+                    displayStatus,
+                    latestFormId: latestVersion?.id ?? list.id
                 }
             })
         )
@@ -108,8 +110,8 @@ export default async function RetireesPage() {
                 </div>
 
                 <div className="grid gap-4">
-                    {listsWithDisplayStatus.map((list: RetireeListSummary & { displayStatus: string | null }) => (
-                        <Link href={`/forms/retirees/${list.id}`} key={list.id}>
+                    {listsWithDisplayStatus.map((list: RetireeListSummary & { displayStatus: string | null; latestFormId: string }) => (
+                        <Link href={`/forms/retirees/${list.latestFormId}`} key={list.id}>
                             <div className="border rounded-lg p-5 hover:bg-accent transition-all shadow-sm group">
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-4">

@@ -232,6 +232,11 @@ export type DbmProposalReviewRow = {
     components: DbmProposalComponent[];
 };
 
+type DbmProposalReviewBaseRow = Omit<DbmProposalReviewRow, "components"> & {
+    parent_form_id: string | null;
+    version: number;
+};
+
 export type DbmProposalReviewFilters = {
     fiscalYear?: number;
     status?: string;
@@ -669,6 +674,8 @@ export async function getAllProposalSummaries(
         .select([
             "pp.id",
             "f.entity_id",
+            "f.parent_form_id",
+            "f.version",
             "f.codename", // e.g., "BP Form 202"
             "pp.proposal_year",
             "pp.priority_rank",
@@ -682,14 +689,15 @@ export async function getAllProposalSummaries(
         ]);
 
     if (entityType === "national") {
-        return await query
+        const rows = await query
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
     if (entityType === "department") {
-        return await query
+        const rows = await query
             .leftJoin("agencies", "agencies.id", "f.entity_id")
             .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
@@ -709,10 +717,11 @@ export async function getAllProposalSummaries(
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
     if (entityType === "agency") {
-        return await query
+        const rows = await query
             .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
                 or([
@@ -723,22 +732,194 @@ export async function getAllProposalSummaries(
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
     if (entityType === "operating_unit") {
         const descendantOuIds = await getOperatingUnitDescendantIds(entityId);
-        return await query
+        const rows = await query
             .where("f.entity_id", "in", [entityId, ...descendantOuIds])
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
-    return await query
+    const rows = await query
         .where("f.entity_id", "=", entityId)
         .orderBy("pp.proposal_year", "desc")
         .orderBy("pp.priority_rank", "asc")
         .execute();
+    return getLatestProposalSummariesByFamily(rows);
+}
+
+function getLatestProposalSummariesByFamily<
+    T extends {
+        id: string;
+        parent_form_id: string | null;
+        version: number;
+        proposal_year: number;
+        priority_rank: number;
+    },
+>(rows: T[]) {
+    const latestByFamily = new Map<string, T>();
+
+    for (const row of rows) {
+        const familyId = row.parent_form_id ?? row.id;
+        const current = latestByFamily.get(familyId);
+
+        if (!current || row.version > current.version) {
+            latestByFamily.set(familyId, row);
+        }
+    }
+
+    return Array.from(latestByFamily.values()).sort((a, b) => {
+        if (b.proposal_year !== a.proposal_year) {
+            return b.proposal_year - a.proposal_year;
+        }
+
+        return a.priority_rank - b.priority_rank;
+    });
+}
+
+function getComponentAllocationKey(component: {
+    item_catalog_id: string | null;
+    fund_code: string | null;
+    specific_description: string | null;
+}) {
+    return [
+        component.item_catalog_id ?? "",
+        component.fund_code ?? "",
+        component.specific_description ?? "",
+    ].join("::");
+}
+
+export async function createAllocationsForApprovedProposalWithExecutor(
+    trx: Transaction<Database>,
+    approvedFormId: string,
+) {
+    const approvedForm = await trx
+        .selectFrom("forms")
+        .select(["id", "entity_id", "parent_form_id"])
+        .where("id", "=", approvedFormId)
+        .executeTakeFirstOrThrow();
+    const proposal = await trx
+        .selectFrom("project_proposals")
+        .select("proposal_year")
+        .where("id", "=", approvedFormId)
+        .executeTakeFirstOrThrow();
+    const originalFormId = approvedForm.parent_form_id ?? approvedForm.id;
+
+    const approvedPap = await trx
+        .selectFrom("form_paps")
+        .select("pap_id")
+        .where("form_id", "=", approvedFormId)
+        .executeTakeFirst();
+
+    if (!approvedPap) {
+        throw new Error("Approved proposal is not linked to a PAP.");
+    }
+
+    const approvedComponents = await trx
+        .selectFrom("cost_by_components")
+        .select([
+            "item_catalog_id",
+            "fund_code",
+            "specific_description",
+            "currency",
+            "proposed_amt",
+            "tier",
+        ])
+        .where("proposal_id", "=", approvedFormId)
+        .where("item_catalog_id", "is not", null)
+        .execute();
+
+    if (approvedComponents.length === 0) return { createdCount: 0 };
+
+    const originalComponents = await trx
+        .selectFrom("cost_by_components")
+        .select([
+            "item_catalog_id",
+            "fund_code",
+            "specific_description",
+            "proposed_amt",
+        ])
+        .where("proposal_id", "=", originalFormId)
+        .where("item_catalog_id", "is not", null)
+        .execute();
+
+    const originalAmountByComponent = new Map(
+        originalComponents.map((component) => [
+            getComponentAllocationKey(component),
+            Number(component.proposed_amt ?? 0),
+        ]),
+    );
+
+    let createdCount = 0;
+
+    for (const component of approvedComponents) {
+        if (!component.item_catalog_id) continue;
+        const itemCatalogId = component.item_catalog_id;
+
+        const proposedAmount =
+            originalAmountByComponent.get(getComponentAllocationKey(component)) ??
+            0;
+        const dbmRecommendedAmount = Number(component.proposed_amt ?? 0);
+        const duplicate = await trx
+            .selectFrom("budget_allocations")
+            .select("id")
+            .where("budget_cycle_year", "=", proposal.proposal_year)
+            .where("entity_id", "=", approvedForm.entity_id)
+            .where("pap_code", "=", approvedPap.pap_id)
+            .where("item_catalog_id", "=", itemCatalogId)
+            .where((eb) =>
+                component.fund_code
+                    ? eb("fund_code", "=", component.fund_code)
+                    : eb("fund_code", "is", null),
+            )
+            .executeTakeFirst();
+
+        if (duplicate) {
+            await trx
+                .updateTable("budget_allocations")
+                .set({
+                    proposed_amt: proposedAmount,
+                    dbm_rec_amt: dbmRecommendedAmount,
+                    currency: component.currency ?? "PHP",
+                    specific_description: component.specific_description ?? null,
+                    auth_status: "dbm_approved",
+                    updated_at: new Date(),
+                })
+                .where("id", "=", duplicate.id)
+                .execute();
+        } else {
+            await trx
+                .insertInto("budget_allocations")
+                .values({
+                    entity_id: approvedForm.entity_id,
+                    budget_cycle_year: proposal.proposal_year,
+                    pap_code: approvedPap.pap_id,
+                    fund_code: component.fund_code ?? null,
+                    item_catalog_id: itemCatalogId,
+                    tier: 2,
+                    specific_description: component.specific_description ?? null,
+                    currency: component.currency ?? "PHP",
+                    proposed_amt: proposedAmount,
+                    dbm_rec_amt: dbmRecommendedAmount,
+                    nep_amt: 0,
+                    gaa_amt: 0,
+                    prev_year_gaa_amt: 0,
+                    release_classification: "unclassified",
+                    origin_tag: "agency_proposed",
+                    auth_status: "dbm_approved",
+                })
+                .execute();
+        }
+
+        createdCount += 1;
+    }
+
+    return { createdCount };
 }
 
 export async function updateProjectProposal(
@@ -1156,10 +1337,6 @@ function buildDbmProposalReviewBaseQuery(filters: DbmProposalReviewFilters) {
         query = query.where("pp.proposal_year", "=", filters.fiscalYear);
     }
 
-    if (filters.status) {
-        query = query.where("f.auth_status", "=", filters.status);
-    }
-
     if (filters.departmentId) {
         query = query.where(({ eb, or }) =>
             or([
@@ -1202,51 +1379,10 @@ function buildDbmProposalReviewBaseQuery(filters: DbmProposalReviewFilters) {
 export async function listDbmProposalReviewRows(
     filters: DbmProposalReviewFilters = {},
 ) {
-    let query = buildDbmProposalReviewBaseQuery(filters)
-        .select([
-            "pp.id",
-            "pp.entity_id",
-            "pp.title",
-            "pp.proposal_year",
-            "pp.priority_rank",
-            "pp.type",
-            "pp.total_proposal_currency",
-            "pp.total_proposal_cost",
-            "f.auth_status",
-            "f.updated_at",
-            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
-                "department_id",
-            ),
-            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
-                "department_name",
-            ),
-            sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as(
-                "agency_id",
-            ),
-            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as(
-                "agency_name",
-            ),
-            "operating_units.id as operating_unit_id",
-            "operating_units.name as operating_unit_name",
-            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
-                "entity_name",
-            ),
-        ])
-        .orderBy(sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`, "asc")
-        .orderBy(sql`COALESCE(agencies.name, parent_agencies.name)`, "asc")
-        .orderBy("operating_units.name", "asc")
-        .orderBy("pp.priority_rank", "asc")
-        .orderBy("f.updated_at", "desc");
-
-    if (typeof filters.limit === "number") query = query.limit(filters.limit);
-    if (typeof filters.offset === "number") {
-        query = query.offset(filters.offset);
-    }
-
-    const rows = (await query.execute()) as Omit<
-        DbmProposalReviewRow,
-        "components"
-    >[];
+    const rows = getPaginatedDbmProposalReviewRows(
+        await listFilteredDbmProposalReviewBaseRows(filters),
+        filters,
+    );
 
     const proposalIds = rows.map((row) => row.id);
     const components = proposalIds.length
@@ -1305,11 +1441,86 @@ export async function listDbmProposalReviewRows(
 export async function countDbmProposalReviewRows(
     filters: Omit<DbmProposalReviewFilters, "limit" | "offset"> = {},
 ) {
-    const result = await buildDbmProposalReviewBaseQuery(filters)
-        .select(({ fn }) => fn.count<string>("pp.id").as("count"))
-        .executeTakeFirst();
+    return (await listFilteredDbmProposalReviewBaseRows(filters)).length;
+}
 
-    return Number(result?.count ?? 0);
+async function listFilteredDbmProposalReviewBaseRows(
+    filters: Omit<DbmProposalReviewFilters, "limit" | "offset"> = {},
+) {
+    const rows = (await buildDbmProposalReviewBaseQuery(filters)
+        .select([
+            "pp.id",
+            "pp.entity_id",
+            "pp.title",
+            "pp.proposal_year",
+            "pp.priority_rank",
+            "pp.type",
+            "pp.total_proposal_currency",
+            "pp.total_proposal_cost",
+            "f.auth_status",
+            "f.updated_at",
+            "f.parent_form_id",
+            "f.version",
+            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
+                "department_id",
+            ),
+            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
+                "department_name",
+            ),
+            sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as(
+                "agency_id",
+            ),
+            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as(
+                "agency_name",
+            ),
+            "operating_units.id as operating_unit_id",
+            "operating_units.name as operating_unit_name",
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
+                "entity_name",
+            ),
+        ])
+        .orderBy(sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`, "asc")
+        .orderBy(sql`COALESCE(agencies.name, parent_agencies.name)`, "asc")
+        .orderBy("operating_units.name", "asc")
+        .orderBy("pp.priority_rank", "asc")
+        .orderBy("f.updated_at", "desc")
+        .execute()) as DbmProposalReviewBaseRow[];
+    const latestByFamily = new Map<string, DbmProposalReviewBaseRow>();
+
+    for (const row of rows) {
+        const familyId = row.parent_form_id ?? row.id;
+        const current = latestByFamily.get(familyId);
+
+        if (!current || row.version > current.version) {
+            latestByFamily.set(familyId, row);
+        }
+    }
+
+    return Array.from(latestByFamily.values())
+        .filter((row) => row.auth_status !== "approved" && row.auth_status !== "rejected")
+        .filter((row) => !filters.status || row.auth_status === filters.status)
+        .sort((a, b) => {
+            const departmentCompare = (a.department_name ?? "").localeCompare(b.department_name ?? "");
+            if (departmentCompare !== 0) return departmentCompare;
+
+            const agencyCompare = (a.agency_name ?? "").localeCompare(b.agency_name ?? "");
+            if (agencyCompare !== 0) return agencyCompare;
+
+            const ouCompare = (a.operating_unit_name ?? "").localeCompare(b.operating_unit_name ?? "");
+            if (ouCompare !== 0) return ouCompare;
+
+            return a.priority_rank - b.priority_rank;
+        });
+}
+
+function getPaginatedDbmProposalReviewRows(
+    rows: DbmProposalReviewBaseRow[],
+    filters: DbmProposalReviewFilters,
+) {
+    const offset = filters.offset ?? 0;
+    const limit = filters.limit ?? rows.length;
+
+    return rows.slice(offset, offset + limit);
 }
 
 export async function updatePendingDbmProposalScopesToRejected(filters: {

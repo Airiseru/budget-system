@@ -509,6 +509,16 @@ export async function verifyAndSubmitSignature(
                 await formRepository.updateFormAuthStatusWithExecutor(formId, nextStatus, trx)
             }
 
+            if (
+                tableName === 'project_proposals' &&
+                nextStatus === 'approved'
+            ) {
+                await proposalRepository.createAllocationsForApprovedProposalWithExecutor(
+                    trx,
+                    formId
+                )
+            }
+
             await auditRepository.createLogWithExecutor(trx, {
                 entity_id: currentEntityId,
                 user_id: session.user.id,

@@ -76,7 +76,7 @@ function groupRows(rows: DbmProposalReviewRow[]) {
 
 export default function ProposalReviewDashboard(props: Props) {
     const groupedRows = groupRows(props.rows)
-    const statuses = ['pending_dbm', 'approved', 'rejected', 'draft', 'pending_budget']
+    const statuses = ['pending_dbm', 'draft', 'pending_budget']
 
     return (
         <main className="mx-auto max-w-[1700px] space-y-6 px-4 py-8 pb-20">
