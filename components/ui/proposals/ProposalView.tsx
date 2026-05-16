@@ -172,7 +172,7 @@ const CostBreakdownColumns = ({ item }: { item: ProposalCostedItem }) => {
                 return (
                     <td
                         key={cls}
-                        className="p-4 text-right border-l font-mono text-sm"
+                        className="p-4 text-center border-l font-mono text-sm"
                     >
                         {costEntry
                             ? Number(costEntry.amount).toLocaleString(
@@ -481,7 +481,7 @@ export default function ProposalView({
                         <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100">
+                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-left">
                                         <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
                                             Item Catalog
                                         </th>
@@ -491,7 +491,7 @@ export default function ProposalView({
                                         <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase">
                                             Description
                                         </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-right">
                                             Amount
                                         </th>
                                     </tr>
@@ -655,23 +655,23 @@ export default function ProposalView({
                                                 key={pIdx}
                                                 className="border-b-2 border-chart-5/50"
                                             >
-                                                <tr className="bg-muted-50/20 font-bold divide-x border-b border-chart-5/20">
-                                                    <td className="p-4 text-muted-900">
+                                                <tr className="bg-muted-50/20 font-bold divide-x border-b border-chart-5/20 text-center">
+                                                    <td className="p-4 text-left text-muted-900">
                                                         {attr.description}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             budgetYear,
                                                             1,
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             budgetYear,
                                                             2,
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono bg-muted-100/20">
+                                                    <td className="p-4 font-mono bg-muted-100/20">
                                                         {(
                                                             getVal(
                                                                 budgetYear,
@@ -683,13 +683,13 @@ export default function ProposalView({
                                                             )
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             forwardYear1,
                                                             1,
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             forwardYear2,
                                                             1,
@@ -722,33 +722,33 @@ export default function ProposalView({
                                                     return (
                                                         <tr
                                                             key={cls}
-                                                            className="hover:bg-muted-50/30 transition-colors"
+                                                            className="hover:bg-muted-50/30 transition-colors text-center"
                                                         >
-                                                            <td className="p-3 pl-8 text-sm font-medium text-muted-500 border-r border-muted-100 italic">
+                                                            <td className="p-3 pl-8 text-left text-sm font-medium text-muted-500 border-r border-muted-100 italic">
                                                                 {cls}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-50">
+                                                            <td className="p-3 font-mono text-sm text-muted-500 border-r border-muted-50">
                                                                 {v27t1 > 0
                                                                     ? v27t1.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
+                                                            <td className="p-3 font-mono text-sm text-muted-500 border-r border-muted-100">
                                                                 {v27t2 > 0
                                                                     ? v27t2.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-600 bg-muted-50/10 border-r border-muted-100">
+                                                            <td className="p-3 font-mono text-sm text-muted-600 bg-muted-50/10 border-r border-muted-100">
                                                                 {(
                                                                     v27t1 +
                                                                     v27t2
                                                                 ).toLocaleString()}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
+                                                            <td className="p-3 font-mono text-sm text-muted-500 border-r border-muted-100">
                                                                 {v28t1 > 0
                                                                     ? v28t1.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500">
+                                                            <td className="p-3 font-mono text-sm text-muted-500">
                                                                 {v29t1 > 0
                                                                     ? v29t1.toLocaleString()
                                                                     : "—"}
@@ -773,7 +773,7 @@ export default function ProposalView({
                             <table className="border rounded-xl w-full bg-white overflow-hidden divide-y">
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                        <th className="py-3 px-4 text-left text-sm font-black text-muted-400 uppercase w-1/3">
                                             Locations
                                         </th>
                                         <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">

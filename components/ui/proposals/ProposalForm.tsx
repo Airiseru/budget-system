@@ -2034,6 +2034,17 @@ export default function ProposalForm({
                                                                                 type="number"
                                                                                 className="w-full text-right bg-transparent outline-none text-[11px] py-1"
                                                                                 placeholder="0"
+
+                                                                                // disable tier 1 input of current year for new proposal
+                                                                                disabled={(() => {
+                                                                                    // find matching attribute cost
+                                                                                    const match = attr.attribution_costs.find(
+                                                                                        c => c.year === col.year && c.tier === col.tier
+                                                                                    )
+
+                                                                                    // disable if current year and tier 1
+                                                                                    return match?.tier === 1 && match?.year === payload.proposal_year && payload.is_new
+                                                                                })()}
                                                                                 value={
                                                                                     attr.attribution_costs
                                                                                         .find(
@@ -2383,6 +2394,7 @@ export default function ProposalForm({
                                         className="w-24 border-b text-sm"
                                         placeholder="Year"
                                         value={target.year}
+                                        min={payload.proposal_year}
                                         onChange={(e) =>
                                             updateRow(
                                                 "local_physical_targets",
