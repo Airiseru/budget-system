@@ -599,7 +599,7 @@ export default function ProposalForm({
                     body: JSON.stringify({
                         userId,
                         entityId: entityId,
-                        payload: finalPayload, // Send the version with the calculated total
+                        payload: result.data, // Send the version with the calculated total
                         auth_status: submitAction,
                     }),
                 },
