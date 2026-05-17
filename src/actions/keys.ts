@@ -1,7 +1,7 @@
 'use server'
 
 import bcrypt from 'bcrypt'
-import { createEntityRepository, createKeyRepository, createFormRepository, createAuditRepository, createBudgetSettingsRepository, createBudgetAllocationRepository } from '../db/factory'
+import { createEntityRepository, createKeyRepository, createFormRepository, createAuditRepository, createBudgetSettingsRepository, createBudgetAllocationRepository, createPapRepository } from '../db/factory'
 import { db } from '../db/postgres/database'
 import { sessionDetails, sessionWithEntity } from './auth'
 import { redirect } from 'next/navigation'
@@ -26,6 +26,7 @@ const auditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'post
 const staffingRepository = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const retireeRepository = createRetireeRepository(process.env.DATABASE_TYPE || 'postgres')
 const proposalRepository = createProposalRepository(process.env.DATABASE_TYPE || 'postgres')
+const papRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 const budgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
 const budgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -513,6 +514,11 @@ export async function verifyAndSubmitSignature(
                 tableName === 'project_proposals' &&
                 nextStatus === 'approved'
             ) {
+                await papRepository.updatePapProjectStatusForFormWithExecutor(
+                    trx,
+                    formId,
+                    'approved'
+                )
                 await proposalRepository.createAllocationsForApprovedProposalWithExecutor(
                     trx,
                     formId
@@ -663,6 +669,17 @@ export async function verifyAndRejectSignature(
             }, trx)
 
             await formRepository.updateFormAuthStatusWithExecutor(formId, rejectStatus, trx)
+
+            if (
+                tableName === 'project_proposals' &&
+                rejectStatus === 'rejected'
+            ) {
+                await papRepository.updatePapProjectStatusForFormWithExecutor(
+                    trx,
+                    formId,
+                    'rejected'
+                )
+            }
 
             await auditRepository.createLogWithExecutor(trx, {
                 entity_id: lockedForm.entity_id,
