@@ -296,6 +296,42 @@ export async function createProjectProposal(
             .returningAll()
             .executeTakeFirstOrThrow();
 
+        const deptRankResult = await trx
+            .selectFrom("project_proposals as pp")
+            .innerJoin("forms as f", "f.id", "pp.id")
+            .innerJoin("entities as e", "e.id", "f.entity_id")
+            // Join to resolve dept — adjust join path to match your schema
+            .leftJoin("agencies", "agencies.id", "e.id")
+            .leftJoin(
+                "departments as dept",
+                "dept.id",
+                "agencies.department_id",
+            )
+            .select(({ fn }) =>
+                fn.max<number>("pp.dept_priority_rank").as("max_rank"),
+            )
+            .where("pp.proposal_year", "=", payload.proposal_year)
+            .where(
+                // Match proposals from the same department
+                sql`COALESCE(dept.id, agencies.department_id)`,
+                "=",
+                sql`(SELECT COALESCE(a.department_id, ou.agency_id)
+             FROM entities e2
+             LEFT JOIN agencies a ON a.id = e2.id
+             LEFT JOIN operating_units ou ON ou.id = e2.id
+             WHERE e2.id = ${entityId}
+             LIMIT 1)`,
+            )
+            .executeTakeFirst();
+
+        const nextDeptRank = (deptRankResult?.max_rank ?? 0) + 1;
+
+        await trx
+            .updateTable("project_proposals")
+            .set({ dept_priority_rank: nextDeptRank })
+            .where("id", "=", form.id)
+            .execute();
+
         // 3. Create the PAP record (Mapped to your specific schema)
         const newPap = await trx
             .insertInto("paps")
@@ -524,42 +560,62 @@ export async function getProjectProposalById(
 }
 
 export async function getAllProposalSummaries(
-    userId: string,
     entityType: string,
+    userRole: string,
     entityId: string,
+    inDbmModule: boolean = false,
+    fiscalYear: number = new Date().getFullYear() + 1,
 ) {
     let query = db
         .selectFrom("project_proposals as pp")
-        .innerJoin("forms as f", "f.id", "pp.id")
+        .innerJoin("forms", "forms.id", "pp.id")
+        .innerJoin("entities", "entities.id", "forms.entity_id")
         .select([
             "pp.id",
-            "f.entity_id",
-            "f.codename", // e.g., "BP Form 202"
+            "forms.entity_id",
+            "forms.codename", // e.g., "BP Form 202"
             "pp.proposal_year",
             "pp.priority_rank",
             "pp.type",
             "pp.total_proposal_cost",
             "pp.total_proposal_currency",
-            "f.auth_status",
+            "forms.auth_status",
             "pp.submission_date",
             "pp.is_infrastructure",
             "pp.title",
-        ]);
+            "entities.type as entity_type",
+        ])
+        .where("forms.parent_form_id", "is", null)
+        .orderBy("pp.submission_date", "desc")
+        .orderBy("pp.priority_rank", "asc");
 
     if (entityType === "national") {
+        return await query.execute();
+    }
+
+    if (userRole === "dbm" && inDbmModule) {
         return await query
-            .orderBy("pp.proposal_year", "desc")
-            .orderBy("pp.priority_rank", "asc")
+            .where(({ eb, or }) =>
+                or([
+                    eb("forms.auth_status", "=", "dbm"),
+                    eb("forms.auth_status", "=", "done"),
+                ]),
+            )
+            .where("forms.fiscal_year", "=", fiscalYear)
             .execute();
     }
 
     if (entityType === "department") {
         return await query
-            .leftJoin("agencies", "agencies.id", "f.entity_id")
-            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
+            .leftJoin("agencies", "agencies.id", "forms.entity_id")
+            .leftJoin(
+                "operating_units",
+                "operating_units.id",
+                "forms.entity_id",
+            )
             .where(({ eb, or }) =>
                 or([
-                    eb("f.entity_id", "=", entityId),
+                    eb("forms.entity_id", "=", entityId),
                     eb("agencies.department_id", "=", entityId),
                     eb(
                         "operating_units.agency_id",
@@ -571,39 +627,33 @@ export async function getAllProposalSummaries(
                     ),
                 ]),
             )
-            .orderBy("pp.proposal_year", "desc")
-            .orderBy("pp.priority_rank", "asc")
             .execute();
     }
 
     if (entityType === "agency") {
         return await query
-            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
+            .leftJoin(
+                "operating_units",
+                "operating_units.id",
+                "forms.entity_id",
+            )
             .where(({ eb, or }) =>
                 or([
-                    eb("f.entity_id", "=", entityId),
+                    eb("forms.entity_id", "=", entityId),
                     eb("operating_units.agency_id", "=", entityId),
                 ]),
             )
-            .orderBy("pp.proposal_year", "desc")
-            .orderBy("pp.priority_rank", "asc")
             .execute();
     }
 
     if (entityType === "operating_unit") {
         const descendantOuIds = await getOperatingUnitDescendantIds(entityId);
         return await query
-            .where("f.entity_id", "in", [entityId, ...descendantOuIds])
-            .orderBy("pp.proposal_year", "desc")
-            .orderBy("pp.priority_rank", "asc")
+            .where("forms.entity_id", "in", [entityId, ...descendantOuIds])
             .execute();
     }
 
-    return await query
-        .where("f.entity_id", "=", entityId)
-        .orderBy("pp.proposal_year", "desc")
-        .orderBy("pp.priority_rank", "asc")
-        .execute();
+    return await query.where("forms.entity_id", "=", entityId).execute();
 }
 
 export async function updateProjectProposal(
@@ -769,6 +819,35 @@ export async function updateProjectProposal(
     });
 }
 
+export async function swapDeptProposalRanks(
+    proposalIdA: string,
+    deptRankA: number,
+    proposalIdB: string,
+    deptRankB: number,
+) {
+    return await db.transaction().execute(async (trx) => {
+        await trx
+            .updateTable("project_proposals")
+            .set({ dept_priority_rank: -1 })
+            .where("id", "=", proposalIdA)
+            .execute();
+
+        await trx
+            .updateTable("project_proposals")
+            .set({ dept_priority_rank: deptRankA })
+            .where("id", "=", proposalIdB)
+            .execute();
+
+        await trx
+            .updateTable("project_proposals")
+            .set({ dept_priority_rank: deptRankB })
+            .where("id", "=", proposalIdA)
+            .execute();
+
+        return { success: true };
+    });
+}
+
 export async function swapProposalRanks(
     entityId: string,
     proposalIdA: string,
@@ -796,6 +875,73 @@ export async function swapProposalRanks(
             .updateTable("project_proposals")
             .set({ priority_rank: rankB })
             .where("id", "=", proposalIdA)
+            .execute();
+
+        return { success: true };
+    });
+}
+
+export async function moveProposalToRank(
+    scope: "entity" | "dept",
+    proposalId: string,
+    newRank: number,
+    scopeFilter: { entityId?: string; proposalIds?: string[] },
+) {
+    const rankCol = scope === "entity" ? "priority_rank" : "dept_priority_rank";
+
+    return await db.transaction().execute(async (trx) => {
+        // Get current rank of the proposal being moved
+        const current = await trx
+            .selectFrom("project_proposals")
+            .select([rankCol])
+            .where("id", "=", proposalId)
+            .executeTakeFirstOrThrow();
+
+        const currentRank = current[rankCol] as number;
+        if (currentRank === newRank) return { success: true };
+
+        // Temporarily set to -1 to free the slot
+        await trx
+            .updateTable("project_proposals")
+            .set({ [rankCol]: -1 })
+            .where("id", "=", proposalId)
+            .execute();
+
+        if (currentRank > newRank) {
+            // Moving up: shift everything in [newRank, currentRank - 1] down by 1
+            let q = trx
+                .updateTable("project_proposals")
+                .set({ [rankCol]: sql`${sql.ref(rankCol)} + 1` })
+                .where(rankCol, ">=", newRank)
+                .where(rankCol, "<", currentRank);
+
+            if (scope === "entity" && scopeFilter.entityId) {
+                q = q.where("entity_id", "=", scopeFilter.entityId);
+            } else if (scope === "dept" && scopeFilter.proposalIds?.length) {
+                q = q.where("id", "in", scopeFilter.proposalIds);
+            }
+            await q.execute();
+        } else {
+            // Moving down: shift everything in [currentRank + 1, newRank] up by 1
+            let q = trx
+                .updateTable("project_proposals")
+                .set({ [rankCol]: sql`${sql.ref(rankCol)} - 1` })
+                .where(rankCol, ">", currentRank)
+                .where(rankCol, "<=", newRank);
+
+            if (scope === "entity" && scopeFilter.entityId) {
+                q = q.where("entity_id", "=", scopeFilter.entityId);
+            } else if (scope === "dept" && scopeFilter.proposalIds?.length) {
+                q = q.where("id", "in", scopeFilter.proposalIds);
+            }
+            await q.execute();
+        }
+
+        // Place proposal at the target rank
+        await trx
+            .updateTable("project_proposals")
+            .set({ [rankCol]: newRank })
+            .where("id", "=", proposalId)
             .execute();
 
         return { success: true };
@@ -844,11 +990,7 @@ function buildDbmProposalReviewBaseQuery(filters: DbmProposalReviewFilters) {
             or([
                 eb("departments.id", "=", filters.departmentId!),
                 eb("agency_departments.id", "=", filters.departmentId!),
-                eb(
-                    "parent_agency_departments.id",
-                    "=",
-                    filters.departmentId!,
-                ),
+                eb("parent_agency_departments.id", "=", filters.departmentId!),
             ]),
         );
     }
@@ -893,25 +1035,34 @@ export async function listDbmProposalReviewRows(
             "pp.total_proposal_cost",
             "f.auth_status",
             "f.updated_at",
-            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
+            sql<
+                string | null
+            >`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
                 "department_id",
             ),
-            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
+            sql<
+                string | null
+            >`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
                 "department_name",
             ),
             sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as(
                 "agency_id",
             ),
-            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as(
-                "agency_name",
-            ),
+            sql<
+                string | null
+            >`COALESCE(agencies.name, parent_agencies.name)`.as("agency_name"),
             "operating_units.id as operating_unit_id",
             "operating_units.name as operating_unit_name",
-            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
+            sql<
+                string | null
+            >`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
                 "entity_name",
             ),
         ])
-        .orderBy(sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`, "asc")
+        .orderBy(
+            sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`,
+            "asc",
+        )
         .orderBy(sql`COALESCE(agencies.name, parent_agencies.name)`, "asc")
         .orderBy("operating_units.name", "asc")
         .orderBy("pp.priority_rank", "asc")
@@ -951,7 +1102,9 @@ export async function listDbmProposalReviewRows(
                   "cbc.currency",
                   "cbc.proposed_amt",
                   "item_catalog.name as item_name",
-                  sql<string | null>`COALESCE(item_catalog.expense_class, cec.expense_class)`.as(
+                  sql<
+                      string | null
+                  >`COALESCE(item_catalog.expense_class, cec.expense_class)`.as(
                       "expense_class",
                   ),
               ])

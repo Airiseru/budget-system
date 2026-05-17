@@ -33,6 +33,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn("title", "text", (col) => col.notNull())
         .addColumn("proposal_year", "integer", (col) => col.notNull())
         .addColumn("priority_rank", "integer", (col) => col.notNull())
+        .addColumn("dept_priority_rank", "integer")
         .addColumn("description", "text", (col) => col.notNull())
         .addColumn("org_outcome_id", "text", (col) => col.notNull())
         .addColumn("purpose", "text", (col) => col.notNull())

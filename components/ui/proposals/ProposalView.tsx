@@ -217,35 +217,36 @@ export default function ProposalView({
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
                 <div className="flex flex-row gap-2">
-                {canVerifyIntegrity && (
-                    <VerifyIntegrityDialog
-                        tableName="project_proposals"
-                        formId={data.id ?? ""}
-                    />
-                )}
-                {canEditCurrentVersion && !budgetPrepClosedForEntityActions && (
-                    <>
-                        <Link
-                            href={`/forms/proposals/${data.id}/edit`}
-                            className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
-                        >
-                            <Pencil size={14} />
-                            {session.user.role !== "dbm"
-                                ? "Edit Form"
-                                : "Overwrite Form"}
-                        </Link>
-                        <form action={updateAuthStatus}>
-                            <button
-                                type="submit"
-                                className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
-                            >
-                                {session.user.role !== "dbm"
-                                    ? "Submit Form"
-                                    : "Finalize Overwrite"}
-                            </button>
-                        </form>
-                    </>
-                )}
+                    {canVerifyIntegrity && (
+                        <VerifyIntegrityDialog
+                            tableName="project_proposals"
+                            formId={data.id ?? ""}
+                        />
+                    )}
+                    {canEditCurrentVersion &&
+                        !budgetPrepClosedForEntityActions && (
+                            <>
+                                <Link
+                                    href={`/forms/proposals/${data.id}/edit`}
+                                    className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
+                                >
+                                    <Pencil size={14} />
+                                    {session.user.role !== "dbm"
+                                        ? "Edit Form"
+                                        : "Overwrite Form"}
+                                </Link>
+                                <form action={updateAuthStatus}>
+                                    <button
+                                        type="submit"
+                                        className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
+                                    >
+                                        {session.user.role !== "dbm"
+                                            ? "Submit Form"
+                                            : "Finalize Overwrite"}
+                                    </button>
+                                </form>
+                            </>
+                        )}
                 </div>
             </div>
 
@@ -558,7 +559,6 @@ export default function ProposalView({
                                             new Set(
                                                 attr.attribution_costs?.flatMap(
                                                     (c: any) =>
-                                                        // Add a check for c?.costs to handle the null in your FY 2028 data
                                                         c?.costs
                                                             ?.map(
                                                                 (cost: any) =>
@@ -582,7 +582,7 @@ export default function ProposalView({
                                             const yData =
                                                 attr.attribution_costs?.find(
                                                     (c: any) =>
-                                                        c && // Ensure c is not null (fixes the FY 2028 issue)
+                                                        c &&
                                                         Number(c.year) ===
                                                             year &&
                                                         (tier === null ||
@@ -660,22 +660,22 @@ export default function ProposalView({
                                                 </tr>
                                                 {/* Child Rows: Individual Expense Classes */}
                                                 {uniqueClasses.map((cls) => {
-                                                    const v27t1 = getVal(
+                                                    const vbyt1 = getVal(
                                                         budgetYear,
                                                         1,
                                                         cls,
                                                     );
-                                                    const v27t2 = getVal(
+                                                    const vbyt2 = getVal(
                                                         budgetYear,
                                                         2,
                                                         cls,
                                                     );
-                                                    const v28t1 = getVal(
+                                                    const vforward1 = getVal(
                                                         forwardYear1,
                                                         1,
                                                         cls,
                                                     );
-                                                    const v29t1 = getVal(
+                                                    const vforward2 = getVal(
                                                         forwardYear2,
                                                         1,
                                                         cls,
@@ -690,29 +690,29 @@ export default function ProposalView({
                                                                 {cls}
                                                             </td>
                                                             <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-50">
-                                                                {v27t1 > 0
-                                                                    ? v27t1.toLocaleString()
+                                                                {vbyt1 > 0
+                                                                    ? vbyt1.toLocaleString()
                                                                     : "—"}
                                                             </td>
                                                             <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
-                                                                {v27t2 > 0
-                                                                    ? v27t2.toLocaleString()
+                                                                {vbyt2 > 0
+                                                                    ? vbyt2.toLocaleString()
                                                                     : "—"}
                                                             </td>
                                                             <td className="p-3 text-right font-mono text-sm text-muted-600 bg-muted-50/10 border-r border-muted-100">
                                                                 {(
-                                                                    v27t1 +
-                                                                    v27t2
+                                                                    vbyt1 +
+                                                                    vbyt2
                                                                 ).toLocaleString()}
                                                             </td>
                                                             <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
-                                                                {v28t1 > 0
-                                                                    ? v28t1.toLocaleString()
+                                                                {vforward1 > 0
+                                                                    ? vforward1.toLocaleString()
                                                                     : "—"}
                                                             </td>
                                                             <td className="p-3 text-right font-mono text-sm text-muted-500">
-                                                                {v29t1 > 0
-                                                                    ? v29t1.toLocaleString()
+                                                                {vforward2 > 0
+                                                                    ? vforward2.toLocaleString()
                                                                     : "—"}
                                                             </td>
                                                         </tr>
@@ -873,7 +873,10 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
                                     {data.cost_by_components.map(
-                                        (comp: ProposalCostedItem, i: number) => (
+                                        (
+                                            comp: ProposalCostedItem,
+                                            i: number,
+                                        ) => (
                                             <tr
                                                 key={i}
                                                 className="hover:bg-muted-50/30 divide-x transition-colors group"
@@ -1105,7 +1108,7 @@ export default function ProposalView({
                                                                     </span>
                                                                     <div
                                                                         key={`${ec}-LP-CASH`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
                                                                     >
                                                                         {getCost(
                                                                             "LP",
@@ -1127,7 +1130,7 @@ export default function ProposalView({
                                                                     </span>
                                                                     <div
                                                                         key={`${ec}-LP-NON-CASH`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
                                                                     >
                                                                         {getCost(
                                                                             "LP",
@@ -1148,7 +1151,7 @@ export default function ProposalView({
                                                                     </span>
                                                                     <div
                                                                         key={`${ec}-GOP`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 "
+                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
                                                                     >
                                                                         {getCost(
                                                                             "GOP",
@@ -1167,7 +1170,7 @@ export default function ProposalView({
                                                                     <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
                                                                         Total
                                                                     </span>
-                                                                    <span className="text-sm font-mono font-bold text-blue-600">
+                                                                    <span className="text-sm font-mono font-bold text-secondary-foreground">
                                                                         {cellTotal.toLocaleString(
                                                                             undefined,
                                                                             {
