@@ -460,7 +460,7 @@ export default function StaffForm({
                             type="number"
                             min="1"
                             className={`w-full p-1 border rounded text-center text-sm ${getFieldStyle(`${path}.num_positions`)}`}
-                            value={pos.num_positions ?? ""}
+                            value={pos.num_positions ?? 0}
                             onChange={(e) =>
                                 handlePositionChange(
                                     index,
