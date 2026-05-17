@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import PapDeleteButton from '@/components/ui/PapDeleteButton'
-import { FORM_ROUTE_MAP, FORM_TYPES, STATUS_LABELS, STATUS_COLOR_MAPPER } from '@/src/lib/constants'
+import { FORM_ROUTE_MAP, FORM_TYPES, PAP_PROJECT_STATUS_LABELS, type PAP_PROJECT_STATUS_TYPES, STATUS_LABELS, STATUS_COLOR_MAPPER } from '@/src/lib/constants'
 import { ArrowLeft, Pencil } from '@/components/ui/Icons'
 import {
     Select,
@@ -74,6 +74,26 @@ function getFormTypeLabel(formType: string) {
     return FORM_TYPES[formType] || formType
 }
 
+function getProjectStatusClassName(status: string) {
+    switch (status) {
+        case 'approved':
+            return 'bg-secondary-foreground/10 text-secondary-foreground border-secondary-foreground/30'
+        case 'rejected':
+        case 'cancelled':
+            return 'bg-destructive/10 text-destructive border-destructive/30'
+        case 'proposed':
+        case 'for_release':
+        case 'on_going':
+            return 'bg-accent-foreground/10 text-accent-foreground border-accent-foreground/30'
+        default:
+            return 'bg-secondary/50 text-muted-foreground border-border/20'
+    }
+}
+
+function getProjectStatusLabel(status: string) {
+    return PAP_PROJECT_STATUS_LABELS[status as PAP_PROJECT_STATUS_TYPES] ?? status.replace(/_/g, ' ').toUpperCase()
+}
+
 export default function PapView({
     pap,
     relatedForms,
@@ -128,8 +148,8 @@ export default function PapView({
                             </p>
                         </div>
                         <div className="flex flex-wrap gap-2">
-                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${STATUS_COLOR_MAPPER(pap.auth_status ?? pap.project_status)}`}>
-                                {STATUS_LABELS[pap.auth_status ?? ''] || pap.project_status.toUpperCase()}
+                            <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${getProjectStatusClassName(pap.project_status)}`}>
+                                {getProjectStatusLabel(pap.project_status)}
                             </span>
                             <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
                                 {pap.project_type?.toUpperCase() || 'No Project Type'}

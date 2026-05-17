@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -54,6 +54,13 @@ export default function RankManager({
         {},
     );
 
+    useEffect(() => {
+        setProposals(initialProposals || []);
+        setSelectedIds([]);
+        setTargetRank("");
+        setError(null);
+    }, [initialProposals, viewingYear]);
+
     const getRank = (p: ProposalSummary, scope: Scope) =>
         scope === "entity" ? p.priority_rank : (p.dept_priority_rank ?? 0);
 
@@ -67,6 +74,18 @@ export default function RankManager({
 
     const refetch = async () => {
         const response = await fetch(`/api/proposals?entityId=${entityId}`);
+        const updatedData = await response.json();
+        setProposals(updatedData);
+    };
+
+    const refreshProposals = async () => {
+        const params = new URLSearchParams({ entityId });
+
+        if (viewingYear) {
+            params.set("year", String(viewingYear));
+        }
+
+        const response = await fetch(`/api/proposals?${params.toString()}`);
         const updatedData = await response.json();
         setProposals(updatedData);
     };
@@ -93,6 +112,14 @@ export default function RankManager({
         setError(null);
         const [propA, propB] = selectedProposals;
 
+        if (propA.auth_status !== "draft" || propB.auth_status !== "draft") {
+            setError(
+                "Priority ranks can only be changed while both proposals are drafts.",
+            );
+            setLoading(false);
+            return;
+        }
+
         try {
             const res = await fetch("/api/proposals/swap", {
                 method: "POST",
@@ -104,11 +131,12 @@ export default function RankManager({
                     rankA: getRank(propA, activeScope),
                     proposalIdB: propB.id,
                     rankB: getRank(propB, activeScope),
+                    proposalYear: propA.proposal_year,
                 }),
             });
 
             if (res.ok) {
-                await refetch();
+                await refreshProposals();
                 setSelectedIds([]);
             } else {
                 const payload = await res.json();
@@ -127,7 +155,9 @@ export default function RankManager({
             setError("Select one draft proposal to bring it to a target rank.");
             return;
         }
+
         const parsedRank = Number(targetRank);
+
         if (!Number.isInteger(parsedRank) || parsedRank < 1) {
             setError("Enter a valid target rank.");
             return;
@@ -138,27 +168,20 @@ export default function RankManager({
         const [proposal] = selectedProposals;
 
         try {
-            const body: Record<string, unknown> = {
-                action: "move",
-                proposalId: proposal.id,
-                targetRank: parsedRank,
-                scope: activeScope,
-            };
-
-            if (activeScope === "entity") {
-                body.entityId = entityId;
-            } else {
-                body.proposalIds = proposals.map((p) => p.id);
-            }
-
             const res = await fetch("/api/proposals/swap", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(body),
+                body: JSON.stringify({
+                    action: "move",
+                    entityId,
+                    proposalId: proposal.id,
+                    targetRank: parsedRank,
+                    proposalYear: proposal.proposal_year,
+                }),
             });
 
             if (res.ok) {
-                await refetch();
+                await refreshProposals();
                 setSelectedIds([]);
                 setTargetRank("");
             } else {
@@ -244,7 +267,6 @@ export default function RankManager({
                 moved.
             </p>
 
-            {/* Your addition: dept scope toggle */}
             {isDepartmentUser && (
                 <div className="flex gap-2">
                     <Button
@@ -266,7 +288,6 @@ export default function RankManager({
                 </div>
             )}
 
-            {/* Friend's addition: fiscal year filter */}
             {lockedYear ? (
                 <div className="rounded-md border px-3 py-2 text-sm text-muted-foreground">
                     Showing proposals for active FY {lockedYear}.
@@ -295,14 +316,14 @@ export default function RankManager({
                 </form>
             )}
 
-            {/* Friend's addition: error display */}
+ 
             {error && (
                 <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {error}
                 </div>
             )}
 
-            {/* Friend's addition: swap/move control panel */}
+  
             <div className="rounded-lg border bg-card p-4 shadow-sm">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
@@ -391,14 +412,13 @@ export default function RankManager({
                         <tr>
                             <th className="p-3 text-left w-28">Select</th>
                             <th className="p-3 text-left w-32">
-                                {/* Your addition: scope-aware header */}
+           
                                 {activeScope === "entity"
                                     ? "Entity Rank"
                                     : "Dept Rank"}
                             </th>
                             <th className="p-3 text-left">Project Title</th>
-                            <th className="p-3 text-left w-36">Status</th>
-                            <th className="p-3 text-center w-48">Actions</th>
+                            <th className="p-3 text-center w-40">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -416,7 +436,7 @@ export default function RankManager({
                                         isSelected ? "bg-primary/10" : ""
                                     } ${!isDraft ? "opacity-70" : ""}`}
                                 >
-                                    {/* Friend's addition: select button */}
+               
                                     <td className="p-3">
                                         <Button
                                             type="button"
@@ -432,7 +452,7 @@ export default function RankManager({
                                             {isSelected ? "Selected" : "Select"}
                                         </Button>
                                     </td>
-                                    {/* Your addition: editable rank input */}
+             
                                     <td className="p-3">
                                         <Input
                                             type="number"
@@ -466,12 +486,12 @@ export default function RankManager({
                                             </div>
                                         )}
                                     </td>
-                                    {/* Friend's addition: status column */}
+          
                                     <td className="p-3 capitalize text-muted-foreground">
                                         {p.auth_status?.replace(/_/g, " ") ??
                                             "Unknown"}
                                     </td>
-                                    {/* Your addition: up/down action buttons */}
+  
                                     <td className="p-3 flex justify-center gap-2">
                                         <Button
                                             size="sm"
@@ -533,7 +553,6 @@ export default function RankManager({
                 </table>
             </div>
 
-            {/* Your addition: dept scope footnote */}
             {activeScope === "dept" && (
                 <p className="text-xs text-slate-500 mt-2">
                     Department-wide ranking across all entities. Changes affect

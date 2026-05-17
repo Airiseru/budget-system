@@ -25,7 +25,8 @@ export default async function NewProposalPage({
 
     const params = await searchParams;
     const activeCycle = await getActiveBudgetPrepCycle();
-    const selectedYear = params.year ? Number(params.year) : undefined;
+    const parsedYear = params.year ? Number(params.year) : undefined;
+    const selectedYear = Number.isInteger(parsedYear) ? parsedYear : undefined;
     const lockedYear = activeCycle?.fiscal_year;
     const allYearsData = lockedYear
         ? []
@@ -37,7 +38,7 @@ export default async function NewProposalPage({
     const availableYears = Array.from(
         new Set(allYearsData.map((proposal) => proposal.proposal_year)),
     ).sort((a, b) => b - a);
-    const viewingYear = lockedYear ?? selectedYear;
+    const viewingYear = lockedYear ?? selectedYear ?? availableYears[0];
 
     const data = await ProposalRepo.getAllProposalSummaries(
         session.user.id ?? "",

@@ -177,7 +177,7 @@ export default async function PapPage({
                     <div className="flex items-center justify-between border-t border-border/30 bg-muted p-4">
                         <p className="text-sm text-muted-foreground">
                             Showing page <span className="font-bold">{page}</span> of{' '}
-                            <span className="font-bold">{Math.max(1, totalPages)}</span> ({totalCount} PAPs)
+                            <span className="font-bold">{Math.max(1, totalPages)}</span>
                         </p>
                         <div className="flex items-center gap-1">
                             <Link

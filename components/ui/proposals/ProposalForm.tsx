@@ -11,6 +11,7 @@ import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepos
 import type { UacsFundingSource } from "@/src/types/uacs";
 import type { FullProjectProposal } from "@/src/types/project_proposals";
 import type { PapOption } from "@/src/db/postgres/repositories/papRepository";
+import { EXPENSE_CLASSES } from "@/src/lib/constants";
 
 interface AttributionYearTier {
     year: number;
@@ -118,15 +119,9 @@ type ProjectProposalField =
 type MatrixField = "cost_by_components" | "foreign_physical_targets";
 
 interface ExpenseRow {
-    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
+    expense_class: keyof typeof EXPENSE_CLASSES;
     fund_category?: "LP" | "Grant" | "GOP" | null; // for BP 203
-    fund_method?:
-        | "cash"
-        | "non_cash"
-        | "non-cash"
-        | "imprest"
-        | "direct_payment"
-        | null; // for BP 203
+    fund_method?: "cash" | "non_cash" | "non-cash" | "imprest" | "direct_payment" | null; // for BP 203
     currency: string;
     amount: number;
 }
@@ -257,7 +252,7 @@ const PrerequisiteRow = ({
     <tr className="border-b border-muted-100 last:border-0 hover:bg-muted-50/30 transition-colors">
         <td className="py-3 px-4 text-sm text-muted-700 font-medium border-r bg-background">
             <input
-                className="w-full bg-transparent text-sm outline-none border-b border-transparent focus:border-secondary-foreground-200"
+                className="w-full bg-transparent text-sm outline-none border-b border-transparent focus:border-secondary-foreground"
                 placeholder={placeholder}
                 value={pre.name ?? ""}
                 onChange={(e) =>
@@ -699,13 +694,13 @@ export default function ProposalForm({
                         general: errorData.error || "Failed to save proposal.",
                     });
                 }
-                window.scrollTo({ top: 0, behavior: "smooth" });
+                window.scrollTo({ top: 0, behavior: "smooth" })
             }
         } catch {
             // toast.error("An unexpected error occurred. Please try again.");
             setErrors({
                 general: "An unexpected error occurred. Please try again.",
-            });
+            })
         } finally {
             setIsLoading(false);
         }
@@ -2172,28 +2167,16 @@ export default function ProposalForm({
                                                                                 type="number"
                                                                                 className="w-full text-right bg-transparent outline-none text-[11px] py-1"
                                                                                 placeholder="0"
+
                                                                                 // disable tier 1 input of current year for new proposal
                                                                                 disabled={(() => {
                                                                                     // find matching attribute cost
-                                                                                    const match =
-                                                                                        attr.attribution_costs.find(
-                                                                                            (
-                                                                                                c,
-                                                                                            ) =>
-                                                                                                c.year ===
-                                                                                                    col.year &&
-                                                                                                c.tier ===
-                                                                                                    col.tier,
-                                                                                        );
+                                                                                    const match = attr.attribution_costs.find(
+                                                                                        c => c.year === col.year && c.tier === col.tier
+                                                                                    )
 
                                                                                     // disable if current year and tier 1
-                                                                                    return (
-                                                                                        match?.tier ===
-                                                                                            1 &&
-                                                                                        match?.year ===
-                                                                                            payload.proposal_year &&
-                                                                                        payload.is_new
-                                                                                    );
+                                                                                    return match?.tier === 1 && match?.year === payload.proposal_year && payload.is_new
                                                                                 })()}
                                                                                 value={
                                                                                     attr.attribution_costs
@@ -2213,8 +2196,7 @@ export default function ProposalForm({
                                                                                                 e.expense_class ===
                                                                                                 expClass,
                                                                                         ) // Added ?. here
-                                                                                        ?.amount ??
-                                                                                    ""
+                                                                                        ?.amount ?? ""
                                                                                 }
                                                                                 onChange={(
                                                                                     e,
@@ -3312,9 +3294,7 @@ export default function ProposalForm({
                                                             <input
                                                                 type="number"
                                                                 className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                                min={
-                                                                    payload.proposal_year
-                                                                }
+                                                                min={payload.proposal_year}
                                                                 value={
                                                                     target.year
                                                                 }
@@ -3523,21 +3503,16 @@ export default function ProposalForm({
                                             <th className="py-4 px-4 border-r w-64">
                                                 Components
                                             </th>
-                                            {(
-                                                [
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ] as const
-                                            ).map((ec) => (
-                                                <th
-                                                    key={ec}
-                                                    className="px-2 text-center border-r min-w-[180px]"
-                                                >
-                                                    {ec}
-                                                </th>
-                                            ))}
+                                            {(["PS", "MOOE", "CO", "FINEX"] as const).map(
+                                                (ec) => (
+                                                    <th
+                                                        key={ec}
+                                                        className="px-2 text-center border-r min-w-[180px]"
+                                                    >
+                                                        {ec}
+                                                    </th>
+                                                ),
+                                            )}
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -3566,14 +3541,12 @@ export default function ProposalForm({
                                                             }
                                                         />
                                                     </td>
-                                                    {(
-                                                        [
-                                                            "PS",
-                                                            "MOOE",
-                                                            "CO",
-                                                            "FINEX",
-                                                        ] as const
-                                                    ).map((ec) => {
+                                                    {([
+                                                        "PS",
+                                                        "MOOE",
+                                                        "CO",
+                                                        "FINEX",
+                                                    ] as const).map((ec) => {
                                                         // HELPER: Find specific cost objects by class, category, and method
                                                         const getCost = (
                                                             cat: "LP" | "GOP",
@@ -3632,7 +3605,8 @@ export default function ProposalForm({
                                                                         </span>
                                                                         <input
                                                                             type="number"
-                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
+                                                                            min={0}
                                                                             value={getCost(
                                                                                 "LP",
                                                                                 "cash",
@@ -3696,10 +3670,8 @@ export default function ProposalForm({
                                                                         </span>
                                                                         <input
                                                                             type="number"
-                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
-                                                                            min={
-                                                                                0
-                                                                            }
+                                                                            className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                            min={0}
                                                                             value={getCost(
                                                                                 "GOP",
                                                                             )}
@@ -3804,12 +3776,58 @@ export default function ProposalForm({
                 </div>
             )}
 
+            {isDbmOverwrite && (
+                <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+                    <label
+                        htmlFor="override-remarks"
+                        className="text-sm font-bold text-secondary-foreground"
+                    >
+                        DBM Override Remarks
+                    </label>
+                    <textarea
+                        id="override-remarks"
+                        value={overrideRemarks}
+                        onChange={(event) => setOverrideRemarks(event.target.value)}
+                        className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                        placeholder="State why this DBM overwrite or change is being made."
+                        required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Required for DBM overrides and recorded in the administrative override history.
+                    </p>
+                </div>
+            )}
+
+            {isDbmOverwrite && (
+                <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+                    <label
+                        htmlFor="override-remarks"
+                        className="text-sm font-bold text-secondary-foreground"
+                    >
+                        DBM Override Remarks
+                    </label>
+                    <textarea
+                        id="override-remarks"
+                        value={overrideRemarks}
+                        onChange={(event) => setOverrideRemarks(event.target.value)}
+                        className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                        placeholder="State why this DBM overwrite or change is being made."
+                        required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Required for DBM overrides and recorded in the administrative override history.
+                    </p>
+                </div>
+            )}
+
             <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 flex justify-end gap-3 z-50">
                 {!isDbmOverwrite && (
                     <button
                         type="submit"
                         disabled={isLoading}
-                        onClick={() => setSubmitAction("draft")}
+                        onClick={() =>
+                            setSubmitAction("draft")
+                        }
                         className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
                     >
                         Save Draft

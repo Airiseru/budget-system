@@ -726,7 +726,6 @@ export async function getAllProposalSummaries(
     userRole: string,
     entityId: string,
     fiscalYear?: number,
-    inDbmModule: boolean = false,
 ) {
     let query = db
         .selectFrom("project_proposals as pp")
@@ -1247,6 +1246,7 @@ export async function swapProposalRanks(
     rankA: number,
     proposalIdB: string,
     rankB: number,
+    proposalYear: number,
 ) {
     void rankA;
     void rankB;
@@ -1258,6 +1258,7 @@ export async function swapProposalRanks(
             .select([
                 "project_proposals.id",
                 "project_proposals.entity_id",
+                "project_proposals.proposal_year",
                 "project_proposals.priority_rank",
                 "project_proposals.root_form_id",
                 "forms.auth_status",
@@ -1275,6 +1276,13 @@ export async function swapProposalRanks(
 
         if (proposalA.entity_id !== entityId || proposalB.entity_id !== entityId) {
             throw new Error("proposal_entity_mismatch");
+        }
+
+        if (
+            proposalA.proposal_year !== proposalYear ||
+            proposalB.proposal_year !== proposalYear
+        ) {
+            throw new Error("proposal_year_mismatch");
         }
 
         if (proposalA.auth_status !== "draft" || proposalB.auth_status !== "draft") {
@@ -1310,6 +1318,7 @@ export async function moveProposalToRank(
     entityId: string,
     proposalId: string,
     targetRank: number,
+    proposalYear: number,
 ) {
     return await db.transaction().execute(async (trx) => {
         const proposals = await trx
@@ -1322,6 +1331,7 @@ export async function moveProposalToRank(
             ])
             .where("project_proposals.entity_id", "=", entityId)
             .where("project_proposals.parent_form_id", "is", null)
+            .where("project_proposals.proposal_year", "=", proposalYear)
             .orderBy("project_proposals.priority_rank", "asc")
             .forUpdate()
             .execute();
@@ -1631,15 +1641,29 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
 
     if (proposals.length === 0) return 0;
 
-    await db
-        .updateTable("forms")
-        .set({ auth_status: "rejected", updated_at: sql`now()` })
-        .where(
-            "id",
-            "in",
-            proposals.map((proposal) => proposal.id),
-        )
-        .execute();
+    await db.transaction().execute(async (trx) => {
+        const proposalIds = proposals.map((proposal) => proposal.id);
+
+        await trx
+            .updateTable("forms")
+            .set({ auth_status: "rejected", updated_at: sql`now()` })
+            .where("id", "in", proposalIds)
+            .execute();
+
+        const linkedPaps = await trx
+            .selectFrom("form_paps")
+            .select("pap_id")
+            .where("form_id", "in", proposalIds)
+            .execute();
+
+        if (linkedPaps.length > 0) {
+            await trx
+                .updateTable("paps")
+                .set({ project_status: "rejected", updated_at: sql`now()` })
+                .where("id", "in", linkedPaps.map((row) => row.pap_id))
+                .execute();
+        }
+    });
 
     return proposals.length;
 }

@@ -5,6 +5,7 @@ import {
     Selectable,
     Updateable
 } from 'kysely'
+import { PAP_PROJECT_STATUS_TYPES } from '../lib/constants'
 
 import { Feature } from 'geojson'
 
@@ -27,7 +28,7 @@ export interface PapTable {
     project_title_code: string | null
     reserved_codes: string | null
     actual_start_date: Date | null
-    project_status: 'draft' | 'proposed' | 'approved' | 'for release' | 'terminating' | 'on-going' | 'completed' | 'rejected' | 'cancelled'
+    project_status: PAP_PROJECT_STATUS_TYPES
     auth_status: string | null
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>

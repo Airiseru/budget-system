@@ -33,6 +33,20 @@ export const PAP_UACS_LABELS: Record<PapUacsFieldName, string> = {
     reserved_codes: 'Reserved Codes',
 }
 
+export type PAP_PROJECT_STATUS_TYPES = 'draft' | 'proposed' | 'approved' | 'for_release' | 'terminating' | 'on_going' | 'completed' | 'rejected' | 'cancelled'
+
+export const PAP_PROJECT_STATUS_LABELS: Record<PAP_PROJECT_STATUS_TYPES, string> = {
+    draft: 'Draft',
+    proposed: 'Proposed',
+    approved: 'Approved',
+    for_release: 'For Release',
+    terminating: 'Terminating',
+    on_going: 'On-Going',
+    completed: 'Completed',
+    rejected: 'Rejected',
+    cancelled: 'Cancelled',
+}
+
 export const FORM_TYPES: Record<string, string> = {
     all: 'All',
     bp_staffing: 'BP Form 204',
