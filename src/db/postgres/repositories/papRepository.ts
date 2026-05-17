@@ -1,6 +1,10 @@
 import { db } from '../database'
 import { Pap, NewPap, PapUpdate } from '../../../types/pap'
-import { sql } from 'kysely'
+import { Kysely, sql, Transaction } from 'kysely'
+import { PAP_PROJECT_STATUS_TYPES } from '@/src/lib/constants'
+import type { Database } from '@/src/types'
+
+type DbExecutor = Kysely<Database> | Transaction<Database>
 
 export type PapListFilters = {
     entity_id?: string
@@ -340,6 +344,31 @@ export async function updatePap(id: string, updateWith: PapUpdate): Promise<Pap 
     }
 
     return null
+}
+
+export async function updatePapProjectStatusForFormWithExecutor(
+    executor: DbExecutor,
+    formId: string,
+    projectStatus: PAP_PROJECT_STATUS_TYPES
+) {
+    const linkedPaps = await executor
+        .selectFrom('form_paps')
+        .select('pap_id')
+        .where('form_id', '=', formId)
+        .execute()
+
+    if (linkedPaps.length === 0) return { updatedCount: 0 }
+
+    const result = await executor
+        .updateTable('paps')
+        .set({
+            project_status: projectStatus,
+            updated_at: new Date(),
+        })
+        .where('id', 'in', linkedPaps.map((row) => row.pap_id))
+        .executeTakeFirst()
+
+    return { updatedCount: Number(result.numUpdatedRows ?? 0) }
 }
 
 // CREATE

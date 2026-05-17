@@ -1567,15 +1567,29 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
 
     if (proposals.length === 0) return 0;
 
-    await db
-        .updateTable("forms")
-        .set({ auth_status: "rejected", updated_at: sql`now()` })
-        .where(
-            "id",
-            "in",
-            proposals.map((proposal) => proposal.id),
-        )
-        .execute();
+    await db.transaction().execute(async (trx) => {
+        const proposalIds = proposals.map((proposal) => proposal.id);
+
+        await trx
+            .updateTable("forms")
+            .set({ auth_status: "rejected", updated_at: sql`now()` })
+            .where("id", "in", proposalIds)
+            .execute();
+
+        const linkedPaps = await trx
+            .selectFrom("form_paps")
+            .select("pap_id")
+            .where("form_id", "in", proposalIds)
+            .execute();
+
+        if (linkedPaps.length > 0) {
+            await trx
+                .updateTable("paps")
+                .set({ project_status: "rejected", updated_at: sql`now()` })
+                .where("id", "in", linkedPaps.map((row) => row.pap_id))
+                .execute();
+        }
+    });
 
     return proposals.length;
 }

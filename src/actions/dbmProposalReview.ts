@@ -3,11 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDbm } from "./admin";
+import { db } from "../db/postgres/database";
 import {
     createBudgetSettingsRepository,
     createEntityRepository,
     createProposalRepository,
     createFormRepository,
+    createPapRepository,
 } from "../db/factory";
 
 const ProposalRepository = createProposalRepository(
@@ -20,6 +22,9 @@ const EntityRepository = createEntityRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const FormRepository = createFormRepository(
+    process.env.DATABASE_TYPE || "postgres",
+);
+const PapRepository = createPapRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const PAGE_SIZE = 20;
@@ -99,6 +104,11 @@ export async function rejectProposalAction(formData: FormData) {
         proposal_id: formData.get("proposal_id"),
     });
     await FormRepository.updateFormAuthStatus(parsed.proposal_id, "rejected");
+    await PapRepository.updatePapProjectStatusForFormWithExecutor(
+        db,
+        parsed.proposal_id,
+        "rejected",
+    );
     revalidatePath("/dbm/proposals");
 }
 
