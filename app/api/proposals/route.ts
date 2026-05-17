@@ -30,7 +30,7 @@ export async function POST(req: Request) {
 
     try {
         const body = await req.json();
-        const { userId, entityId, payload, auth_status } = body;
+        const { userId, entityId, payload, auth_status, existingPapId } = body;
 
         if (!(await isBudgetPrepActiveForYear(payload.proposal_year))) {
             return NextResponse.json(
@@ -44,6 +44,9 @@ export async function POST(req: Request) {
             payload, // Keep this if your repo needs the raw arrays for child tables
             auth_status ?? "draft",
             payload.proposal_year, // this is practically the fiscal year
+            undefined,
+            undefined,
+            existingPapId,
         );
 
         // 3. Audit Logging (Creation)

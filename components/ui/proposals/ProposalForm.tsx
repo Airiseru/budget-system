@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalSchema } from "@/src/lib/validations/proposal.schema";
 import { AlertCircle } from "lucide-react";
@@ -10,6 +10,7 @@ import SearchableComboboxField, {
 import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
 import type { UacsFundingSource } from "@/src/types/uacs";
 import type { FullProjectProposal } from "@/src/types/project_proposals";
+import type { PapOption } from "@/src/db/postgres/repositories/papRepository";
 
 interface AttributionYearTier {
     year: number;
@@ -160,6 +161,7 @@ interface ProjectProposalPayload {
     beneficiaries: string;
 
     is_new: boolean;
+    existing_pap_id: string;
     myca_issuance?: boolean | null;
     is_infrastructure: boolean;
     for_ict?: boolean | null;
@@ -343,6 +345,7 @@ interface WrapperProps {
     activeFiscalYear?: number;
     itemCatalogs?: ItemCatalogOption[];
     fundingSources?: UacsFundingSource[];
+    existingPaps?: PapOption[];
 }
 
 export default function ProposalForm({
@@ -354,6 +357,7 @@ export default function ProposalForm({
     activeFiscalYear,
     itemCatalogs = [],
     fundingSources = [],
+    existingPaps = [],
 }: WrapperProps) {
     const router = useRouter();
     const [isLoading, setIsLoading] = useState(false);
@@ -362,6 +366,13 @@ export default function ProposalForm({
         "draft" | "pending_budget" | "pending_dbm"
     >(isDbmOverwrite ? "pending_dbm" : "draft");
     const [overrideRemarks, setOverrideRemarks] = useState("");
+
+    const availablePaps = existingPaps ?? [];
+    const hasExistingPaps = availablePaps.length > 0;
+
+    const [selectedPapId, setSelectedPapId] = useState<string>(
+        project?.pap_id ?? "",
+    );
 
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         title: project?.title || "",
@@ -374,7 +385,8 @@ export default function ProposalForm({
         description: project?.description || "",
         purpose: project?.purpose || "",
         beneficiaries: project?.beneficiaries || "",
-        is_new: project?.is_new ?? false,
+        is_new: project?.is_new ?? (hasExistingPaps ? false : true),
+        existing_pap_id: project?.pap_id || "",
         myca_issuance: project?.myca_issuance ?? false,
         is_infrastructure: project?.is_infrastructure ?? false,
         for_ict: project?.for_ict ?? false,
@@ -407,6 +419,15 @@ export default function ProposalForm({
                 costs: target.costs ?? [],
             })) || [],
     });
+
+    useEffect(() => {
+        if (!hasExistingPaps) {
+            setPayload((prev) => ({
+                ...prev,
+                is_new: true,
+            }));
+        }
+    }, [hasExistingPaps]);
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -644,6 +665,9 @@ export default function ProposalForm({
                         entityId: entityId,
                         payload: result.data, // Send the version with the calculated total
                         auth_status: submitAction,
+                        existingPapId: payload.is_new
+                            ? undefined
+                            : selectedPapId,
                         isDbm: isDbmOverwrite,
                         overrideRemarks: isDbmOverwrite
                             ? overrideRemarks
@@ -1330,6 +1354,50 @@ export default function ProposalForm({
                                 New Project
                             </span>
                         </label>
+                        {!hasExistingPaps && (
+                            <p className="text-sm text-muted-500">
+                                No existing PAPs available. Proposal is locked
+                                to New Project.
+                            </p>
+                        )}
+                        {payload.is_new === false && (
+                            <div>
+                                <label className="text-sm font-black uppercase text-muted-400">
+                                    Existing PAP
+                                </label>
+
+                                <SearchableComboboxField
+                                    items={availablePaps.map((pap) => ({
+                                        value: pap.id,
+                                        label: pap.title,
+                                    }))}
+                                    value={selectedPapId}
+                                    placeholder="Select Existing PAP"
+                                    searchPlaceholder="Search PAP"
+                                    emptyText="No PAPs found."
+                                    onValueChange={(value) => {
+                                        setSelectedPapId(value);
+
+                                        const selectedPap = availablePaps.find(
+                                            (p) => p.id === value,
+                                        );
+
+                                        if (selectedPap) {
+                                            setPayload((prev) => ({
+                                                ...prev,
+                                                existing_pap_id: value,
+                                            }));
+                                        }
+                                    }}
+                                />
+
+                                {!selectedPapId && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        Please select an existing PAP.
+                                    </p>
+                                )}
+                            </div>
+                        )}
                         {payload.is_new == true && (
                             <label className="ml-6 flex items-center gap-3 cursor-pointer group">
                                 <input

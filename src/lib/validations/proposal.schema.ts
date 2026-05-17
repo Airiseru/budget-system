@@ -25,49 +25,67 @@ const NonZeroCostArraySchema = z
         message: "At least one expense item must have an amount greater than 0",
     });
 
-const BaseSchema = z.object({
-    title: z.string().min(5, "Title must be at least 5 characters"),
-    proposal_year: z
-        .number()
-        .min(1987, "The Fifth Philippine Republic began at 1987"),
-    priority_rank: z.number().int().positive("Rank must be a positive number"),
-    org_outcome_id: z.string().min(1, "Organizational Outcome is required"),
-    description: z.string().min(1, "Description is too short"),
-    purpose: z.string().min(1, "Purpose is too short"),
-    beneficiaries: z.string().min(1, "Beneficiaries field is required"),
-    is_new: z.boolean(),
-    is_infrastructure: z.boolean(),
-    myca_issuance: z.boolean().nullable().optional(),
-    for_ict: z.boolean().nullable().optional(),
-    total_proposal_currency: z.string().default("PHP"),
-    total_proposal_cost: z.coerce.number(),
-    pap_prerequisites: z
-        .array(
-            z.object({
-                name: z.string().min(1, "Prerequisite name is required"),
-                type: z.string().min(1, "Prerequisite type is required"),
-                status: z.string().min(1, "Prerequisite status is required"),
-                remarks: z.string().nullable().optional(),
-            }),
-        )
-        .default([]),
-    cost_by_components: z
-        .array(
-            z.object({
-                component_name: z.string().optional(),
-                item_catalog_id: z.string().min(1, "Item catalog is required"),
-                fund_code: z.string().min(1, "Fund source is required"),
-                specific_description: z.string().nullable().optional(),
-                currency: z.string().min(1, "Currency is required"),
-                proposed_amt: z.coerce
-                    .number()
-                    .min(0.01, "Proposed amount must be greater than 0"),
-                tier: z.literal(2).optional().default(2),
-                costs: NonZeroCostArraySchema,
-            }),
-        )
-        .min(1, "Please add at least one component allocation"),
-});
+const BaseSchema = z
+    .object({
+        title: z.string().min(5, "Title must be at least 5 characters"),
+        proposal_year: z
+            .number()
+            .min(1987, "The Fifth Philippine Republic began at 1987"),
+        priority_rank: z
+            .number()
+            .int()
+            .positive("Rank must be a positive number"),
+        org_outcome_id: z.string().min(1, "Organizational Outcome is required"),
+        description: z.string().min(1, "Description is too short"),
+        purpose: z.string().min(1, "Purpose is too short"),
+        beneficiaries: z.string().min(1, "Beneficiaries field is required"),
+        is_new: z.boolean(),
+        existing_pap_id: z.string().optional(),
+        is_infrastructure: z.boolean(),
+        myca_issuance: z.boolean().nullable().optional(),
+        for_ict: z.boolean().nullable().optional(),
+        total_proposal_currency: z.string().default("PHP"),
+        total_proposal_cost: z.coerce.number(),
+        pap_prerequisites: z
+            .array(
+                z.object({
+                    name: z.string().min(1, "Prerequisite name is required"),
+                    type: z.string().min(1, "Prerequisite type is required"),
+                    status: z
+                        .string()
+                        .min(1, "Prerequisite status is required"),
+                    remarks: z.string().nullable().optional(),
+                }),
+            )
+            .default([]),
+        cost_by_components: z
+            .array(
+                z.object({
+                    component_name: z.string().optional(),
+                    item_catalog_id: z
+                        .string()
+                        .min(1, "Item catalog is required"),
+                    fund_code: z.string().min(1, "Fund source is required"),
+                    specific_description: z.string().nullable().optional(),
+                    currency: z.string().min(1, "Currency is required"),
+                    proposed_amt: z.coerce
+                        .number()
+                        .min(0.01, "Proposed amount must be greater than 0"),
+                    tier: z.literal(2).optional().default(2),
+                    costs: NonZeroCostArraySchema,
+                }),
+            )
+            .min(1, "Please add at least one component allocation"),
+    })
+    .superRefine((data, ctx) => {
+        if (!data.is_new && !data.existing_pap_id) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ["existing_pap_id"],
+                message: "Please select an existing PAP for project expansion",
+            });
+        }
+    });
 
 export const ProposalSchema = z.discriminatedUnion("type", [
     BaseSchema.extend({
@@ -113,15 +131,14 @@ export const ProposalSchema = z.discriminatedUnion("type", [
                         "At least one expense cost with a non-zero amount must be provided across all attributions.",
                 },
             ),
-        local_infrastructure_requirements: z
-            .array(
-                z.object({
-                    description: z.string().min(1, "Description required"),
-                    year: z.number(),
-                    total_amt: z.coerce.number().min(0),
-                    costs: NonZeroCostArraySchema,
-                }),
-            ),
+        local_infrastructure_requirements: z.array(
+            z.object({
+                description: z.string().min(1, "Description required"),
+                year: z.number(),
+                total_amt: z.coerce.number().min(0),
+                costs: NonZeroCostArraySchema,
+            }),
+        ),
         local_physical_targets: z
             .array(
                 z.object({
@@ -141,7 +158,7 @@ export const ProposalSchema = z.discriminatedUnion("type", [
                 code: "custom",
                 path: ["local_infrastructure_requirements"],
                 message: "Please add at least one infrastructure requirement",
-            })
+            });
         }
     }),
 
