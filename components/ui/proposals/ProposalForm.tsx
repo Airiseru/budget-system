@@ -919,7 +919,7 @@ export default function ProposalForm({
                                         }`}
                                         title="Remove allocation"
                                     >
-                                        âœ•
+                                        ✕
                                     </button>
                                 </td>
                             </tr>

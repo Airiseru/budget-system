@@ -1181,6 +1181,7 @@ export async function swapProposalRanks(
     rankA: number,
     proposalIdB: string,
     rankB: number,
+    proposalYear: number,
 ) {
     void rankA;
     void rankB;
@@ -1192,6 +1193,7 @@ export async function swapProposalRanks(
             .select([
                 "project_proposals.id",
                 "project_proposals.entity_id",
+                "project_proposals.proposal_year",
                 "project_proposals.priority_rank",
                 "project_proposals.root_form_id",
                 "forms.auth_status",
@@ -1209,6 +1211,13 @@ export async function swapProposalRanks(
 
         if (proposalA.entity_id !== entityId || proposalB.entity_id !== entityId) {
             throw new Error("proposal_entity_mismatch");
+        }
+
+        if (
+            proposalA.proposal_year !== proposalYear ||
+            proposalB.proposal_year !== proposalYear
+        ) {
+            throw new Error("proposal_year_mismatch");
         }
 
         if (proposalA.auth_status !== "draft" || proposalB.auth_status !== "draft") {
@@ -1244,6 +1253,7 @@ export async function moveProposalToRank(
     entityId: string,
     proposalId: string,
     targetRank: number,
+    proposalYear: number,
 ) {
     return await db.transaction().execute(async (trx) => {
         const proposals = await trx
@@ -1256,6 +1266,7 @@ export async function moveProposalToRank(
             ])
             .where("project_proposals.entity_id", "=", entityId)
             .where("project_proposals.parent_form_id", "is", null)
+            .where("project_proposals.proposal_year", "=", proposalYear)
             .orderBy("project_proposals.priority_rank", "asc")
             .forUpdate()
             .execute();

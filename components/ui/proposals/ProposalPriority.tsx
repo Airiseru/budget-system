@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { ArrowLeft, ArrowRightLeft } from "lucide-react";
@@ -43,6 +43,13 @@ export default function RankManager({
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [targetRank, setTargetRank] = useState("");
 
+    useEffect(() => {
+        setProposals(initialProposals || []);
+        setSelectedIds([]);
+        setTargetRank("");
+        setError(null);
+    }, [initialProposals, viewingYear]);
+
     const selectedProposals = selectedIds
         .map((id) => proposals.find((proposal) => proposal.id === id))
         .filter((proposal): proposal is ProposalSummary => Boolean(proposal));
@@ -61,7 +68,13 @@ export default function RankManager({
     };
 
     const refreshProposals = async () => {
-        const response = await fetch(`/api/proposals?entityId=${entityId}`);
+        const params = new URLSearchParams({ entityId });
+
+        if (viewingYear) {
+            params.set("year", String(viewingYear));
+        }
+
+        const response = await fetch(`/api/proposals?${params.toString()}`);
         const updatedData = await response.json();
         setProposals(updatedData);
     };
@@ -92,6 +105,7 @@ export default function RankManager({
                     rankA: propA.priority_rank,
                     proposalIdB: propB.id,
                     rankB: propB.priority_rank,
+                    proposalYear: propA.proposal_year,
                 }),
             });
 
@@ -136,6 +150,7 @@ export default function RankManager({
                     entityId,
                     proposalId: proposal.id,
                     targetRank: parsedRank,
+                    proposalYear: proposal.proposal_year,
                 }),
             });
 
@@ -185,7 +200,6 @@ export default function RankManager({
                         defaultValue={viewingYear ?? ""}
                         className="rounded border border-border bg-background px-3 py-2 text-sm"
                     >
-                        <option value="">All years</option>
                         {availableYears.map((year) => (
                             <option key={year} value={year}>
                                 FY {year}

@@ -63,16 +63,40 @@ export async function POST(req: Request) {
 
         if (body.action === "move") {
             const { proposalId, targetRank } = body;
+            const requestedYear = Number(body.proposalYear ?? body.proposal_year);
+            const movingProposal = await ProposalRepository.getProjectProposalById(
+                proposalId,
+            );
+
+            if (!movingProposal) {
+                return NextResponse.json(
+                    { error: "Proposal not found" },
+                    { status: 404 },
+                );
+            }
+
+            const proposalYear = Number.isInteger(requestedYear)
+                ? requestedYear
+                : movingProposal.proposal_year;
+
+            if (movingProposal.proposal_year !== proposalYear) {
+                return NextResponse.json(
+                    { error: "Proposal year mismatch" },
+                    { status: 400 },
+                );
+            }
+
             const currentProposals = await ProposalRepository.getAllProposalSummaries(
                 session.user.id,
                 "admin",
                 entityId,
+                proposalYear,
             );
-            const movingProposal = currentProposals.find(
+            const movingSummary = currentProposals.find(
                 (proposal) => proposal.id === proposalId,
             );
 
-            if (!movingProposal) {
+            if (!movingSummary) {
                 return NextResponse.json(
                     { error: "Proposal not found" },
                     { status: 404 },
@@ -83,7 +107,7 @@ export async function POST(req: Request) {
                 1,
                 Math.min(Math.trunc(Number(targetRank)), currentProposals.length),
             );
-            const currentRank = Number(movingProposal.priority_rank);
+            const currentRank = Number(movingSummary.priority_rank);
             const affectedIds = currentProposals
                 .filter((proposal) => {
                     const rank = Number(proposal.priority_rank);
@@ -122,6 +146,7 @@ export async function POST(req: Request) {
                 entityId,
                 proposalId,
                 Number(targetRank),
+                proposalYear,
             );
             const changedIds = result.changedIds;
             const changedPreviousProposals = previousProposals.filter(
@@ -169,6 +194,7 @@ export async function POST(req: Request) {
         }
 
         const { proposalIdA, rankA, proposalIdB, rankB } = body;
+        const requestedYear = Number(body.proposalYear ?? body.proposal_year);
 
         const [proposalA, proposalB] = await Promise.all([
             ProposalRepository.getProjectProposalById(proposalIdA),
@@ -179,6 +205,20 @@ export async function POST(req: Request) {
             return NextResponse.json(
                 { error: "Proposal not found" },
                 { status: 404 },
+            );
+        }
+
+        const proposalYear = Number.isInteger(requestedYear)
+            ? requestedYear
+            : proposalA.proposal_year;
+
+        if (
+            proposalA.proposal_year !== proposalYear ||
+            proposalB.proposal_year !== proposalYear
+        ) {
+            return NextResponse.json(
+                { error: "Proposal year mismatch" },
+                { status: 400 },
             );
         }
 
@@ -198,6 +238,7 @@ export async function POST(req: Request) {
             rankA,
             proposalIdB,
             rankB,
+            proposalYear,
         );
 
         const [updatedA, updatedB] = await Promise.all([

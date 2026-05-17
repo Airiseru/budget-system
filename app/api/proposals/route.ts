@@ -106,6 +106,8 @@ export async function GET(req: Request) {
     try {
         const { searchParams } = new URL(req.url);
         const entityId = searchParams.get("entityId");
+        const yearParam = searchParams.get("year");
+        const fiscalYear = yearParam ? Number(yearParam) : undefined;
 
         if (!entityId) {
             return NextResponse.json(
@@ -114,9 +116,24 @@ export async function GET(req: Request) {
             );
         }
 
+        if (
+            yearParam &&
+            (!Number.isInteger(fiscalYear) || Number(fiscalYear) < 1)
+        ) {
+            return NextResponse.json(
+                { error: "Invalid fiscal year" },
+                { status: 400 },
+            );
+        }
+
         // Fetch using your existing repository function
         // Note: adjust the userId/entityType based on your session logic
-        const data = await repo.getAllProposalSummaries("", "admin", entityId);
+        const data = await repo.getAllProposalSummaries(
+            "",
+            "admin",
+            entityId,
+            fiscalYear,
+        );
 
         return NextResponse.json(data);
     } catch (error) {
