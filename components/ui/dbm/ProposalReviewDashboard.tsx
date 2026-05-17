@@ -1,8 +1,6 @@
 import Link from 'next/link'
 import BackButton from '@/components/ui/BackButton'
-import {
-    completeProposalScopeAction,
-} from '@/src/actions/dbmProposalReview'
+import SignedBulkRejectButton from '@/components/ui/dbm/SignedBulkRejectButton'
 import type { DbmProposalReviewRow } from '@/src/db/postgres/repositories/proposalRepository'
 import { STATUS_COLOR_MAPPER, STATUS_LABELS } from '@/src/lib/constants'
 
@@ -165,30 +163,33 @@ export default function ProposalReviewDashboard(props: Props) {
                                 </div>
                                 {props.selectedStatus === 'pending_dbm' ? (
                                     <div className="flex flex-wrap gap-2">
-                                        {departmentId !== 'none' && (
-                                            <form action={completeProposalScopeAction}>
-                                                <input type="hidden" name="fiscal_year" value={props.viewingYear} />
-                                                <input type="hidden" name="scope_type" value="department" />
-                                                <input type="hidden" name="scope_id" value={departmentId} />
-                                                <button className="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-700">Done with department</button>
-                                            </form>
-                                        )}
-                                        {agencyId !== 'none' && (
-                                            <form action={completeProposalScopeAction}>
-                                                <input type="hidden" name="fiscal_year" value={props.viewingYear} />
-                                                <input type="hidden" name="scope_type" value="agency" />
-                                                <input type="hidden" name="scope_id" value={agencyId} />
-                                                <button className="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-700">Done with agency</button>
-                                            </form>
-                                        )}
-                                        {operatingUnitId !== 'none' && (
-                                            <form action={completeProposalScopeAction}>
-                                                <input type="hidden" name="fiscal_year" value={props.viewingYear} />
-                                                <input type="hidden" name="scope_type" value="operating_unit" />
-                                                <input type="hidden" name="scope_id" value={operatingUnitId} />
-                                                <button className="rounded border border-red-200 px-3 py-2 text-sm font-semibold text-red-700">Done with OU</button>
-                                            </form>
-                                        )}
+                                        {departmentId !== 'none' && props.viewingYear ? (
+                                            <SignedBulkRejectButton
+                                                fiscalYear={props.viewingYear}
+                                                scopeType="department"
+                                                scopeId={departmentId}
+                                                scopeName={departmentName}
+                                                label="Done with department"
+                                            />
+                                        ) : null}
+                                        {agencyId !== 'none' && props.viewingYear ? (
+                                            <SignedBulkRejectButton
+                                                fiscalYear={props.viewingYear}
+                                                scopeType="agency"
+                                                scopeId={agencyId}
+                                                scopeName={agencyName}
+                                                label="Done with agency"
+                                            />
+                                        ) : null}
+                                        {operatingUnitId !== 'none' && props.viewingYear ? (
+                                            <SignedBulkRejectButton
+                                                fiscalYear={props.viewingYear}
+                                                scopeType="operating_unit"
+                                                scopeId={operatingUnitId}
+                                                scopeName={operatingUnitName}
+                                                label="Done with OU"
+                                            />
+                                        ) : null}
                                     </div>
                                 ) : null}
                             </div>
