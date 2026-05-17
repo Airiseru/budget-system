@@ -12,6 +12,7 @@ type DBMFormsSearchParams = Promise<{
     year?: string
     status?: string
     type?: string
+    includeHistory?: string
 }>
 
 export default async function DBMFormsPage({ searchParams }: { searchParams: DBMFormsSearchParams }) {
@@ -34,11 +35,13 @@ export default async function DBMFormsPage({ searchParams }: { searchParams: DBM
     const selectedYear = params.year ? Number(params.year) : undefined
     const selectedStatus = params.status || ''
     const selectedType = params.type || ''
+    const includeVersionHistory = params.includeHistory === 'true'
 
     const {forms, totalPages} = await FormRepository.getAllForms({
         fiscal_year: selectedYear,
         auth_status: selectedStatus || undefined,
         type: selectedType || undefined,
+        includeVersionHistory,
         limit,
         offset
     })
@@ -51,6 +54,7 @@ export default async function DBMFormsPage({ searchParams }: { searchParams: DBM
             selectedYear={selectedYear}
             selectedStatus={selectedStatus}
             selectedType={selectedType}
+            includeVersionHistory={includeVersionHistory}
         />
     )
 }

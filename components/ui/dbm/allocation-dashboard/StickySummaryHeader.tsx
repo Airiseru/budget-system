@@ -4,7 +4,8 @@ import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { BudgetCycle } from '@/src/types/budget_settings'
 import type { AllocationDashboardTotals } from '@/src/db/postgres/repositories/budgetAllocationRepository'
-import { PHASE_LABELS, formatAmount } from './shared'
+import { formatAmount } from './shared'
+import { BUDGET_PHASE_LABELS } from '@/src/lib/constants'
 
 type Props = {
     activeCycle: BudgetCycle | null
@@ -42,7 +43,7 @@ export default function StickySummaryHeader({
                         </h1>
                         {activeCycle ? (
                             <span className="rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-semibold text-white">
-                                {PHASE_LABELS[activeCycle.current_phase]}
+                                {BUDGET_PHASE_LABELS[activeCycle.current_phase]}
                             </span>
                         ) : null}
                     </div>

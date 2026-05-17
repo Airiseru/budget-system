@@ -3,22 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireDbm } from "./admin";
-import { sessionDetails } from "./auth";
 import {
-    createBudgetAllocationRepository,
     createBudgetSettingsRepository,
     createEntityRepository,
-    createFormRepository,
-    createItemRepository,
-    createPapRepository,
     createProposalRepository,
-    createUacsRepository,
+    createFormRepository,
 } from "../db/factory";
 
 const ProposalRepository = createProposalRepository(
-    process.env.DATABASE_TYPE || "postgres",
-);
-const BudgetAllocationRepository = createBudgetAllocationRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const BudgetSettingsRepository = createBudgetSettingsRepository(
@@ -30,28 +22,7 @@ const EntityRepository = createEntityRepository(
 const FormRepository = createFormRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
-const ItemRepository = createItemRepository(
-    process.env.DATABASE_TYPE || "postgres",
-);
-const PapRepository = createPapRepository(
-    process.env.DATABASE_TYPE || "postgres",
-);
-const UacsRepository = createUacsRepository(
-    process.env.DATABASE_TYPE || "postgres",
-);
-
 const PAGE_SIZE = 20;
-
-const amountField = z.preprocess(
-    (value) => Number(value),
-    z.number().min(0, "Recommended amount must be at least 0"),
-);
-
-const AcceptProposalSchema = z.object({
-    proposal_id: z.string().uuid(),
-    pap_code: z.string().uuid("PREXC/PAP is required."),
-    default_fund_code: z.string().min(1, "Fund source is required."),
-});
 
 const RejectProposalSchema = z.object({
     proposal_id: z.string().uuid(),
@@ -78,16 +49,10 @@ export async function loadDbmProposalReview(params: {
         cycles,
         activeCycle,
         entitySegments,
-        paps,
-        itemCatalogs,
-        fundingSources,
     ] = await Promise.all([
         BudgetSettingsRepository.listBudgetCycles(),
         BudgetSettingsRepository.getActiveBudgetCycle(),
         EntityRepository.getAllEntitySegments(true),
-        PapRepository.getPapOptions(),
-        ItemRepository.listAllItemCatalog(),
-        UacsRepository.listFundingSources(),
     ]);
 
     const viewingYear =
@@ -125,101 +90,7 @@ export async function loadDbmProposalReview(params: {
         departments: entitySegments.departments,
         agencies: entitySegments.agencies,
         operatingUnits: entitySegments.operatingUnits,
-        paps,
-        itemCatalogs,
-        fundingSources,
     };
-}
-
-export async function acceptProposalAction(formData: FormData) {
-    await requireDbm();
-    const values = {
-        proposal_id: formData.get("proposal_id"),
-        pap_code: formData.get("pap_code"),
-        default_fund_code: formData.get("default_fund_code"),
-    };
-    const parsed = AcceptProposalSchema.safeParse(values);
-    if (!parsed.success) {
-        throw new Error(
-            parsed.error.issues[0]?.message ?? "Invalid proposal acceptance.",
-        );
-    }
-
-    const proposal = await ProposalRepository.getProjectProposalById(
-        parsed.data.proposal_id,
-    );
-    if (!proposal) throw new Error("Proposal not found.");
-    if (proposal.auth_status !== "pending_dbm") {
-        throw new Error("Only proposals pending DBM can be accepted.");
-    }
-
-    const session = await sessionDetails();
-    if (!session?.user?.id) throw new Error("Missing user session.");
-
-    for (const component of proposal.cost_by_components ?? []) {
-        const componentId = String(component.id);
-        const itemCatalogId = String(component.item_catalog_id ?? "");
-        if (!itemCatalogId) continue;
-
-        const dbmRecAmt = amountField.parse(
-            formData.get(`dbm_rec_amt_${componentId}`) ??
-                component.proposed_amt ??
-                0,
-        );
-        const fundCode = String(
-            component.fund_code || parsed.data.default_fund_code,
-        );
-        const proposedAmt = Number(
-            component.proposed_amt ?? component.costs?.[0]?.amount ?? 0,
-        );
-        const previousYearGaa =
-            await BudgetAllocationRepository.findPreviousYearGaaAmount({
-                fiscalYear: proposal.proposal_year,
-                entityId: proposal.entity_id,
-                papCode: parsed.data.pap_code,
-                fundCode,
-                tier: 2,
-                itemCatalogId,
-            });
-
-        const allocation =
-            await BudgetAllocationRepository.createBudgetAllocation({
-                entity_id: proposal.entity_id,
-                budget_cycle_year: proposal.proposal_year,
-                pap_code: parsed.data.pap_code,
-                fund_code: fundCode,
-                item_catalog_id: itemCatalogId,
-                tier: 2,
-                specific_description: component.specific_description ?? null,
-                currency: component.currency ?? "PHP",
-                release_classification: "unclassified",
-                origin_tag: "agency_proposed",
-                proposed_amt: proposedAmt,
-                dbm_rec_amt: dbmRecAmt,
-                nep_amt: 0,
-                gaa_amt: 0,
-                prev_year_gaa_amt: previousYearGaa,
-                valid_from: null,
-                valid_until: null,
-                auth_status: "proposed",
-            });
-
-        await BudgetAllocationRepository.createAllocationWorkflowLog({
-            allocation_id: allocation.id,
-            workflow_stage: "dbm_review",
-            remarks: `Accepted project proposal "${proposal.title}".`,
-            amt_before: null,
-            amt_after: dbmRecAmt,
-            performed_by: session.user.id,
-        });
-    }
-
-    await FormRepository.updateFormAuthStatus(
-        parsed.data.proposal_id,
-        "approved",
-    );
-    revalidatePath("/dbm/proposals");
-    revalidatePath("/dbm/allocations");
 }
 
 export async function rejectProposalAction(formData: FormData) {

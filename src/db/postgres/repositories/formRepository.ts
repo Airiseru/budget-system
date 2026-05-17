@@ -12,6 +12,7 @@ export interface FormFilters {
     type?: string;
     limit?: number;
     offset?: number;
+    includeVersionHistory?: boolean;
 }
 
 export async function getFormById(id: string) {
@@ -166,14 +167,29 @@ export async function getAllForms(filters: FormFilters = {}) {
             ).as('entity_abbr')
         ])
 
-    // Apply optional filters dynamically
+    // Apply filters that are stable across a form's version family before loading.
     if (filters.fiscal_year) query = query.where('forms.fiscal_year', '=', filters.fiscal_year);
-    if (filters.auth_status) query = query.where('forms.auth_status', '=', filters.auth_status);
     if (filters.type) query = query.where('forms.type', '=', filters.type);
+
+    if (filters.includeVersionHistory && filters.auth_status) {
+        query = query.where('forms.auth_status', '=', filters.auth_status)
+    }
 
     const allForms = await query
         .orderBy('forms.updated_at', 'desc')
         .execute()
+
+    if (filters.includeVersionHistory) {
+        const totalCount = allForms.length
+        const limit = filters.limit ?? 50
+        const offset = filters.offset ?? 0
+
+        return {
+            forms: allForms.slice(offset, offset + limit),
+            totalCount,
+            totalPages: Math.ceil(totalCount / limit)
+        }
+    }
 
     const latestByFamily = new Map<string, (typeof allForms)[number]>()
 
@@ -186,8 +202,12 @@ export async function getAllForms(filters: FormFilters = {}) {
         }
     }
 
-    const latestForms = Array.from(latestByFamily.values())
+    let latestForms = Array.from(latestByFamily.values())
         .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+
+    if (filters.auth_status) {
+        latestForms = latestForms.filter((form) => form.auth_status === filters.auth_status)
+    }
 
     const totalCount = latestForms.length
     const limit = filters.limit ?? 50

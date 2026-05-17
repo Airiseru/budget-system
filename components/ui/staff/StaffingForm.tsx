@@ -259,6 +259,8 @@ export default function StaffForm({
             ...prev,
             positions: [...prev.positions, buildDefaultPosition()],
         }));
+
+        window.scrollTo({ top: 0, behavior: "smooth" })
     };
 
     const removeRow = (index: number) => {
@@ -307,7 +309,7 @@ export default function StaffForm({
             result.error.issues.forEach((err) => {
                 newErrors[err.path.join(".")] = err.message;
             });
-            console.log(newErrors);
+            console.log(`Validation errors: ${JSON.stringify(newErrors)}`);
             setFieldErrors(newErrors);
             setError("Validation failed. Please check the highlighted fields.");
             setIsLoading(false);
@@ -443,7 +445,7 @@ export default function StaffForm({
                             min="1"
                             max="12"
                             className={`w-full p-1 border rounded text-center text-sm ${getFieldStyle(`${path}.months_employed`)}`}
-                            value={pos.months_employed}
+                            value={pos.months_employed ?? ""}
                             onChange={(e) =>
                                 handlePositionChange(
                                     index,
@@ -458,7 +460,7 @@ export default function StaffForm({
                             type="number"
                             min="1"
                             className={`w-full p-1 border rounded text-center text-sm ${getFieldStyle(`${path}.num_positions`)}`}
-                            value={pos.num_positions}
+                            value={pos.num_positions ?? 0}
                             onChange={(e) =>
                                 handlePositionChange(
                                     index,
@@ -475,7 +477,7 @@ export default function StaffForm({
                             max={highestSG}
                             placeholder="SG"
                             className={`w-full p-1 border rounded text-center text-sm ${getFieldStyle(`${path}.salary_grade`)}`}
-                            value={pos.salary_grade}
+                            value={pos.salary_grade ?? ""}
                             onChange={(e) =>
                                 handlePositionChange(
                                     index,
@@ -489,14 +491,14 @@ export default function StaffForm({
                         <input
                             placeholder="Step"
                             className={`w-full p-1 border rounded text-center bg-muted/50 text-sm ${getFieldStyle(`${path}.step`)}`}
-                            value={pos.step}
+                            value={pos.step ?? ""}
                             disabled
                         />
                     </td>
                     <td className="p-2 align-top relative group">
                         <input
                             className={`w-full p-1 border rounded text-center bg-muted/50 font-mono text-sm ${getFieldStyle(`${path}.total_salary`)}`}
-                            value={formatCurrency(pos.total_salary)}
+                            value={formatCurrency(pos.total_salary ?? 0)}
                             disabled
                         />
                         <button
@@ -824,16 +826,16 @@ export default function StaffForm({
                         + Add New Position Row
                     </button>
                     <div className="flex gap-3">
-                        <button
-                            type="submit"
-                            onClick={() =>
-                                setSubmitAction(isDBM ? "pending_dbm" : "draft")
-                            }
-                            className="px-6 py-2 border bg-white text-secondary-foreground rounded-md hover:text-white hover:bg-secondary-foreground transition-all font-medium text-sm"
-                            disabled={isLoading}
-                        >
-                            {isDBM ? "Overwrite Form" : "Save Draft"}
-                        </button>
+                        {!isDBM && (
+                            <button
+                                type="submit"
+                                onClick={() => setSubmitAction("draft")}
+                                className="px-6 py-2 border bg-white text-secondary-foreground rounded-md hover:text-white hover:bg-secondary-foreground transition-all font-medium text-sm"
+                                disabled={isLoading}
+                            >
+                                Save Draft
+                            </button>
+                        )}
                         <button
                             type="submit"
                             onClick={() =>
@@ -847,7 +849,7 @@ export default function StaffForm({
                             {isLoading
                                 ? "Submitting..."
                                 : isDBM
-                                  ? "Finalize Overwrite"
+                                  ? "Overwrite Form"
                                   : "Submit Form"}
                         </button>
                     </div>

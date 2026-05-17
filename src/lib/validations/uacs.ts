@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PAP_UACS_LABELS, PAP_UACS_SEGMENTS, type PapUacsFieldName } from '@/src/lib/constants'
 
 export const UacsCategorySchema = z.enum(['funding_source', 'location', 'object_code'])
 
@@ -46,3 +47,39 @@ export type UacsFormState = {
     fieldErrors?: Record<string, string[] | undefined>
     values?: Record<string, string | undefined>
 } | undefined
+
+export type PapUacsFieldErrors = Partial<Record<PapUacsFieldName, string>>
+
+const papUacsSegment = (field: PapUacsFieldName) => {
+    const length = PAP_UACS_SEGMENTS[field]
+    const label = PAP_UACS_LABELS[field]
+
+    return z
+        .string()
+        .regex(
+            new RegExp(`^\\d{${length}}$`),
+            `${label} must be ${length} digit${length === 1 ? '' : 's'}.`
+        )
+}
+
+export const PapUacsUpdateSchema = z.object({
+    cost_structure_code: papUacsSegment('cost_structure_code'),
+    organizational_outcome_code: papUacsSegment('organizational_outcome_code'),
+    program_code: papUacsSegment('program_code'),
+    subprogram_code: papUacsSegment('subprogram_code'),
+    identifier_code: papUacsSegment('identifier_code'),
+    project_title_code: papUacsSegment('project_title_code'),
+    reserved_codes: papUacsSegment('reserved_codes'),
+}).partial()
+
+export function getPapUacsFieldErrors(error: z.ZodError): PapUacsFieldErrors {
+    const flattened = z.flattenError(error)
+
+    return Object.fromEntries(
+        Object.entries(flattened.fieldErrors)
+            .filter((entry): entry is [PapUacsFieldName, string[]] =>
+                entry[0] in PAP_UACS_SEGMENTS && Array.isArray(entry[1]) && entry[1].length > 0
+            )
+            .map(([field, messages]) => [field, messages[0]])
+    ) as PapUacsFieldErrors
+}

@@ -39,6 +39,7 @@ type Props = {
         user_name: string | null;
     } | null;
     allowClosedCycleAction?: boolean;
+    approvedRedirectHref?: string;
     workflow: Workflow;
     defaultOpen?: boolean;
 };
@@ -59,6 +60,7 @@ export function SignSection({
     pastSignatories = [],
     latestRejection,
     allowClosedCycleAction = false,
+    approvedRedirectHref,
     workflow,
     defaultOpen = true,
 }: Props) {
@@ -185,6 +187,7 @@ export function SignSection({
                                         ) ?? ""
                                     }
                                     allowClosedCycleAction={allowClosedCycleAction}
+                                    approvedRedirectHref={approvedRedirectHref}
                                 />
                                 {getNextStatus(authStatus, workflow, "reject") && (
                                     <RejectButton

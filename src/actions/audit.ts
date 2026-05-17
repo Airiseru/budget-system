@@ -363,7 +363,10 @@ export async function getFormIntegrity(tableName: string, recordId: string) {
         throw new Error('Unauthorized')
     }
 
-    return await AuditRepository.verifyFormIntegrity(tableName, recordId)
+    const res = await AuditRepository.verifyFormIntegrity(tableName, recordId)
+    console.log(res)
+
+    return res
 }
 
 export async function getAllocationSignoffIntegrity(

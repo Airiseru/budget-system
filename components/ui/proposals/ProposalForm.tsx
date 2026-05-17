@@ -9,6 +9,7 @@ import SearchableComboboxField, {
 } from "@/components/ui/dbm/SearchableComboboxField";
 import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
 import type { UacsFundingSource } from "@/src/types/uacs";
+import type { FullProjectProposal } from "@/src/types/project_proposals";
 
 interface AttributionYearTier {
     year: number;
@@ -117,8 +118,14 @@ type MatrixField = "cost_by_components" | "foreign_physical_targets";
 
 interface ExpenseRow {
     expense_class: "PS" | "MOOE" | "CO" | "FINEX";
-    fund_category?: "LP" | "Grant" | "GOP"; // for BP 203
-    fund_method?: "cash" | "non_cash" | "imprest" | "direct_payment"; // for BP 203
+    fund_category?: "LP" | "Grant" | "GOP" | null; // for BP 203
+    fund_method?:
+        | "cash"
+        | "non_cash"
+        | "non-cash"
+        | "imprest"
+        | "direct_payment"
+        | null; // for BP 203
     currency: string;
     amount: number;
 }
@@ -183,9 +190,35 @@ interface ProjectProposalPayload {
     foreign_physical_targets: { name: string; costs: ExpenseRow[] }[];
 }
 
+type ProposalFormProject = Omit<
+    FullProjectProposal,
+    | "cost_by_components"
+    | "foreign_physical_targets"
+    | "pap_prerequisites"
+    | "local_locations"
+    | "local_financial_attributions"
+    | "local_physical_targets"
+    | "local_infrastructure_requirements"
+    | "foreign_financial_targets"
+> & {
+    pap_prerequisites?: ProjectProposalPayload["pap_prerequisites"];
+    cost_by_components?: (Omit<CostingComponent, "costs"> & {
+        costs?: ExpenseRow[];
+    })[];
+    local_locations?: ProjectProposalPayload["local_locations"];
+    local_financial_attributions?: ProjectProposalPayload["local_financial_attributions"];
+    local_physical_targets?: ProjectProposalPayload["local_physical_targets"];
+    local_infrastructure_requirements?: ProjectProposalPayload["local_infrastructure_requirements"];
+    foreign_financial_targets?: ProjectProposalPayload["foreign_financial_targets"];
+    foreign_physical_targets?: (Omit<
+        ProjectProposalPayload["foreign_physical_targets"][number],
+        "costs"
+    > & { costs?: ExpenseRow[] })[];
+};
+
 type ProposalPrerequisite = ProjectProposalPayload["pap_prerequisites"][number];
 type ArrayFieldKey = {
-    [K in keyof ProjectProposalPayload]: ProjectProposalPayload[K] extends any[]
+    [K in keyof ProjectProposalPayload]: ProjectProposalPayload[K] extends unknown[]
         ? K
         : never;
 }[keyof ProjectProposalPayload] &
@@ -199,6 +232,7 @@ type NonArrayFieldKey = Exclude<keyof ProjectProposalPayload, ArrayFieldKey>;
 
 interface PrerequisiteRowProps {
     pre: ProposalPrerequisite;
+    placeholder: string;
     index: number;
     updateRow: <K extends ArrayFieldKey & keyof ProjectProposalPayload>(
         field: K,
@@ -213,6 +247,7 @@ interface PrerequisiteRowProps {
 
 const PrerequisiteRow = ({
     pre,
+    placeholder,
     index,
     updateRow,
     removeRow,
@@ -221,7 +256,7 @@ const PrerequisiteRow = ({
         <td className="py-3 px-4 text-sm text-muted-700 font-medium border-r bg-background">
             <input
                 className="w-full bg-transparent text-sm outline-none border-b border-transparent focus:border-secondary-foreground-200"
-                placeholder="Prerequisite"
+                placeholder={placeholder}
                 value={pre.name ?? ""}
                 onChange={(e) =>
                     updateRow("pap_prerequisites", index, {
@@ -300,7 +335,7 @@ const PrerequisiteRow = ({
 );
 
 interface WrapperProps {
-    project?: any;
+    project?: ProposalFormProject;
     type: "202" | "203";
     userId: string;
     entityName: string;
@@ -326,6 +361,7 @@ export default function ProposalForm({
     const [submitAction, setSubmitAction] = useState<
         "draft" | "pending_budget" | "pending_dbm"
     >(isDbmOverwrite ? "pending_dbm" : "draft");
+    const [overrideRemarks, setOverrideRemarks] = useState("");
 
     const [payload, setPayload] = useState<ProjectProposalPayload>({
         title: project?.title || "",
@@ -347,7 +383,11 @@ export default function ProposalForm({
         type: type,
 
         pap_prerequisites: project?.pap_prerequisites || DEFAULT_PREREQUISITES,
-        cost_by_components: project?.cost_by_components || [],
+        cost_by_components:
+            project?.cost_by_components?.map((component) => ({
+                ...component,
+                costs: component.costs ?? [],
+            })) || [],
 
         local_locations: project?.local_locations?.length
             ? project?.local_locations?.length > 0
@@ -361,7 +401,11 @@ export default function ProposalForm({
         local_infrastructure_requirements:
             project?.local_infrastructure_requirements || [],
         foreign_financial_targets: project?.foreign_financial_targets || [],
-        foreign_physical_targets: project?.foreign_physical_targets || [],
+        foreign_physical_targets:
+            project?.foreign_physical_targets?.map((target) => ({
+                ...target,
+                costs: target.costs ?? [],
+            })) || [],
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -386,7 +430,7 @@ export default function ProposalForm({
     const getErrorsForPath = (pathPrefix: string) => {
         return Object.entries(errors)
             .filter(([key]) => key.startsWith(pathPrefix))
-            .map(([_, message]) => message);
+            .map(([, message]) => message);
     };
 
     const getFriendlyErrorMessage = (path: string, message: string) => {
@@ -415,7 +459,7 @@ export default function ProposalForm({
         const match = path.match(/^(.+?)\.(\d+)\.(.+)$/);
 
         if (match) {
-            const [_, tableKey, index, field] = match;
+            const [, tableKey, index, field] = match;
             const tableName = tableNames[tableKey] || toTitleCase(tableKey);
             const fieldName = toTitleCase(field);
             const position = ordinal(parseInt(index) + 1);
@@ -490,8 +534,7 @@ export default function ProposalForm({
 
     const removeRow = <K extends ArrayFieldKey>(field: K, index: number) => {
         setPayload((prev) => {
-            // We cast to any[] here because we know K is an ArrayFieldKey
-            const currentArray = prev[field] as any[];
+            const currentArray = prev[field] as unknown[];
             if (Array.isArray(currentArray)) {
                 return {
                     ...prev,
@@ -599,14 +642,24 @@ export default function ProposalForm({
                     body: JSON.stringify({
                         userId,
                         entityId: entityId,
-                        payload: finalPayload, // Send the version with the calculated total
+                        payload: result.data, // Send the version with the calculated total
                         auth_status: submitAction,
+                        isDbm: isDbmOverwrite,
+                        overrideRemarks: isDbmOverwrite
+                            ? overrideRemarks
+                            : undefined,
                     }),
                 },
             );
 
             if (res.ok) {
-                router.push("/forms/proposals");
+                const data = await res.json();
+                router.refresh();
+                router.push(
+                    data.papId || project?.id
+                        ? `/forms/proposals/${data.formId ?? project?.id}`
+                        : "/forms/proposals",
+                );
             } else {
                 const errorData = await res.json();
                 if (
@@ -617,10 +670,18 @@ export default function ProposalForm({
                         priority_rank:
                             "This priority rank is already taken by another proposal.",
                     });
+                } else {
+                    setErrors({
+                        general: errorData.error || "Failed to save proposal.",
+                    });
                 }
+                window.scrollTo({ top: 0, behavior: "smooth" });
             }
         } catch {
             // toast.error("An unexpected error occurred. Please try again.");
+            setErrors({
+                general: "An unexpected error occurred. Please try again.",
+            });
         } finally {
             setIsLoading(false);
         }
@@ -654,7 +715,7 @@ export default function ProposalForm({
 
     const handleMatrixChange203 = (
         componentIdx: number,
-        expenseClass: string,
+        expenseClass: "PS" | "MOOE" | "CO" | "FINEX",
         category: "LP" | "Grant" | "GOP",
         value: number,
         field: MatrixField,
@@ -680,7 +741,7 @@ export default function ProposalForm({
                 };
             } else {
                 currentCosts.push({
-                    expense_class: expenseClass as any,
+                    expense_class: expenseClass,
                     fund_category: category,
                     fund_method: method,
                     currency: "PHP",
@@ -1044,7 +1105,7 @@ export default function ProposalForm({
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
-                            value={payload.priority_rank}
+                            value={payload.priority_rank || ""}
                             onChange={(e) =>
                                 setPayload({
                                     ...payload,
@@ -1226,6 +1287,7 @@ export default function ProposalForm({
                                         <PrerequisiteRow
                                             key={`auth-${i}`}
                                             pre={pre}
+                                            placeholder="Approver"
                                             index={i}
                                             updateRow={updateRow}
                                             removeRow={removeRow}
@@ -1266,6 +1328,7 @@ export default function ProposalForm({
                                         <PrerequisiteRow
                                             key={`doc-${i}`}
                                             pre={pre}
+                                            placeholder="Document"
                                             index={i}
                                             updateRow={updateRow}
                                             removeRow={removeRow}
@@ -1394,7 +1457,7 @@ export default function ProposalForm({
                                                         </td>
                                                         <td className="py-3 px-4 align-top">
                                                             <textarea
-                                                                className="min-h-12 w-full rounded border border-muted-200 bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                className="min-h-12 w-full rounded border border-muted-200 bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
                                                                 placeholder="Optional description"
                                                                 value={
                                                                     comp.specific_description ??
@@ -1416,7 +1479,7 @@ export default function ProposalForm({
                                                         </td>
                                                         <td className="py-3 px-2 align-top">
                                                             <input
-                                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-sm uppercase outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-sm uppercase outline-none focus:ring-1 focus:ring-secondary-foreground"
                                                                 value={
                                                                     comp.currency ??
                                                                     "PHP"
@@ -1440,7 +1503,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 min="0"
                                                                 step="0.01"
-                                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-right text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-right text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
                                                                 value={
                                                                     comp.proposed_amt ??
                                                                     ""
@@ -2041,6 +2104,29 @@ export default function ProposalForm({
                                                                                 type="number"
                                                                                 className="w-full text-right bg-transparent outline-none text-[11px] py-1"
                                                                                 placeholder="0"
+                                                                                // disable tier 1 input of current year for new proposal
+                                                                                disabled={(() => {
+                                                                                    // find matching attribute cost
+                                                                                    const match =
+                                                                                        attr.attribution_costs.find(
+                                                                                            (
+                                                                                                c,
+                                                                                            ) =>
+                                                                                                c.year ===
+                                                                                                    col.year &&
+                                                                                                c.tier ===
+                                                                                                    col.tier,
+                                                                                        );
+
+                                                                                    // disable if current year and tier 1
+                                                                                    return (
+                                                                                        match?.tier ===
+                                                                                            1 &&
+                                                                                        match?.year ===
+                                                                                            payload.proposal_year &&
+                                                                                        payload.is_new
+                                                                                    );
+                                                                                })()}
                                                                                 value={
                                                                                     attr.attribution_costs
                                                                                         .find(
@@ -2059,8 +2145,8 @@ export default function ProposalForm({
                                                                                                 e.expense_class ===
                                                                                                 expClass,
                                                                                         ) // Added ?. here
-                                                                                        ?.amount ||
-                                                                                    0
+                                                                                        ?.amount ??
+                                                                                    ""
                                                                                 }
                                                                                 onChange={(
                                                                                     e,
@@ -2398,6 +2484,7 @@ export default function ProposalForm({
                                         className="w-24 border-b text-sm"
                                         placeholder="Year"
                                         value={target.year}
+                                        min={payload.proposal_year}
                                         onChange={(e) =>
                                             updateRow(
                                                 "local_physical_targets",
@@ -2485,12 +2572,14 @@ export default function ProposalForm({
                                                 <th className="py-4 px-4 border-r w-64">
                                                     Components
                                                 </th>
-                                                {[
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ].map((ec) => (
+                                                {(
+                                                    [
+                                                        "PS",
+                                                        "MOOE",
+                                                        "CO",
+                                                        "FINEX",
+                                                    ] as const
+                                                ).map((ec) => (
                                                     <th
                                                         key={ec}
                                                         className="px-2 text-center border-r min-w-[180px]"
@@ -2529,12 +2618,14 @@ export default function ProposalForm({
                                                                 }
                                                             />
                                                         </td>
-                                                        {[
-                                                            "PS",
-                                                            "MOOE",
-                                                            "CO",
-                                                            "FINEX",
-                                                        ].map((ec) => {
+                                                        {(
+                                                            [
+                                                                "PS",
+                                                                "MOOE",
+                                                                "CO",
+                                                                "FINEX",
+                                                            ] as const
+                                                        ).map((ec) => {
                                                             // HELPER: Find specific cost objects by class, category, and method
                                                             const getCost = (
                                                                 cat:
@@ -2553,7 +2644,11 @@ export default function ProposalForm({
                                                                         (cat !==
                                                                             "LP" ||
                                                                             c.fund_method ===
-                                                                                method),
+                                                                                method ||
+                                                                            (method ===
+                                                                                "non_cash" &&
+                                                                                c.fund_method ===
+                                                                                    "non-cash")),
                                                                 )?.amount || "";
 
                                                             const lpCash =
@@ -2843,6 +2938,9 @@ export default function ProposalForm({
                                                             <input
                                                                 type="number"
                                                                 className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                min={
+                                                                    payload.proposal_year
+                                                                }
                                                                 value={
                                                                     target.year
                                                                 }
@@ -2866,6 +2964,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.lp_imprest ||
                                                                     ""
@@ -2876,12 +2975,13 @@ export default function ProposalForm({
                                                                         i,
                                                                         {
                                                                             lp_imprest:
-                                                                                parseInt(
+                                                                                Number(
                                                                                     e
                                                                                         .target
-                                                                                        .value,
+                                                                                        .value ||
+                                                                                        0,
                                                                                 ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -2891,6 +2991,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.lp_direct ||
                                                                     ""
@@ -2901,12 +3002,13 @@ export default function ProposalForm({
                                                                         i,
                                                                         {
                                                                             lp_direct:
-                                                                                parseInt(
+                                                                                Number(
                                                                                     e
                                                                                         .target
-                                                                                        .value,
+                                                                                        .value ||
+                                                                                        0,
                                                                                 ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -2916,6 +3018,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.grant ||
                                                                     ""
@@ -2925,12 +3028,13 @@ export default function ProposalForm({
                                                                         "foreign_financial_targets",
                                                                         i,
                                                                         {
-                                                                            grant: parseInt(
+                                                                            grant: Number(
                                                                                 e
                                                                                     .target
-                                                                                    .value,
+                                                                                    .value ||
+                                                                                    0,
                                                                             ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -2940,6 +3044,7 @@ export default function ProposalForm({
                                                                 type="number"
                                                                 className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                 placeholder="0"
+                                                                min={0}
                                                                 value={
                                                                     target.gop ||
                                                                     ""
@@ -2949,12 +3054,13 @@ export default function ProposalForm({
                                                                         "foreign_financial_targets",
                                                                         i,
                                                                         {
-                                                                            gop: parseInt(
+                                                                            gop: Number(
                                                                                 e
                                                                                     .target
-                                                                                    .value,
+                                                                                    .value ||
+                                                                                    0,
                                                                             ),
-                                                                        } as any,
+                                                                        },
                                                                     )
                                                                 }
                                                             />
@@ -3043,16 +3149,21 @@ export default function ProposalForm({
                                             <th className="py-4 px-4 border-r w-64">
                                                 Components
                                             </th>
-                                            {["PS", "MOOE", "CO", "FINEX"].map(
-                                                (ec) => (
-                                                    <th
-                                                        key={ec}
-                                                        className="px-2 text-center border-r min-w-[180px]"
-                                                    >
-                                                        {ec}
-                                                    </th>
-                                                ),
-                                            )}
+                                            {(
+                                                [
+                                                    "PS",
+                                                    "MOOE",
+                                                    "CO",
+                                                    "FINEX",
+                                                ] as const
+                                            ).map((ec) => (
+                                                <th
+                                                    key={ec}
+                                                    className="px-2 text-center border-r min-w-[180px]"
+                                                >
+                                                    {ec}
+                                                </th>
+                                            ))}
                                             <th className="w-10"></th>
                                         </tr>
                                     </thead>
@@ -3076,17 +3187,19 @@ export default function ProposalForm({
                                                                         name: e
                                                                             .target
                                                                             .value,
-                                                                    } as any,
+                                                                    },
                                                                 )
                                                             }
                                                         />
                                                     </td>
-                                                    {[
-                                                        "PS",
-                                                        "MOOE",
-                                                        "CO",
-                                                        "FINEX",
-                                                    ].map((ec) => {
+                                                    {(
+                                                        [
+                                                            "PS",
+                                                            "MOOE",
+                                                            "CO",
+                                                            "FINEX",
+                                                        ] as const
+                                                    ).map((ec) => {
                                                         // HELPER: Find specific cost objects by class, category, and method
                                                         const getCost = (
                                                             cat: "LP" | "GOP",
@@ -3103,7 +3216,11 @@ export default function ProposalForm({
                                                                     (cat !==
                                                                         "LP" ||
                                                                         c.fund_method ===
-                                                                            method),
+                                                                            method ||
+                                                                        (method ===
+                                                                            "non_cash" &&
+                                                                            c.fund_method ===
+                                                                                "non-cash")),
                                                             )?.amount || "";
 
                                                         const lpCash = Number(
@@ -3172,7 +3289,10 @@ export default function ProposalForm({
                                                                         </span>
                                                                         <input
                                                                             type="number"
-                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
+                                                                            min={
+                                                                                0
+                                                                            }
                                                                             value={getCost(
                                                                                 "LP",
                                                                                 "non_cash",
@@ -3202,7 +3322,10 @@ export default function ProposalForm({
                                                                         </span>
                                                                         <input
                                                                             type="number"
-                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
+                                                                            min={
+                                                                                0
+                                                                            }
                                                                             value={getCost(
                                                                                 "GOP",
                                                                             )}
@@ -3279,86 +3402,45 @@ export default function ProposalForm({
                             </div>
                         )}
                     </div>
+                </div>
+            )}
 
-                    {/* Physical Targets Section Styled similarly */}
-                    {/* <div className="bg-background rounded-xl border shadow-sm overflow-hidden">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Foreign Physical Targets
-                            </h3>
-                            <button
-                                type="button"
-                                onClick={() =>
-                                    addRow("foreign_physical_targets", {
-                                        name: "",
-                                        costs: [],
-                                    })
-                                }
-                                className="text-secondary-foreground text-sm font-bold hover:underline"
-                            >
-                                + ADD TARGET
-                            </button>
-                        </div>
-                        
-                        <div className="p-4 space-y-2">
-                            {payload.foreign_physical_targets.map(
-                                (target, i) => (
-                                    <div
-                                        key={i}
-                                        className="flex gap-4 items-center"
-                                    >
-                                        <input
-                                            className="flex-1 border-b border-muted-200 py-2 outline-none text-sm focus:border-secondary-foreground-400 transition-colors"
-                                            placeholder="Target Name/Description"
-                                            value={target.name}
-                                            onChange={(e) =>
-                                                updateRow(
-                                                    "foreign_physical_targets",
-                                                    i,
-                                                    {
-                                                        name: e.target.value,
-                                                    },
-                                                )
-                                            }
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                removeRow(
-                                                    "foreign_physical_targets",
-                                                    i,
-                                                )
-                                            }
-                                            className="text-red-400 hover:text-red-600"
-                                        >
-                                            ✕
-                                        </button>
-                                    </div>
-                                ),
-                            )}
-                            {payload.foreign_physical_targets.length === 0 && (
-                                <div className="py-4 text-center text-muted-400 text-sm italic">
-                                    No physical targets added.
-                                </div>
-                            )}
-                        </div>
-                    </div> */}
+            {isDbmOverwrite && (
+                <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+                    <label
+                        htmlFor="override-remarks"
+                        className="text-sm font-bold text-secondary-foreground"
+                    >
+                        DBM Override Remarks
+                    </label>
+                    <textarea
+                        id="override-remarks"
+                        value={overrideRemarks}
+                        onChange={(event) =>
+                            setOverrideRemarks(event.target.value)
+                        }
+                        className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
+                        placeholder="State why this DBM overwrite or change is being made."
+                        required
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Required for DBM overrides and recorded in the
+                        administrative override history.
+                    </p>
                 </div>
             )}
 
             <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 flex justify-end gap-3 z-50">
-                <button
-                    type="submit"
-                    disabled={isLoading}
-                    onClick={() =>
-                        setSubmitAction(
-                            isDbmOverwrite ? "pending_dbm" : "draft",
-                        )
-                    }
-                    className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
-                >
-                    {isDbmOverwrite ? "Save Overwrite" : "Save Draft"}
-                </button>
+                {!isDbmOverwrite && (
+                    <button
+                        type="submit"
+                        disabled={isLoading}
+                        onClick={() => setSubmitAction("draft")}
+                        className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
+                    >
+                        Save Draft
+                    </button>
+                )}
                 <button
                     type="submit"
                     disabled={isLoading}
@@ -3369,7 +3451,7 @@ export default function ProposalForm({
                     }
                     className="px-6 py-2 bg-secondary-foreground-600 text-primary-foreground font-bold rounded-lg shadow-md hover:bg-secondary-foreground-700"
                 >
-                    {isDbmOverwrite ? "Finalize Overwrite" : "Submit Proposal"}
+                    {isDbmOverwrite ? "Overwrite Form" : "Submit Proposal"}
                 </button>
             </div>
         </form>

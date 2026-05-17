@@ -11,7 +11,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('record_id', 'varchar')
         .addColumn('payload', 'jsonb')
         .addColumn('changed_at', 'timestamptz', (col) => col.defaultTo(sql`now()`).notNull())
-        .addColumn('nonce', 'varchar')
         .addColumn('prev_hash', 'text')
         .addColumn('hash', 'text', (col) => col.notNull())
         .addColumn('public_key_snapshot', 'text')
@@ -28,12 +27,12 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .execute()
 
     // Create composite index for search queries
-    await db.schema.createIndex('audit_logs_target_idx')
+    await db.schema.createIndex('idx_audit_logs_target_changed_at_idx')
         .on('audit_logs')
-        .columns(['table_name', 'record_id'])
+        .columns(['table_name', 'record_id', 'changed_at'])
         .execute()
 
-    await db.schema.createIndex('audit_logs_entity_changed_at_idx')
+    await db.schema.createIndex('idx_audit_logs_entity_changed_at_idx')
         .on('audit_logs')
         .columns(['entity_id', 'changed_at'])
         .execute()
@@ -106,10 +105,10 @@ export async function down(db: Kysely<unknown>): Promise<void> {
     await sql`DROP TRIGGER IF EXISTS trg_signatories_append_only ON signatories`.execute(db)
 
     // Drop indexes
-    await db.schema.dropIndex('idx_audit_logs_entity_id').execute()
-    await db.schema.dropIndex('audit_logs_entity_changed_at_idx').execute()
+    await db.schema.dropIndex('idx_audit_logs_target_changed_at_idx').execute()
+    await db.schema.dropIndex('idx_audit_logs_entity_changed_at_idx').execute()
     await db.schema.dropIndex('idx_merkle_roots_entity_id_created_at').execute()
-    await db.schema.dropIndex('audit_logs_target_idx').execute()
+    await db.schema.dropIndex('idx_audit_logs_entity_id').execute()
     await db.schema.dropIndex('idx_audit_logs_changed_at').execute()
 
     // Drop tables

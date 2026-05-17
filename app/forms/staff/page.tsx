@@ -35,13 +35,15 @@ export default async function StaffingPage() {
         const summariesWithDisplayStatus = await Promise.all(
             data.map(async (summary) => {
                 const versionFamily = await FormRepo.getFormVersionFamily(summary.id)
+                const latestVersion = versionFamily.forms.at(-1)
                 const displayStatus = versionFamily.forms.some((form) => form.auth_status === 'approved')
                     ? 'approved'
                     : summary.auth_status
 
                 return {
                     ...summary,
-                    displayStatus
+                    displayStatus,
+                    latestFormId: latestVersion?.id ?? summary.id
                 }
             })
         )
@@ -93,7 +95,7 @@ export default async function StaffingPage() {
                 <h1 className="text-2xl font-bold mb-6">Staffing Submissions</h1>
                 <div className="grid gap-4">
                     {summariesWithDisplayStatus.map((summary) => (
-                        <Link href={`/forms/staff/${summary.id}`} key={summary.id}>
+                        <Link href={`/forms/staff/${summary.latestFormId}`} key={summary.id}>
                             <div className="border rounded-lg p-4 hover:bg-accent transition-colors">
                                 <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-3">

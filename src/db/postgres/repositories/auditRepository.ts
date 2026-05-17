@@ -1,5 +1,5 @@
 import { db } from "../database"
-import { Kysely, Transaction } from "kysely"
+import { Kysely, sql, Transaction } from "kysely"
 import {
     sha256,
     computeAuditEntryHash,
@@ -25,6 +25,7 @@ import isEqual from "lodash/isEqual"
 import { fetchHydratedFormState } from "./formHydrator"
 import { cleanDataBasedOnTable } from "@/src/lib/validations"
 import { Diff } from "@/src/types/audit"
+import type { Signatory } from "@/src/types/keys"
 import type { Database } from "@/src/types"
 import { getNextStatus, getWorkflow, type Workflow } from "@/src/lib/workflows"
 import * as keyRepository from "./keyRepository"
@@ -34,6 +35,26 @@ type DbExecutor = Kysely<Database> | Transaction<Database>
 type SignedAuditLog = AuditLog & {
     event_type: SignedAuditEventType
     payload: FormSignaturePayload | null
+}
+
+async function runInTransaction<T>(
+    executor: DbExecutor,
+    callback: (trx: Transaction<Database>) => Promise<T>
+): Promise<T> {
+    if (executor.isTransaction) {
+        return await callback(executor as Transaction<Database>)
+    }
+
+    return await executor.transaction().execute(callback)
+}
+
+async function acquireEntityAuditAdvisoryLock(
+    executor: Transaction<Database>,
+    entityId: string
+) {
+    await sql`
+        select pg_advisory_xact_lock(hashtextextended(${entityId}, 0))
+    `.execute(executor)
 }
 
 function isSignedAuditEvent(eventType: AuditEventType): eventType is SignedAuditEventType {
@@ -48,13 +69,21 @@ function didTimestampsMatch(left: Date | string, right: Date | string) {
     return new Date(left).getTime() === new Date(right).getTime()
 }
 
-function getSourceRecordIdFromSignaturePayload(signaturePayload: string): string | null {
-    try {
-        const parsed = JSON.parse(signaturePayload) as { record_id?: unknown }
-        return typeof parsed.record_id === 'string' ? parsed.record_id : null
-    } catch {
-        return null
-    }
+function findMatchingPreloadedSignatory(params: {
+    signatories: Signatory[]
+    userId: string
+    eventType: SignedAuditEventType
+    signature: string
+    changedAt: Date | string
+}) {
+    const changedAtTime = new Date(params.changedAt).getTime()
+
+    return params.signatories.find((signatory) =>
+        signatory.user_id === params.userId &&
+        signatory.event_type === params.eventType &&
+        signatory.signature === params.signature &&
+        new Date(signatory.created_at).getTime() === changedAtTime
+    ) ?? null
 }
 
 async function verifySignedAuditEventAgainstSignatory(params: {
@@ -63,8 +92,9 @@ async function verifySignedAuditEventAgainstSignatory(params: {
     reconstructedState: unknown
     tableName: string
     usedSignatoryIds: Set<string>
+    signatories: Signatory[]
 }) {
-    const { log, workflow, reconstructedState, tableName, usedSignatoryIds } = params
+    const { log, workflow, reconstructedState, tableName, usedSignatoryIds, signatories } = params
     const payload = log.payload
 
     if (!payload) {
@@ -76,14 +106,13 @@ async function verifySignedAuditEventAgainstSignatory(params: {
         }
     }
 
-    const matchingSignatory = await keyRepository.getMatchingSignatoryForAuditEvent(
-        'forms',
-        log.record_id ?? '',
-        log.user_id,
-        log.event_type,
-        log.signature ?? '',
-        new Date(log.changed_at)
-    )
+    const matchingSignatory = findMatchingPreloadedSignatory({
+        signatories,
+        userId: log.user_id,
+        eventType: log.event_type,
+        signature: log.signature ?? '',
+        changedAt: log.changed_at,
+    })
 
     if (!matchingSignatory || usedSignatoryIds.has(matchingSignatory.id)) {
         return {
@@ -123,6 +152,7 @@ async function verifySignedAuditEventAgainstSignatory(params: {
     const signatorySnapshotMatches =
         matchingSignatory.target_table === 'forms' &&
         matchingSignatory.target_record_id === (log.record_id ?? '') &&
+        matchingSignatory.source_record_id === (log.record_id ?? '') &&
         matchingSignatory.user_id === log.user_id &&
         matchingSignatory.event_type === log.event_type &&
         matchingSignatory.signature === log.signature &&
@@ -154,85 +184,98 @@ async function verifySignedAuditEventAgainstSignatory(params: {
     }
 }
 
-async function createLogWithExecutor(
+export async function createLogWithExecutor(
     executor: DbExecutor,
     log: Omit<NewAuditLog, 'hash'>,
     signingPayload: SignaturePayload | string | null
 ): Promise<AuditLog> {
-    const editedLog: NewAuditLog = {
-        ...log,
-        table_name: log.table_name ?? null,
-        record_id: log.record_id ?? null,
-        payload: log.payload ?? null,
-        public_key_snapshot: log.public_key_snapshot ?? null,
-        signature: log.signature ?? null,
-        hash: ''
-    }
-
-    const requiresSignature = REQUIRES_SIGNATURE.includes(log.event_type as AuditEventType)
-
-    if (requiresSignature) {
-        if (!log.public_key_snapshot || !log.signature || !signingPayload) {
-            throw new Error(`${log.event_type} requires a digital signature`)
+    return await runInTransaction(executor, async (trx) => {
+        const editedLog: NewAuditLog = {
+            ...log,
+            table_name: log.table_name ?? null,
+            record_id: log.record_id ?? null,
+            payload: log.payload ?? null,
+            public_key_snapshot: log.public_key_snapshot ?? null,
+            signature: log.signature ?? null,
+            hash: ''
         }
 
-        const isValid = await verifySignature(
-            signingPayload,
-            log.signature,
-            log.public_key_snapshot
-        )
+        const requiresSignature = REQUIRES_SIGNATURE.includes(log.event_type as AuditEventType)
 
-        if (!isValid) throw new Error('Invalid digital signature')
-    }
+        if (requiresSignature) {
+            if (!log.public_key_snapshot || !log.signature || !signingPayload) {
+                throw new Error(`${log.event_type} requires a digital signature`)
+            }
 
-    const lastLog = await executor
-        .selectFrom('audit_logs')
-        .select('hash')
-        .where('entity_id', '=', log.entity_id)
-        .orderBy('changed_at', 'desc')
-        .limit(1)
-        .forUpdate()
-        .executeTakeFirst()
+            const isValid = await verifySignature(
+                signingPayload,
+                log.signature,
+                log.public_key_snapshot
+            )
 
-    const prevHash = lastLog ? lastLog.hash : null
-    const changedAt = requiresSignature && log.changed_at
-        ? new Date(log.changed_at)
-        : new Date()
+            if (!isValid) throw new Error('Invalid digital signature')
+        }
 
-    const newHash = computeAuditEntryHash({
-        entity_id: log.entity_id,
-        user_id: log.user_id,
-        event_type: log.event_type as AuditLogEntryPayload['event_type'],
-        table_name: log.table_name ?? "NULL",
-        record_id: log.record_id ?? "NULL",
-        payload: log.payload ?? "NULL",
-        changed_at: changedAt.toISOString(),
-        prev_hash: prevHash ?? "NULL",
-        public_key_snapshot: log.public_key_snapshot ?? "NULL",
-        signature: log.signature ?? "NULL",
-    })
+        if ((process.env.AUDIT_DISABLE_ADVISORY_LOCK || '') !== 'true') {
+            await acquireEntityAuditAdvisoryLock(trx, log.entity_id)
+        }
 
-    editedLog.changed_at = changedAt
-    editedLog.prev_hash = prevHash
-    editedLog.hash = newHash
+        const lastLog = await trx
+            .selectFrom('audit_logs')
+            .select(['hash', 'changed_at'])
+            .where('entity_id', '=', log.entity_id)
+            .orderBy('changed_at', 'desc')
+            .orderBy('id', 'desc')
+            .limit(1)
+            .forUpdate()
+            .executeTakeFirst()
 
-    return await executor
-        .insertInto('audit_logs')
-        .values({
-            ...editedLog,
-            payload: log.payload ? canonicalStringify(log.payload) : null,
+        const prevHash = lastLog ? lastLog.hash : null
+        const changedAt = requiresSignature && log.changed_at
+            ? new Date(log.changed_at)
+            : new Date()
+
+        if (lastLog && changedAt.getTime() <= new Date(lastLog.changed_at).getTime()) {
+            if (requiresSignature) {
+                throw new Error(
+                    `${log.event_type} timestamp must be strictly newer than the latest audit log for this entity. Please retry the signature.`
+                )
+            }
+
+            changedAt.setTime(new Date(lastLog.changed_at).getTime() + 1)
+        }
+
+        const newHash = computeAuditEntryHash({
+            entity_id: log.entity_id,
+            user_id: log.user_id,
+            event_type: log.event_type as AuditLogEntryPayload['event_type'],
+            table_name: log.table_name ?? "NULL",
+            record_id: log.record_id ?? "NULL",
+            payload: log.payload ?? "NULL",
+            changed_at: changedAt.toISOString(),
+            prev_hash: prevHash ?? "NULL",
+            public_key_snapshot: log.public_key_snapshot ?? "NULL",
+            signature: log.signature ?? "NULL",
         })
-        .returningAll()
-        .executeTakeFirstOrThrow()
+
+        editedLog.changed_at = changedAt
+        editedLog.prev_hash = prevHash
+        editedLog.hash = newHash
+
+        return await trx
+            .insertInto('audit_logs')
+            .values({
+                ...editedLog,
+                payload: log.payload ? canonicalStringify(log.payload) : null,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow()
+    })
 }
 
 export async function createLog(log: Omit<NewAuditLog, 'hash'>, signingPayload: SignaturePayload | string | null): Promise<AuditLog> {
-    return await db.transaction().execute(async (trx) => {
-        return await createLogWithExecutor(trx, log, signingPayload)
-    })
+    return await createLogWithExecutor(db, log, signingPayload)
 }
-
-export { createLogWithExecutor }
 
 export async function getHistory(tableName: string, recordId: string) {
     return await db
@@ -250,6 +293,7 @@ export async function getHistory(tableName: string, recordId: string) {
         .where('audit_logs.table_name', '=', tableName)
         .where('audit_logs.record_id', '=', recordId)
         .orderBy('audit_logs.changed_at', 'asc')
+        .orderBy('audit_logs.id', 'asc')
         .execute()
 }
 
@@ -259,6 +303,7 @@ export async function verifyEntityChain(entityId: string) {
         .selectAll()
         .where('entity_id', '=', entityId)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     return await verifyChain(logs)
@@ -291,6 +336,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         .selectAll()
         .where('entity_id', '=', firstLog.entity_id)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     // Standard verification does not rebuild Merkle trees.
@@ -307,22 +353,9 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
     }
 
-    const chainResult =
-        lastSeal && isSealedRootValid
-            ? verifyChainSegment(
-                postSealLogs,
-                sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
-            )
-            : verifyChain(allEntityLogs)
-
     const formLogs = allEntityLogs.filter(
         l => l.table_name === tableName && l.record_id === recordId
     )
-    const formRecord = await db
-        .selectFrom('forms')
-        .select(['id', 'type'])
-        .where('id', '=', recordId)
-        .executeTakeFirst()
     const logIndexMap = new Map(allEntityLogs.map((log, index) => [log.id, index]))
     const currentGlobalRoot = lastSeal?.root_hash ?? null
 
@@ -337,140 +370,175 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
     })
 
-    // Verify form data matches with changes stored in audit logs
-    let isDataMatch = false
-    let reconstructedState = null
-    let currentState = null
-    let approvalHashesValid = true
-    let snapshotsMatchHistory = true
-    let signatureEventsValid = true
-    let signatoryRowsValid = true
-    let authorizationSnapshotsValid = true
+    // Run ledger integrity and state reconstruction in parallel
+    const [chainResult, stateResult] = await Promise.all([
+        // Verify the chain
+        Promise.resolve(
+            lastSeal && isSealedRootValid
+                ? verifyChainSegment(
+                    postSealLogs,
+                    sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
+                )
+                : verifyChain(allEntityLogs)
+        ),
 
-    if (formLogs.length > 0) {
-        currentState = await fetchHydratedFormState(tableName, recordId)
-        const workflow = formRecord ? getWorkflow(formRecord.type) : null
-        const usedSignatoryIds = new Set<string>()
+        // Verify the data state
+        (async () => {
+            let isDataMatch = false
+            let reconstructedState = null
+            let currentState = null
+            let approvalHashesValid = true
+            let snapshotsMatchHistory = true
+            let signatureEventsValid = true
+            let signatoryRowsValid = true
+            let authorizationSnapshotsValid = true
 
-        if (!currentState) {
-            return {
-                isTimelineIntact: chainResult.isValid,
-                isSealedRootValid,
-                timelineBrokenAt: chainResult.brokenAt,
-                isDataMatch: false, 
-                currentGlobalRoot,
-                lastSealedRoot: lastSeal?.root_hash || null,
-                totalEntityEvents: allEntityLogs.length,
-                formEventCount: formLogs.length,
-                formLogs: formLogsWithProofs,
-                debugState: { error: "Form missing from database." }
-            }
-        }
-
-        for (const log of formLogsWithProofs) {
-            const payload = log.payload as Record<string, unknown>
-
-            if (log.event_type === 'CREATE_FORM') {
-                reconstructedState = JSON.parse(JSON.stringify(payload))
-            }
-            else if (log.event_type === 'EDIT_FORM') {
-                // Delta: Apply diff to current reconstructed state
-                if (reconstructedState) {
-                    reconstructedState = replayDiffs(reconstructedState, [payload as Diff])
+            if (formLogs.length === 0) {
+                return {
+                    isMissingCurrentState: false,
+                    isDataMatch,
+                    debugState: {
+                        reconstructedState,
+                        currentState,
+                        approvalHashesValid,
+                        snapshotsMatchHistory,
+                        signatureEventsValid,
+                        signatoryRowsValid,
+                        authorizationSnapshotsValid,
+                        isDataMatch,
+                    },
                 }
             }
-            else if (log.event_type === 'SUBMIT_FORM') {
-                // Compare signed snapshot to current reconstructed state
-                if (reconstructedState) {
-                    // Clean payload to remove id and foreign keys
-                    const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
 
-                    const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
+            const [hydratedState, targetSignatories, formRecord] = await Promise.all([
+                fetchHydratedFormState(tableName, recordId),
+                keyRepository.listSignatoriesByTarget('forms', recordId),
+                db
+                    .selectFrom('forms')
+                    .select(['id', 'type'])
+                    .where('id', '=', recordId)
+                    .executeTakeFirst(),
+            ])
+            currentState = hydratedState
+            const workflow = formRecord ? getWorkflow(formRecord.type) : null
+            const usedSignatoryIds = new Set<string>()
 
-                    const historyMatch = isEqual(cleanedReconstructedState, cleanedPayload)
-                    if (!historyMatch) {
-                        snapshotsMatchHistory = false
-                        console.log(`[AUDIT] Broken Snapshot: Log ${log.id} expected state ${JSON.stringify(cleanedReconstructedState)} but got ${JSON.stringify(cleanedPayload)}`)
+            if (!currentState) {
+                return {
+                    isMissingCurrentState: true,
+                    isDataMatch: false,
+                    debugState: { error: "Form missing from database." },
+                }
+            }
+
+            for (const log of formLogsWithProofs) {
+                const payload = log.payload as Record<string, unknown>
+
+                if (log.event_type === 'CREATE_FORM') {
+                    reconstructedState = JSON.parse(JSON.stringify(payload))
+                }
+                else if (log.event_type === 'EDIT_FORM') {
+                    if (reconstructedState) {
+                        reconstructedState = replayDiffs(reconstructedState, [payload as Diff])
                     }
-                } else {
-                    snapshotsMatchHistory = false
                 }
-                
-                // Reset the reconstructed state since it was submitted
-                reconstructedState = JSON.parse(canonicalStringify(payload))
+                else if (log.event_type === 'SUBMIT_FORM') {
+                    if (reconstructedState) {
+                        const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
+                        const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
 
+                        const historyMatch = isEqual(cleanedReconstructedState, cleanedPayload)
+                        if (!historyMatch) {
+                            snapshotsMatchHistory = false
+                            console.log(`[AUDIT] Broken Snapshot: Log ${log.id} expected state ${JSON.stringify(cleanedReconstructedState)} BUT GOT ${JSON.stringify(cleanedPayload)}`)
+                        }
+                    } else {
+                        snapshotsMatchHistory = false
+                    }
+
+                    reconstructedState = JSON.parse(canonicalStringify(payload))
+
+                }
+                else if (isSignedAuditEvent(log.event_type)) {
+                    if (!workflow || !reconstructedState) {
+                        signatureEventsValid = false
+                        signatoryRowsValid = false
+                        authorizationSnapshotsValid = false
+                        approvalHashesValid = false
+                        continue
+                    }
+
+                    const verificationResult = await verifySignedAuditEventAgainstSignatory({
+                        log: log as SignedAuditLog,
+                        workflow,
+                        reconstructedState,
+                        tableName,
+                        usedSignatoryIds,
+                        signatories: targetSignatories,
+                    })
+
+                    if (!verificationResult.formStateHashValid) {
+                        console.log(`[AUDIT] Broken Approval Hash: Log ${log.id} with event type ${log.event_type} expected reconstructed state hash to match signed form_state_hash ${payload?.form_state_hash ?? 'missing'}. Reconstructed state: ${JSON.stringify(reconstructedState)}`)
+                        approvalHashesValid = false
+                    }
+                    if (!verificationResult.cryptographicValid) {
+                        signatureEventsValid = false
+                    }
+                    if (!verificationResult.matched) {
+                        signatoryRowsValid = false
+                    }
+                    if (!verificationResult.authorizationValid) {
+                        authorizationSnapshotsValid = false
+                    }
+                }
             }
-            else if (isSignedAuditEvent(log.event_type)) {
-                // Return if workflow or reconstructed state is missing
-                if (!workflow || !reconstructedState) {
-                    signatureEventsValid = false
-                    signatoryRowsValid = false
-                    authorizationSnapshotsValid = false
-                    approvalHashesValid = false
-                    continue
-                }
 
-                // Verify signed event on reconstructed state
-                const verificationResult = await verifySignedAuditEventAgainstSignatory({
-                    log: log as SignedAuditLog,
-                    workflow,
+            const cleanedReconstructedState = reconstructedState
+                ? cleanDataBasedOnTable(tableName, reconstructedState)
+                : null
+
+            const cleanedCurrentState = currentState
+                ? cleanDataBasedOnTable(tableName, currentState)
+                : null
+
+            isDataMatch =
+                !!cleanedReconstructedState &&
+                isEqual(cleanedReconstructedState, cleanedCurrentState) &&
+                approvalHashesValid &&
+                snapshotsMatchHistory &&
+                signatureEventsValid &&
+                signatoryRowsValid &&
+                authorizationSnapshotsValid
+
+            return {
+                isMissingCurrentState: false,
+                isDataMatch,
+                debugState: {
                     reconstructedState,
-                    tableName,
-                    usedSignatoryIds,
-                })
-
-                // Update verification results
-                if (!verificationResult.formStateHashValid) {
-                    approvalHashesValid = false
-                }
-                if (!verificationResult.cryptographicValid) {
-                    signatureEventsValid = false
-                }
-                if (!verificationResult.matched) {
-                    signatoryRowsValid = false
-                }
-                if (!verificationResult.authorizationValid) {
-                    authorizationSnapshotsValid = false
-                }
+                    currentState,
+                    approvalHashesValid,
+                    snapshotsMatchHistory,
+                    signatureEventsValid,
+                    signatoryRowsValid,
+                    authorizationSnapshotsValid,
+                    isDataMatch,
+                },
             }
-        }
-
-        // Clean the reconstructed state to remove ids and foreign keys
-        const cleanedReconstructedState = reconstructedState
-            ? cleanDataBasedOnTable(tableName, reconstructedState)
-            : null
-        
-        // Compare the reconstructed state to the current state
-        isDataMatch =
-            !!cleanedReconstructedState &&
-            isEqual(cleanedReconstructedState, currentState) &&
-            approvalHashesValid &&
-            snapshotsMatchHistory &&
-            signatureEventsValid &&
-            signatoryRowsValid &&
-            authorizationSnapshotsValid
-    }
+        })(),
+    ])
 
     return {
         isTimelineIntact: chainResult.isValid,
         isSealedRootValid: isSealedRootValid,
         timelineBrokenAt: chainResult.brokenAt,
-        isDataMatch: isDataMatch,
+        chainFailureReport: chainResult.report ?? null,
+        isDataMatch: stateResult.isMissingCurrentState ? false : stateResult.isDataMatch,
         currentGlobalRoot: currentGlobalRoot,
         lastSealedRoot: lastSeal?.root_hash || null,
         totalEntityEvents: allEntityLogs.length,
         formEventCount: formLogs.length,
         formLogs: formLogsWithProofs,
-        debugState: {
-            reconstructedState,
-            currentState,
-            approvalHashesValid,
-            snapshotsMatchHistory,
-            signatureEventsValid,
-            signatoryRowsValid,
-            authorizationSnapshotsValid,
-            isDataMatch
-        }
+        debugState: stateResult.debugState
     }
 }
 
@@ -503,6 +571,7 @@ export async function verifyAllocationSignoffIntegrity(
         .selectAll()
         .where('entity_id', '=', firstLog.entity_id)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     let isSealedRootValid = true
@@ -539,10 +608,13 @@ export async function verifyAllocationSignoffIntegrity(
         }
     })
 
-    const currentState = await budgetAllocationRepository.getAllocationSignoffSnapshot(
-        fiscalYear,
-        signoffType
-    )
+    const [currentState, targetSignatories] = await Promise.all([
+        budgetAllocationRepository.getAllocationSignoffSnapshot(
+            fiscalYear,
+            signoffType
+        ),
+        keyRepository.listSignatoriesByTarget('budget_cycles', String(fiscalYear)),
+    ])
 
     const currentHash = await sha256(canonicalStringify(currentState))
     const workflow = getWorkflow(signoffType)
@@ -566,14 +638,13 @@ export async function verifyAllocationSignoffIntegrity(
             continue
         }
 
-        const matchingSignatory = await keyRepository.getMatchingSignatoryForAuditEvent(
-            'budget_cycles',
-            String(fiscalYear),
-            log.user_id,
-            log.event_type,
-            log.signature ?? '',
-            new Date(log.changed_at)
-        )
+        const matchingSignatory = findMatchingPreloadedSignatory({
+            signatories: targetSignatories,
+            userId: log.user_id,
+            eventType: log.event_type,
+            signature: log.signature ?? '',
+            changedAt: log.changed_at,
+        })
 
         if (!matchingSignatory || usedSignatoryIds.has(matchingSignatory.id)) {
             cryptographicValid = false
@@ -607,8 +678,7 @@ export async function verifyAllocationSignoffIntegrity(
             matchingSignatory.public_key_snapshot
         )
 
-        const sourceRecordIdMatches =
-            getSourceRecordIdFromSignaturePayload(matchingSignatory.signature_payload) === signoffRecordId
+        const sourceRecordIdMatches = matchingSignatory.source_record_id === signoffRecordId
 
         if (!signatureStillValid) {
             cryptographicValid = false
@@ -659,6 +729,7 @@ export async function verifyAllocationSignoffIntegrity(
         isTimelineIntact: chainResult.isValid,
         isSealedRootValid,
         timelineBrokenAt: chainResult.brokenAt,
+        chainFailureReport: chainResult.report ?? null,
         isDataMatch,
         currentGlobalRoot,
         lastSealedRoot: lastSeal?.root_hash || null,
@@ -682,6 +753,7 @@ export async function sealDailyAuditLog(entityId: string) {
         .selectAll()
         .where('entity_id', '=', entityId)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     if (allEntityLogs.length === 0) return { success: false, message: 'No logs to seal' }
@@ -731,6 +803,7 @@ export async function generateMerkleProofForEntry(entityId: string, logId: strin
         .selectAll()
         .where('entity_id', '=', entityId)
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .limit(lastSeal.log_count)
         .execute()
 
@@ -767,6 +840,7 @@ export async function getPayloadOfFormSignEvent(
         ]))
         .select(['payload', 'event_type', 'user_id'])
         .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
         .execute()
 
     console.log(`RESULT IN PAYLOAD OF SIGN EVENT: ${JSON.stringify(result)}`)
@@ -809,6 +883,7 @@ export async function getLatestFormRejection(tableName: string, recordId: string
         .where('audit_logs.record_id', '=', recordId)
         .where('audit_logs.event_type', '=', 'REJECT_FORM')
         .orderBy('audit_logs.changed_at', 'desc')
+        .orderBy('audit_logs.id', 'desc')
         .limit(1)
         .executeTakeFirst()
 

@@ -7,14 +7,23 @@ import { getOperatingUnitDescendantIds } from "./entityRepository";
 
 type ProposalExpenseClass = {
     amount: number | string;
-    expense_class: string;
+    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
     currency?: string;
+    fund_category?: "LP" | "Grant" | "GOP" | null;
+    fund_method?: "cash" | "non_cash" | "non-cash" | null;
 };
 
 type ProposalCostSourceItem = Record<string, unknown> & {
     costs?: ProposalExpenseClass[];
+    component_name?: string;
+    description?: string;
+    location?: string;
+    name?: string;
+    year?: number | string;
+    total_amt?: number | string;
     item_catalog_id?: string | null;
     fund_code?: string | null;
+    fund_description?: string | null;
     specific_description?: string | null;
     currency?: string;
     proposed_amt?: number | string;
@@ -30,6 +39,27 @@ type ProposalAttributionEntry = {
 type ProposalAttribution = {
     description: string;
     attribution_costs: ProposalAttributionEntry[];
+};
+
+type ProposalPrerequisitePayload = {
+    name: string;
+    type: string;
+    status: string;
+    remarks?: string | null;
+};
+
+type ProposalPhysicalTargetPayload = {
+    year: number;
+    tier: 1 | 2;
+    target_description: string;
+};
+
+type ProposalForeignFinancialPayload = {
+    year: number;
+    lp_imprest: number;
+    lp_direct: number;
+    grant: number;
+    gop: number;
 };
 
 // type ProposalSummaryData = {
@@ -64,13 +94,13 @@ type ProposalWritePayload = {
     total_proposal_currency?: string;
     total_proposal_cost: number;
     type: "202" | "203";
-    pap_prerequisites?: Array<Record<string, unknown>>;
+    pap_prerequisites?: ProposalPrerequisitePayload[];
     cost_by_components: ProposalCostSourceItem[];
     local_financial_attributions?: ProposalAttribution[];
     local_infrastructure_requirements?: ProposalCostSourceItem[];
     local_locations?: ProposalCostSourceItem[];
-    local_physical_targets?: Array<Record<string, unknown>>;
-    foreign_financial_targets?: ProposalCostSourceItem[];
+    local_physical_targets?: ProposalPhysicalTargetPayload[];
+    foreign_financial_targets?: ProposalForeignFinancialPayload[];
     foreign_physical_targets?: Array<Record<string, unknown>>;
 };
 
@@ -81,11 +111,101 @@ type CostSourceTableName =
     | "foreign_financial_targets"
     | "foreign_physical_targets";
 
+const toNumber = (value: number | string | undefined, fallback = 0) =>
+    value === undefined || value === "" ? fallback : Number(value);
+
+const normalizeFundMethod = (
+    method: ProposalExpenseClass["fund_method"],
+) => (method === "non_cash" ? "non-cash" : method);
+
+async function assertProposalRankAvailable(
+    trx: Transaction<Database>,
+    entityId: string,
+    proposalYear: number,
+    priorityRank: number,
+    rootFormId: string,
+) {
+    const conflictingProposal = await trx
+        .selectFrom("project_proposals")
+        .select("id")
+        .where("entity_id", "=", entityId)
+        .where("proposal_year", "=", proposalYear)
+        .where("priority_rank", "=", priorityRank)
+        .where("root_form_id", "!=", rootFormId)
+        .executeTakeFirst();
+
+    if (conflictingProposal) {
+        throw new Error("unique_entity_rank");
+    }
+}
+
+async function insertCostSourceEntity(
+    trx: Transaction<Database>,
+    tableName: CostSourceTableName,
+    proposalId: string,
+    sourceId: string,
+    item: ProposalCostSourceItem,
+) {
+    switch (tableName) {
+        case "cost_by_components":
+            await trx
+                .insertInto("cost_by_components")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    component_name: item.component_name ?? "",
+                    item_catalog_id: item.item_catalog_id ?? null,
+                    fund_code: item.fund_code ?? null,
+                    specific_description: item.specific_description ?? null,
+                    currency: item.currency ?? "PHP",
+                    proposed_amt: toNumber(item.proposed_amt),
+                    tier: item.tier ?? 2,
+                })
+                .execute();
+            return;
+        case "local_infrastructure_requirements":
+            await trx
+                .insertInto("local_infrastructure_requirements")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    description: item.description ?? "",
+                    year: toNumber(item.year),
+                    total_amt: toNumber(item.total_amt),
+                })
+                .execute();
+            return;
+        case "local_locations":
+            await trx
+                .insertInto("local_locations")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    location: item.location ?? "",
+                })
+                .execute();
+            return;
+        case "foreign_physical_targets":
+            await trx
+                .insertInto("foreign_physical_targets")
+                .values({
+                    proposal_id: proposalId,
+                    cost_source_id: sourceId,
+                    name: item.name ?? "",
+                })
+                .execute();
+            return;
+        default:
+            throw new Error(`Unsupported cost source table: ${tableName}`);
+    }
+}
+
 export type DbmProposalComponent = {
     id: string;
     component_name: string;
     item_catalog_id: string | null;
     fund_code: string | null;
+    fund_description: string | null;
     specific_description: string | null;
     currency: string;
     proposed_amt: number;
@@ -112,6 +232,11 @@ export type DbmProposalReviewRow = {
     operating_unit_name: string | null;
     entity_name: string | null;
     components: DbmProposalComponent[];
+};
+
+type DbmProposalReviewBaseRow = Omit<DbmProposalReviewRow, "components"> & {
+    parent_form_id: string | null;
+    version: number;
 };
 
 export type DbmProposalReviewFilters = {
@@ -148,34 +273,22 @@ async function insertWithCostSource(
 
         // 2. Separate costs array from the entity metadata (like component_name or location)
         const costs = item.costs;
-        const entityData: Record<string, unknown> = { ...item };
-        delete entityData.costs;
-        delete entityData.id;
-        delete entityData.proposal_id;
-        delete entityData.cost_source_id;
 
         // 3. Insert the entity (e.g., the Component Row)
-        await trx
-            .insertInto(tableName as any)
-            .values({
-                ...entityData,
-                proposal_id: proposalId,
-                cost_source_id: source.id,
-            })
-            .execute();
+        await insertCostSourceEntity(trx, tableName, proposalId, source.id, item);
 
         // 4. Insert the nested expense classes (PS, MOOE, CO, FE)
         if (costs && costs.length > 0) {
             await trx
                 .insertInto("cost_by_expense_class")
                 .values(
-                    costs.map((c: any) => ({
-                        amount: c.amount,
+                    costs.map((c: ProposalExpenseClass) => ({
+                        amount: Number(c.amount),
                         expense_class: c.expense_class,
                         currency: c.currency || "PHP",
                         cost_source_id: source.id,
                         fund_category: c.fund_category || null,
-                        fund_method: c.fund_method || null,
+                        fund_method: normalizeFundMethod(c.fund_method) || null,
                     })),
                 )
                 .execute();
@@ -227,10 +340,10 @@ async function insertAttributions(
             await trx
                 .insertInto("cost_by_expense_class")
                 .values(
-                    entry.costs.map((c: any) => ({
+                    entry.costs.map((c: ProposalExpenseClass) => ({
                         cost_source_id: source.id,
                         expense_class: c.expense_class,
-                        amount: c.amount || 0,
+                        amount: Number(c.amount || 0),
                         currency: c.currency || "PHP",
                         // fund_category, fund_component, etc. if provided
                     })),
@@ -247,6 +360,7 @@ export async function createProjectProposal(
     fiscal_year: number,
     parent_form_id?: string,
     version?: number,
+    existingPapId?: string,
 ) {
     return await db.transaction().execute(async (trx) => {
         // 1. Insert into Master Forms table
@@ -270,12 +384,23 @@ export async function createProjectProposal(
             })
             .returning("id")
             .executeTakeFirstOrThrow();
+        const rootFormId = parent_form_id ?? form.id;
+
+        await assertProposalRankAvailable(
+            trx,
+            entityId,
+            payload.proposal_year,
+            payload.priority_rank,
+            rootFormId,
+        );
 
         // 2. Insert into Project Proposals
         const project = await trx
             .insertInto("project_proposals")
             .values({
                 id: form.id,
+                parent_form_id: parent_form_id ?? null,
+                root_form_id: rootFormId,
                 entity_id: entityId,
                 title: payload.title,
                 proposal_year: payload.proposal_year,
@@ -332,36 +457,52 @@ export async function createProjectProposal(
             .where("id", "=", form.id)
             .execute();
 
-        // 3. Create the PAP record (Mapped to your specific schema)
-        const newPap = await trx
-            .insertInto("paps")
-            .values({
-                entity_id: entityId,
-                title: payload.title,
-                // These columns are NOT NULL in your schema,
-                // so ensure they exist in proposalData or use defaults:
-                org_outcome_id: payload.org_outcome_id || "O-1",
-                description: payload.description || "No description provided.",
-                purpose: payload.purpose || "No purpose provided.",
-                beneficiaries: payload.beneficiaries || "General Public",
+        // 3. Original proposals create a PAP. Versioned overwrites reuse the family PAP by default.
+        let papId = existingPapId;
 
-                project_type: payload.is_infrastructure
-                    ? "infrastructure"
-                    : "non-infrastructure",
-                project_status: "proposed",
-                auth_status: authStatus,
-                category: payload.type === "202" ? "local" : "foreign",
-                identifier_code: payload.type === "202" ? "2" : "3",
-            })
-            .returning("id")
-            .executeTakeFirstOrThrow();
+        if (!papId && parent_form_id) {
+            const familyPap = await trx
+                .selectFrom("form_paps")
+                .select("pap_id")
+                .where("form_id", "=", parent_form_id)
+                .executeTakeFirstOrThrow();
+
+            papId = familyPap.pap_id;
+        }
+
+        if (!papId) {
+            const newPap = await trx
+                .insertInto("paps")
+                .values({
+                    entity_id: entityId,
+                    title: payload.title,
+                    // These columns are NOT NULL in your schema,
+                    // so ensure they exist in proposalData or use defaults:
+                    org_outcome_id: payload.org_outcome_id || "O-1",
+                    description: payload.description || "No description provided.",
+                    purpose: payload.purpose || "No purpose provided.",
+                    beneficiaries: payload.beneficiaries || "General Public",
+
+                    project_type: payload.is_infrastructure
+                        ? "infrastructure"
+                        : "non-infrastructure",
+                    project_status: "proposed",
+                    auth_status: authStatus,
+                    category: payload.type === "202" ? "local" : "foreign",
+                    identifier_code: payload.type === "202" ? "2" : "3",
+                })
+                .returning("id")
+                .executeTakeFirstOrThrow();
+
+            papId = newPap.id;
+        }
 
         // 4. Link Form and PAP in the junction table
         await trx
             .insertInto("form_paps")
             .values({
                 form_id: form.id,
-                pap_id: newPap.id,
+                pap_id: papId,
             })
             .execute();
 
@@ -370,7 +511,7 @@ export async function createProjectProposal(
             await trx
                 .insertInto("pap_prerequisites")
                 .values(
-                    payload.pap_prerequisites.map((p: any) => ({
+                    payload.pap_prerequisites.map((p) => ({
                         ...p,
                         proposal_id: form.id,
                     })),
@@ -418,7 +559,7 @@ export async function createProjectProposal(
                 await trx
                     .insertInto("local_physical_targets")
                     .values(
-                        payload.local_physical_targets.map((p: any) => ({
+                        payload.local_physical_targets.map((p) => ({
                             ...p,
                             proposal_id: form.id,
                         })),
@@ -430,7 +571,7 @@ export async function createProjectProposal(
                 await trx
                     .insertInto("foreign_financial_targets")
                     .values(
-                        payload.foreign_financial_targets.map((p: any) => ({
+                        payload.foreign_financial_targets.map((p) => ({
                             ...p,
                             proposal_id: form.id,
                         })),
@@ -450,7 +591,7 @@ export async function createProjectProposal(
 
         return {
             formId: form.id,
-            papId: newPap.id,
+            papId,
             createdAt: project.created_at,
         };
     });
@@ -462,19 +603,40 @@ export async function getProjectProposalById(
     const project = await db
         .selectFrom("project_proposals")
         .innerJoin("forms", "forms.id", "project_proposals.id")
+        .leftJoin("form_paps", "form_paps.form_id", "project_proposals.id")
         .selectAll("project_proposals")
-        .select("forms.auth_status as auth_status")
+        .select([
+            "forms.auth_status as auth_status",
+            "forms.parent_form_id as parent_form_id",
+            "forms.version as version",
+            "form_paps.pap_id as pap_id",
+        ])
         .where("project_proposals.id", "=", id)
         .executeTakeFirst();
 
     if (!project) return null;
 
     const fetchWithCosts = async (tableName: CostSourceTableName) => {
-        const items = await db
-            .selectFrom(tableName)
-            .where("proposal_id", "=", id)
-            .selectAll()
-            .execute();
+        const items =
+            tableName === "cost_by_components"
+                ? await db
+                      .selectFrom("cost_by_components")
+                      .leftJoin(
+                          "uacs_funding_sources",
+                          "uacs_funding_sources.code",
+                          "cost_by_components.fund_code",
+                      )
+                      .where("cost_by_components.proposal_id", "=", id)
+                      .selectAll("cost_by_components")
+                      .select(
+                          "uacs_funding_sources.description as fund_description",
+                      )
+                      .execute()
+                : await db
+                      .selectFrom(tableName)
+                      .where("proposal_id", "=", id)
+                      .selectAll()
+                      .execute();
         return await Promise.all(
             items.map(async (item) => {
                 const costs = await db
@@ -556,66 +718,59 @@ export async function getProjectProposalById(
         foreign_physical_targets: await fetchWithCosts(
             "foreign_physical_targets",
         ),
-    } as any;
+    } as unknown as FullProjectProposal;
 }
 
 export async function getAllProposalSummaries(
     entityType: string,
     userRole: string,
     entityId: string,
+    fiscalYear?: number,
     inDbmModule: boolean = false,
-    fiscalYear: number = new Date().getFullYear() + 1,
 ) {
     let query = db
         .selectFrom("project_proposals as pp")
-        .innerJoin("forms", "forms.id", "pp.id")
-        .innerJoin("entities", "entities.id", "forms.entity_id")
+        .innerJoin("forms as f", "f.id", "pp.id")
+        .innerJoin("entities", "entities.id", "f.entity_id")
         .select([
             "pp.id",
-            "forms.entity_id",
-            "forms.codename", // e.g., "BP Form 202"
+            "f.entity_id",
+            "f.parent_form_id",
+            "f.version",
+            "f.codename", // e.g., "BP Form 202"
             "pp.proposal_year",
             "pp.priority_rank",
             "pp.type",
             "pp.total_proposal_cost",
             "pp.total_proposal_currency",
-            "forms.auth_status",
+            "f.auth_status",
             "pp.submission_date",
             "pp.is_infrastructure",
             "pp.title",
             "entities.type as entity_type",
         ])
-        .where("forms.parent_form_id", "is", null)
         .orderBy("pp.submission_date", "desc")
         .orderBy("pp.priority_rank", "asc");
 
-    if (entityType === "national") {
-        return await query.execute();
+    if (fiscalYear) {
+        query = query.where("pp.proposal_year", "=", fiscalYear);
     }
 
-    if (userRole === "dbm" && inDbmModule) {
-        return await query
-            .where(({ eb, or }) =>
-                or([
-                    eb("forms.auth_status", "=", "dbm"),
-                    eb("forms.auth_status", "=", "done"),
-                ]),
-            )
-            .where("forms.fiscal_year", "=", fiscalYear)
+    if (entityType === "national") {
+        const rows = await query
+            .orderBy("pp.proposal_year", "desc")
+            .orderBy("pp.priority_rank", "asc")
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
     if (entityType === "department") {
-        return await query
-            .leftJoin("agencies", "agencies.id", "forms.entity_id")
-            .leftJoin(
-                "operating_units",
-                "operating_units.id",
-                "forms.entity_id",
-            )
+        const rows = await query
+            .leftJoin("agencies", "agencies.id", "f.entity_id")
+            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
                 or([
-                    eb("forms.entity_id", "=", entityId),
+                    eb("f.entity_id", "=", entityId),
                     eb("agencies.department_id", "=", entityId),
                     eb(
                         "operating_units.agency_id",
@@ -628,32 +783,207 @@ export async function getAllProposalSummaries(
                 ]),
             )
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
     if (entityType === "agency") {
-        return await query
-            .leftJoin(
-                "operating_units",
-                "operating_units.id",
-                "forms.entity_id",
-            )
+        const rows = await query
+            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
                 or([
-                    eb("forms.entity_id", "=", entityId),
+                    eb("f.entity_id", "=", entityId),
                     eb("operating_units.agency_id", "=", entityId),
                 ]),
             )
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
     if (entityType === "operating_unit") {
         const descendantOuIds = await getOperatingUnitDescendantIds(entityId);
-        return await query
-            .where("forms.entity_id", "in", [entityId, ...descendantOuIds])
+        const rows = await query
+            .where("f.entity_id", "in", [entityId, ...descendantOuIds])
+            .orderBy("pp.proposal_year", "desc")
+            .orderBy("pp.priority_rank", "asc")
             .execute();
+        return getLatestProposalSummariesByFamily(rows);
     }
 
-    return await query.where("forms.entity_id", "=", entityId).execute();
+    const rows = await query
+        .where("f.entity_id", "=", entityId)
+        .orderBy("pp.proposal_year", "desc")
+        .orderBy("pp.priority_rank", "asc")
+        .execute();
+    return getLatestProposalSummariesByFamily(rows);
+}
+
+function getLatestProposalSummariesByFamily<
+    T extends {
+        id: string;
+        parent_form_id: string | null;
+        version: number;
+        proposal_year: number;
+        priority_rank: number;
+    },
+>(rows: T[]) {
+    const latestByFamily = new Map<string, T>();
+
+    for (const row of rows) {
+        const familyId = row.parent_form_id ?? row.id;
+        const current = latestByFamily.get(familyId);
+
+        if (!current || row.version > current.version) {
+            latestByFamily.set(familyId, row);
+        }
+    }
+
+    return Array.from(latestByFamily.values()).sort((a, b) => {
+        if (b.proposal_year !== a.proposal_year) {
+            return b.proposal_year - a.proposal_year;
+        }
+
+        return a.priority_rank - b.priority_rank;
+    });
+}
+
+function getComponentAllocationKey(component: {
+    item_catalog_id: string | null;
+    fund_code: string | null;
+    specific_description: string | null;
+}) {
+    return [
+        component.item_catalog_id ?? "",
+        component.fund_code ?? "",
+        component.specific_description ?? "",
+    ].join("::");
+}
+
+export async function createAllocationsForApprovedProposalWithExecutor(
+    trx: Transaction<Database>,
+    approvedFormId: string,
+) {
+    const approvedForm = await trx
+        .selectFrom("forms")
+        .select(["id", "entity_id", "parent_form_id"])
+        .where("id", "=", approvedFormId)
+        .executeTakeFirstOrThrow();
+    const proposal = await trx
+        .selectFrom("project_proposals")
+        .select("proposal_year")
+        .where("id", "=", approvedFormId)
+        .executeTakeFirstOrThrow();
+    const originalFormId = approvedForm.parent_form_id ?? approvedForm.id;
+
+    const approvedPap = await trx
+        .selectFrom("form_paps")
+        .select("pap_id")
+        .where("form_id", "=", approvedFormId)
+        .executeTakeFirst();
+
+    if (!approvedPap) {
+        throw new Error("Approved proposal is not linked to a PAP.");
+    }
+
+    const approvedComponents = await trx
+        .selectFrom("cost_by_components")
+        .select([
+            "item_catalog_id",
+            "fund_code",
+            "specific_description",
+            "currency",
+            "proposed_amt",
+            "tier",
+        ])
+        .where("proposal_id", "=", approvedFormId)
+        .where("item_catalog_id", "is not", null)
+        .execute();
+
+    if (approvedComponents.length === 0) return { createdCount: 0 };
+
+    const originalComponents = await trx
+        .selectFrom("cost_by_components")
+        .select([
+            "item_catalog_id",
+            "fund_code",
+            "specific_description",
+            "proposed_amt",
+        ])
+        .where("proposal_id", "=", originalFormId)
+        .where("item_catalog_id", "is not", null)
+        .execute();
+
+    const originalAmountByComponent = new Map(
+        originalComponents.map((component) => [
+            getComponentAllocationKey(component),
+            Number(component.proposed_amt ?? 0),
+        ]),
+    );
+
+    let createdCount = 0;
+
+    for (const component of approvedComponents) {
+        if (!component.item_catalog_id) continue;
+        const itemCatalogId = component.item_catalog_id;
+
+        const proposedAmount =
+            originalAmountByComponent.get(getComponentAllocationKey(component)) ??
+            0;
+        const dbmRecommendedAmount = Number(component.proposed_amt ?? 0);
+        const duplicate = await trx
+            .selectFrom("budget_allocations")
+            .select("id")
+            .where("budget_cycle_year", "=", proposal.proposal_year)
+            .where("entity_id", "=", approvedForm.entity_id)
+            .where("pap_code", "=", approvedPap.pap_id)
+            .where("item_catalog_id", "=", itemCatalogId)
+            .where((eb) =>
+                component.fund_code
+                    ? eb("fund_code", "=", component.fund_code)
+                    : eb("fund_code", "is", null),
+            )
+            .executeTakeFirst();
+
+        if (duplicate) {
+            await trx
+                .updateTable("budget_allocations")
+                .set({
+                    proposed_amt: proposedAmount,
+                    dbm_rec_amt: dbmRecommendedAmount,
+                    currency: component.currency ?? "PHP",
+                    specific_description: component.specific_description ?? null,
+                    auth_status: "dbm_approved",
+                    updated_at: new Date(),
+                })
+                .where("id", "=", duplicate.id)
+                .execute();
+        } else {
+            await trx
+                .insertInto("budget_allocations")
+                .values({
+                    entity_id: approvedForm.entity_id,
+                    budget_cycle_year: proposal.proposal_year,
+                    pap_code: approvedPap.pap_id,
+                    fund_code: component.fund_code ?? null,
+                    item_catalog_id: itemCatalogId,
+                    tier: 2,
+                    specific_description: component.specific_description ?? null,
+                    currency: component.currency ?? "PHP",
+                    proposed_amt: proposedAmount,
+                    dbm_rec_amt: dbmRecommendedAmount,
+                    nep_amt: 0,
+                    gaa_amt: 0,
+                    prev_year_gaa_amt: 0,
+                    release_classification: "unclassified",
+                    origin_tag: "agency_proposed",
+                    auth_status: "dbm_approved",
+                })
+                .execute();
+        }
+
+        createdCount += 1;
+    }
+
+    return { createdCount };
 }
 
 export async function updateProjectProposal(
@@ -667,6 +997,20 @@ export async function updateProjectProposal(
         console.log(
             "This is the payload received in the repository update function: ",
             p,
+        );
+
+        const currentProposal = await trx
+            .selectFrom("project_proposals")
+            .select(["entity_id", "root_form_id"])
+            .where("id", "=", proposalId)
+            .executeTakeFirstOrThrow();
+
+        await assertProposalRankAvailable(
+            trx,
+            currentProposal.entity_id,
+            p.proposal_year,
+            p.priority_rank,
+            currentProposal.root_form_id,
         );
 
         // 1. Update form status
@@ -738,7 +1082,7 @@ export async function updateProjectProposal(
             await trx
                 .insertInto("pap_prerequisites")
                 .values(
-                    p.pap_prerequisites.map((i: any) => ({
+                    p.pap_prerequisites.map((i) => ({
                         ...i,
                         proposal_id: proposalId,
                     })),
@@ -784,7 +1128,7 @@ export async function updateProjectProposal(
                 await trx
                     .insertInto("local_physical_targets")
                     .values(
-                        p.local_physical_targets.map((i: any) => ({
+                        p.local_physical_targets.map((i) => ({
                             ...i,
                             proposal_id: proposalId,
                         })),
@@ -796,7 +1140,7 @@ export async function updateProjectProposal(
                 await trx
                     .insertInto("foreign_financial_targets")
                     .values(
-                        p.foreign_financial_targets.map((i: any) => ({
+                        p.foreign_financial_targets.map((i) => ({
                             ...i,
                             proposal_id: proposalId,
                         })),
@@ -817,6 +1161,55 @@ export async function updateProjectProposal(
 
         return { success: true };
     });
+}
+
+export async function createDbmProjectProposalOverwrite(
+    sourceFormId: string,
+    payload: { payload: ProposalWritePayload; auth_status?: string },
+) {
+    const sourceForm = await db
+        .selectFrom("forms")
+        .select([
+            "id",
+            "entity_id",
+            "parent_form_id",
+            "version",
+            "auth_status",
+        ])
+        .where("id", "=", sourceFormId)
+        .executeTakeFirstOrThrow();
+
+    const parentFormId = sourceForm.parent_form_id ?? sourceForm.id;
+
+    const existingOverwrite = await db
+        .selectFrom("forms")
+        .select(["id"])
+        .where("parent_form_id", "=", parentFormId)
+        .orderBy("version", "desc")
+        .executeTakeFirst();
+
+    if (existingOverwrite) {
+        await updateProjectProposal(existingOverwrite.id, payload);
+
+        return {
+            formId: existingOverwrite.id,
+            created: false,
+        };
+    }
+
+    const created = await createProjectProposal(
+        sourceForm.entity_id,
+        payload.payload,
+        payload.auth_status ?? sourceForm.auth_status ?? "pending_dbm",
+        payload.payload.proposal_year,
+        parentFormId,
+        (sourceForm.version ?? 1) + 1,
+    );
+
+    return {
+        formId: created.formId,
+        created: true,
+    };
 }
 
 export async function swapDeptProposalRanks(
@@ -855,7 +1248,39 @@ export async function swapProposalRanks(
     proposalIdB: string,
     rankB: number,
 ) {
+    void rankA;
+    void rankB;
+
     return await db.transaction().execute(async (trx) => {
+        const proposals = await trx
+            .selectFrom("project_proposals")
+            .innerJoin("forms", "forms.id", "project_proposals.id")
+            .select([
+                "project_proposals.id",
+                "project_proposals.entity_id",
+                "project_proposals.priority_rank",
+                "project_proposals.root_form_id",
+                "forms.auth_status",
+            ])
+            .where("project_proposals.id", "in", [proposalIdA, proposalIdB])
+            .forUpdate()
+            .execute();
+
+        const proposalA = proposals.find((proposal) => proposal.id === proposalIdA);
+        const proposalB = proposals.find((proposal) => proposal.id === proposalIdB);
+
+        if (!proposalA || !proposalB) {
+            throw new Error("proposal_not_found");
+        }
+
+        if (proposalA.entity_id !== entityId || proposalB.entity_id !== entityId) {
+            throw new Error("proposal_entity_mismatch");
+        }
+
+        if (proposalA.auth_status !== "draft" || proposalB.auth_status !== "draft") {
+            throw new Error("submitted_rank_change");
+        }
+
         // 1. Move A to a temporary placeholder rank to free up rankA
         await trx
             .updateTable("project_proposals")
@@ -866,14 +1291,14 @@ export async function swapProposalRanks(
         // 2. Move B to A's old rank
         await trx
             .updateTable("project_proposals")
-            .set({ priority_rank: rankA })
+            .set({ priority_rank: Number(proposalA.priority_rank) })
             .where("id", "=", proposalIdB)
             .execute();
 
         // 3. Move A to B's old rank
         await trx
             .updateTable("project_proposals")
-            .set({ priority_rank: rankB })
+            .set({ priority_rank: Number(proposalB.priority_rank) })
             .where("id", "=", proposalIdA)
             .execute();
 
@@ -882,69 +1307,94 @@ export async function swapProposalRanks(
 }
 
 export async function moveProposalToRank(
-    scope: "entity" | "dept",
+    entityId: string,
     proposalId: string,
-    newRank: number,
-    scopeFilter: { entityId?: string; proposalIds?: string[] },
+    targetRank: number,
 ) {
-    const rankCol = scope === "entity" ? "priority_rank" : "dept_priority_rank";
-
     return await db.transaction().execute(async (trx) => {
-        // Get current rank of the proposal being moved
-        const current = await trx
+        const proposals = await trx
             .selectFrom("project_proposals")
-            .select([rankCol])
-            .where("id", "=", proposalId)
-            .executeTakeFirstOrThrow();
-
-        const currentRank = current[rankCol] as number;
-        if (currentRank === newRank) return { success: true };
-
-        // Temporarily set to -1 to free the slot
-        await trx
-            .updateTable("project_proposals")
-            .set({ [rankCol]: -1 })
-            .where("id", "=", proposalId)
+            .innerJoin("forms", "forms.id", "project_proposals.id")
+            .select([
+                "project_proposals.id",
+                "project_proposals.priority_rank",
+                "forms.auth_status",
+            ])
+            .where("project_proposals.entity_id", "=", entityId)
+            .where("project_proposals.parent_form_id", "is", null)
+            .orderBy("project_proposals.priority_rank", "asc")
+            .forUpdate()
             .execute();
 
-        if (currentRank > newRank) {
-            // Moving up: shift everything in [newRank, currentRank - 1] down by 1
-            let q = trx
-                .updateTable("project_proposals")
-                .set({ [rankCol]: sql`${sql.ref(rankCol)} + 1` })
-                .where(rankCol, ">=", newRank)
-                .where(rankCol, "<", currentRank);
+        const movingProposal = proposals.find(
+            (proposal) => proposal.id === proposalId,
+        );
 
-            if (scope === "entity" && scopeFilter.entityId) {
-                q = q.where("entity_id", "=", scopeFilter.entityId);
-            } else if (scope === "dept" && scopeFilter.proposalIds?.length) {
-                q = q.where("id", "in", scopeFilter.proposalIds);
-            }
-            await q.execute();
-        } else {
-            // Moving down: shift everything in [currentRank + 1, newRank] up by 1
-            let q = trx
-                .updateTable("project_proposals")
-                .set({ [rankCol]: sql`${sql.ref(rankCol)} - 1` })
-                .where(rankCol, ">", currentRank)
-                .where(rankCol, "<=", newRank);
-
-            if (scope === "entity" && scopeFilter.entityId) {
-                q = q.where("entity_id", "=", scopeFilter.entityId);
-            } else if (scope === "dept" && scopeFilter.proposalIds?.length) {
-                q = q.where("id", "in", scopeFilter.proposalIds);
-            }
-            await q.execute();
+        if (!movingProposal) {
+            throw new Error("proposal_not_found");
         }
 
-        // Place proposal at the target rank
-        await trx
-            .updateTable("project_proposals")
-            .set({ [rankCol]: newRank })
-            .where("id", "=", proposalId)
-            .execute();
+        if (movingProposal.auth_status !== "draft") {
+            throw new Error("submitted_rank_change");
+        }
 
-        return { success: true };
+        const boundedTargetRank = Math.max(
+            1,
+            Math.min(Math.trunc(targetRank), proposals.length),
+        );
+        const currentRank = Number(movingProposal.priority_rank);
+
+        if (currentRank === boundedTargetRank) {
+            return { success: true, changedIds: [] as string[] };
+        }
+
+        const affectedProposals = proposals.filter((proposal) => {
+            const rank = Number(proposal.priority_rank);
+
+            return currentRank < boundedTargetRank
+                ? rank >= currentRank && rank <= boundedTargetRank
+                : rank >= boundedTargetRank && rank <= currentRank;
+        });
+
+        if (
+            affectedProposals.some(
+                (proposal) => proposal.auth_status !== "draft",
+            )
+        ) {
+            throw new Error("submitted_rank_change");
+        }
+
+        for (const [index, proposal] of affectedProposals.entries()) {
+            await trx
+                .updateTable("project_proposals")
+                .set({ priority_rank: -(index + 1) })
+                .where("id", "=", proposal.id)
+                .execute();
+        }
+
+        for (const proposal of affectedProposals) {
+            const rank = Number(proposal.priority_rank);
+            let nextRank = rank;
+
+            if (proposal.id === proposalId) {
+                nextRank = boundedTargetRank;
+            } else if (currentRank < boundedTargetRank) {
+                nextRank = rank - 1;
+            } else {
+                nextRank = rank + 1;
+            }
+
+            await trx
+                .updateTable("project_proposals")
+                .set({ priority_rank: nextRank })
+                .where("id", "=", proposal.id)
+                .execute();
+        }
+
+        return {
+            success: true,
+            changedIds: affectedProposals.map((proposal) => proposal.id),
+        };
     });
 }
 
@@ -979,10 +1429,6 @@ function buildDbmProposalReviewBaseQuery(filters: DbmProposalReviewFilters) {
 
     if (filters.fiscalYear) {
         query = query.where("pp.proposal_year", "=", filters.fiscalYear);
-    }
-
-    if (filters.status) {
-        query = query.where("f.auth_status", "=", filters.status);
     }
 
     if (filters.departmentId) {
@@ -1023,60 +1469,10 @@ function buildDbmProposalReviewBaseQuery(filters: DbmProposalReviewFilters) {
 export async function listDbmProposalReviewRows(
     filters: DbmProposalReviewFilters = {},
 ) {
-    let query = buildDbmProposalReviewBaseQuery(filters)
-        .select([
-            "pp.id",
-            "pp.entity_id",
-            "pp.title",
-            "pp.proposal_year",
-            "pp.priority_rank",
-            "pp.type",
-            "pp.total_proposal_currency",
-            "pp.total_proposal_cost",
-            "f.auth_status",
-            "f.updated_at",
-            sql<
-                string | null
-            >`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
-                "department_id",
-            ),
-            sql<
-                string | null
-            >`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
-                "department_name",
-            ),
-            sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as(
-                "agency_id",
-            ),
-            sql<
-                string | null
-            >`COALESCE(agencies.name, parent_agencies.name)`.as("agency_name"),
-            "operating_units.id as operating_unit_id",
-            "operating_units.name as operating_unit_name",
-            sql<
-                string | null
-            >`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
-                "entity_name",
-            ),
-        ])
-        .orderBy(
-            sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`,
-            "asc",
-        )
-        .orderBy(sql`COALESCE(agencies.name, parent_agencies.name)`, "asc")
-        .orderBy("operating_units.name", "asc")
-        .orderBy("pp.priority_rank", "asc")
-        .orderBy("f.updated_at", "desc");
-
-    if (typeof filters.limit === "number") query = query.limit(filters.limit);
-    if (typeof filters.offset === "number") {
-        query = query.offset(filters.offset);
-    }
-
-    const rows = (await query.execute()) as Omit<
-        DbmProposalReviewRow,
-        "components"
-    >[];
+    const rows = getPaginatedDbmProposalReviewRows(
+        await listFilteredDbmProposalReviewBaseRows(filters),
+        filters,
+    );
 
     const proposalIds = rows.map((row) => row.id);
     const components = proposalIds.length
@@ -1092,12 +1488,18 @@ export async function listDbmProposalReviewRows(
                   "cec.cost_source_id",
                   "cbc.cost_source_id",
               )
+              .leftJoin(
+                  "uacs_funding_sources as fund_sources",
+                  "fund_sources.code",
+                  "cbc.fund_code",
+              )
               .select([
                   "cbc.id",
                   "cbc.proposal_id",
                   "cbc.component_name",
                   "cbc.item_catalog_id",
                   "cbc.fund_code",
+                  "fund_sources.description as fund_description",
                   "cbc.specific_description",
                   "cbc.currency",
                   "cbc.proposed_amt",
@@ -1131,11 +1533,86 @@ export async function listDbmProposalReviewRows(
 export async function countDbmProposalReviewRows(
     filters: Omit<DbmProposalReviewFilters, "limit" | "offset"> = {},
 ) {
-    const result = await buildDbmProposalReviewBaseQuery(filters)
-        .select(({ fn }) => fn.count<string>("pp.id").as("count"))
-        .executeTakeFirst();
+    return (await listFilteredDbmProposalReviewBaseRows(filters)).length;
+}
 
-    return Number(result?.count ?? 0);
+async function listFilteredDbmProposalReviewBaseRows(
+    filters: Omit<DbmProposalReviewFilters, "limit" | "offset"> = {},
+) {
+    const rows = (await buildDbmProposalReviewBaseQuery(filters)
+        .select([
+            "pp.id",
+            "pp.entity_id",
+            "pp.title",
+            "pp.proposal_year",
+            "pp.priority_rank",
+            "pp.type",
+            "pp.total_proposal_currency",
+            "pp.total_proposal_cost",
+            "f.auth_status",
+            "f.updated_at",
+            "f.parent_form_id",
+            "f.version",
+            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
+                "department_id",
+            ),
+            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
+                "department_name",
+            ),
+            sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as(
+                "agency_id",
+            ),
+            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as(
+                "agency_name",
+            ),
+            "operating_units.id as operating_unit_id",
+            "operating_units.name as operating_unit_name",
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
+                "entity_name",
+            ),
+        ])
+        .orderBy(sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`, "asc")
+        .orderBy(sql`COALESCE(agencies.name, parent_agencies.name)`, "asc")
+        .orderBy("operating_units.name", "asc")
+        .orderBy("pp.priority_rank", "asc")
+        .orderBy("f.updated_at", "desc")
+        .execute()) as DbmProposalReviewBaseRow[];
+    const latestByFamily = new Map<string, DbmProposalReviewBaseRow>();
+
+    for (const row of rows) {
+        const familyId = row.parent_form_id ?? row.id;
+        const current = latestByFamily.get(familyId);
+
+        if (!current || row.version > current.version) {
+            latestByFamily.set(familyId, row);
+        }
+    }
+
+    return Array.from(latestByFamily.values())
+        .filter((row) => row.auth_status !== "approved" && row.auth_status !== "rejected")
+        .filter((row) => !filters.status || row.auth_status === filters.status)
+        .sort((a, b) => {
+            const departmentCompare = (a.department_name ?? "").localeCompare(b.department_name ?? "");
+            if (departmentCompare !== 0) return departmentCompare;
+
+            const agencyCompare = (a.agency_name ?? "").localeCompare(b.agency_name ?? "");
+            if (agencyCompare !== 0) return agencyCompare;
+
+            const ouCompare = (a.operating_unit_name ?? "").localeCompare(b.operating_unit_name ?? "");
+            if (ouCompare !== 0) return ouCompare;
+
+            return a.priority_rank - b.priority_rank;
+        });
+}
+
+function getPaginatedDbmProposalReviewRows(
+    rows: DbmProposalReviewBaseRow[],
+    filters: DbmProposalReviewFilters,
+) {
+    const offset = filters.offset ?? 0;
+    const limit = filters.limit ?? rows.length;
+
+    return rows.slice(offset, offset + limit);
 }
 
 export async function updatePendingDbmProposalScopesToRejected(filters: {

@@ -95,23 +95,18 @@ export default async function ProposalDetailsPage({
     )
 
     // 4. Back Navigation Logic
-    const isOwnAgencyForm = session.user.entity_id === data.entity_id
     const isActingAsEvaluator = session.user.workflow_role === "dbm"
 
     let backUrl = "/forms/proposals"
 
     if (session.user.role === "dbm") {
-        if (!isOwnAgencyForm) {
-            backUrl = "/dbm/forms"
-        } else if (isActingAsEvaluator && data.auth_status === "pending_dbm") {
-            backUrl = "/dbm/forms"
-        }
+        backUrl = "/dbm/proposals"
     }
 
     const allowClosedCycleActions =
         session.user.role === "dbm" &&
         isActingAsEvaluator &&
-        backUrl === "/dbm/forms" &&
+        backUrl === "/dbm/proposals" &&
         await canDbmActOnFormForFiscalYear(data.proposal_year)
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForProposalYear && !allowClosedCycleActions;
@@ -162,6 +157,7 @@ export default async function ProposalDetailsPage({
             isDbmEvaluator={isActingAsEvaluator}
             userCanSign={entityActionsLockedByBudgetCycle ? false : userCanSign}
             budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
+            allowClosedCycleActions={allowClosedCycleActions}
             currentSignatoryRole={currentSignatoryRole}
             existingSignature={existingSignature}
             allSignatures={allSignatures}

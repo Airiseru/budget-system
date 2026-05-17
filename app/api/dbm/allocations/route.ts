@@ -49,7 +49,6 @@ export async function POST(request: Request) {
             item_catalog_id: parsed.data.item_catalog_id,
             tier: parsed.data.tier,
             specific_description: parsed.data.specific_description,
-            quantity: parsed.data.quantity,
             currency: parsed.data.currency,
             release_classification: 'unclassified',
             origin_tag: 'legislative_insertion',

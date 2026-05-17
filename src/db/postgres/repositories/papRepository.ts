@@ -4,6 +4,9 @@ import { sql } from 'kysely'
 
 export type PapListFilters = {
     entity_id?: string
+    entity_ids?: string[]
+    category?: 'local' | 'foreign'
+    search?: string
     limit?: number
     offset?: number
 }
@@ -35,6 +38,8 @@ export type PapRelatedForm = {
     type: string
     codename: string | null
     fiscal_year: number
+    parent_form_id: string | null
+    version: number
     created_at: Date
     updated_at: Date
     auth_status: string | null
@@ -118,6 +123,16 @@ export async function getPapByEntityId(entityId: string): Promise<Pap[]> {
 }
 
 export async function getPaginatedPaps(filters: PapListFilters = {}) {
+    if (filters.entity_ids && filters.entity_ids.length === 0) {
+        const limit = filters.limit ?? 15
+
+        return {
+            paps: [],
+            totalCount: 0,
+            totalPages: Math.ceil(0 / limit),
+        }
+    }
+
     let query = createPapBaseQuery()
         .selectAll('paps')
         .select([
@@ -127,8 +142,33 @@ export async function getPaginatedPaps(filters: PapListFilters = {}) {
             sql<string | null>`COALESCE(entities.type, '')`.as('entity_type'),
         ])
 
-    if (filters.entity_id) {
+    if (filters.entity_ids) {
+        query = query.where('paps.entity_id', 'in', filters.entity_ids)
+    } else if (filters.entity_id) {
         query = query.where('paps.entity_id', '=', filters.entity_id)
+    }
+
+    if (filters.category) {
+        query = query.where('paps.category', '=', filters.category)
+    }
+
+    if (filters.search?.trim()) {
+        const search = `%${filters.search.trim()}%`
+        query = query.where(({ eb, or }) => or([
+            eb('paps.title', 'ilike', search),
+            eb('paps.description', 'ilike', search),
+            eb('paps.purpose', 'ilike', search),
+            eb('paps.beneficiaries', 'ilike', search),
+            eb(sql<string>`CONCAT(
+                COALESCE(paps.cost_structure_code, ''),
+                COALESCE(paps.organizational_outcome_code, ''),
+                COALESCE(paps.program_code, ''),
+                COALESCE(paps.subprogram_code, ''),
+                COALESCE(paps.identifier_code, ''),
+                COALESCE(paps.project_title_code, ''),
+                COALESCE(paps.reserved_codes, '')
+            )`, 'ilike', search),
+        ]))
     }
 
     const allPaps = await query
@@ -220,7 +260,7 @@ export async function getPap(criteria: Partial<Pap>): Promise<Pap[]> {
 }
 
 export async function getFormsByPapId(papId: string) {
-    return await db
+    const forms = await db
         .selectFrom('forms')
         .innerJoin('form_paps', 'forms.id', 'form_paps.form_id')
         .leftJoin('entities', 'entities.id', 'forms.entity_id')
@@ -233,6 +273,8 @@ export async function getFormsByPapId(papId: string) {
             'forms.type', 
             'forms.codename',
             'forms.fiscal_year',
+            'forms.parent_form_id',
+            'forms.version',
             'forms.auth_status', 
             'forms.created_at',
             'forms.updated_at',
@@ -242,6 +284,24 @@ export async function getFormsByPapId(papId: string) {
         ])
         .orderBy('forms.updated_at', 'desc')
         .execute();
+
+    const latestByFamily = new Map<string, PapRelatedForm>()
+
+    for (const form of forms) {
+        const familyId = form.parent_form_id ?? form.id
+        const current = latestByFamily.get(familyId)
+
+        if (!current || form.version > current.version || (
+            form.version === current.version &&
+            form.updated_at.getTime() > current.updated_at.getTime()
+        )) {
+            latestByFamily.set(familyId, form)
+        }
+    }
+
+    return [...latestByFamily.values()].sort(
+        (a, b) => b.updated_at.getTime() - a.updated_at.getTime()
+    )
 }
 
 export async function getFullCodeByPapId(papId: string) {

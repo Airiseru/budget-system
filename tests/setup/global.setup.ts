@@ -5,6 +5,39 @@ import { User, Agency, OperatingUnit } from "@/src/types/entities"
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
+async function createUser(email: string, entity_id: string, name: string, position: string): Promise<Partial<User>> {
+    let user = await db.selectFrom('users')
+        .where('email', '=', email)
+        .executeTakeFirst()
+
+    if (!user) {
+        const response = await auth.api.signUpEmail({
+            body: {
+                email: email,
+                password: 'T#st1234T#st1234',
+                name: name,
+                entity_id: entity_id,
+                position: position
+            },
+            asResponse: true
+        })
+    
+        if (response.status !== 200) {
+            throw new Error('Failed to create DBM user')
+        }
+    
+        const responseData = await response.json()
+    
+        user = {
+            id: responseData.user.id,
+            name: responseData.user.name,
+            email: responseData.user.email,
+        }
+    }
+
+    return user
+}
+
 export default async function globalSetup() {
     console.log('Setting up database for Playwright Test')
 
@@ -13,15 +46,18 @@ export default async function globalSetup() {
     
     let dbmExists = false
     let darExists = false
-    let darPersonnelExists = false
-    let darBudgetExists = false
-    let dbmOS = null
+    let dpwhExists = false
+    let dbmOS: Partial<Agency> | null | undefined = null
     let darOS: Partial<Agency> | null | undefined = null
     let darOU: Partial<OperatingUnit> | null | undefined = null
+    let dpwhOS: Partial<Agency> | null | undefined = null
+    let dpwhOU1: Partial<OperatingUnit> | null | undefined = null
+    let dpwhOU2: Partial<OperatingUnit> | null | undefined = null
     
     // Check if department exists
     if (departments.find(d => d.name === 'Department of Budget and Management')) dbmExists = true
     if (departments.find(d => d.name === 'Department of Agrarian Reform')) darExists = true
+    if (departments.find(d => d.name === 'Department of Public Works and Highways')) dpwhExists = true
 
     if (!dbmExists) {
         // Create DBM
@@ -75,133 +111,81 @@ export default async function globalSetup() {
         }, darOS.id as string)
     }
 
-    // Check if DBM user exists
-    const dbmEmail = 'dbm-test@dbm.com'
-    let dbmUser: Partial<User> | null | undefined = await db.selectFrom('users')
-        .where('email', '=', dbmEmail)
-        .executeTakeFirst()
-
-    if (!dbmUser) {
-        // Create DBM admin user
-        const response = await auth.api.signUpEmail({
-            body: {
-                email: dbmEmail,
-                password: 'T#st1234T#st1234',
-                name: 'John Dbm',
-                entity_id: dbmOS?.id as string,
-                position: 'Agency Head'
-            },
-            asResponse: true
+    if (!dpwhExists) {
+        // Create DPWH
+        const dpwh = await EntityRepository.createDepartment({
+            name: 'Department of Public Works and Highways',
+            abbr: 'DPWH',
+            uacs_code: '18'
         })
 
-        if (response.status !== 200) {
-            throw new Error('Failed to create DBM user')
-        }
+        // Create Office of the Secretary
+        dpwhOS = await EntityRepository.createAgency({
+            name: 'Office of the Secretary',
+            uacs_code: '001',
+            type: 'bureau'
+        }, dpwh.id)
 
-        const responseData = await response.json()
+        // Create OU
+        const parentOU = await EntityRepository.createOperatingUnit({
+            name: 'District Engineering Offices and Sub District Engineering Offices',
+            uacs_code: '18'
+        }, dpwhOS.id as string)
 
-        dbmUser = {
-            id: responseData.user.id,
-            name: responseData.user.name,
-            email: responseData.user.email,
-        }
+        dpwhOU1 = await EntityRepository.createOperatingUnit({
+            name: 'Batangas 1st District Engineering Office',
+            uacs_code: '00056',
+            parent_ou_id: parentOU.id
+        }, dpwhOS.id as string)
+
+        dpwhOU2 = await EntityRepository.createOperatingUnit({
+            name: 'Batangas 2nd District Engineering Office',
+            uacs_code: '00057',
+            parent_ou_id: parentOU.id
+        }, dpwhOS.id as string)
     }
+
+    // Check if DBM user exists
+    const dbmEmail = 'dbm-test@dbm.com'
+    let dbmUser = await createUser(dbmEmail, dbmOS?.id as string, "John Dbm", "Agency Head")
 
     // Check if DAR OS Agency Head exists
     const darEmail = 'dar-test@dar.com'
-    let darUser: Partial<User> | null | undefined = await db.selectFrom('users')
-        .where('email', '=', darEmail)
-        .executeTakeFirst()
-
-    if (!darUser) {
-        // Create DAR admin user
-        const response = await auth.api.signUpEmail({
-            body: {
-                email: darEmail,
-                password: 'T#st1234T#st1234',
-                name: 'John Dar',
-                entity_id: darOS?.id as string,
-                position: 'Agency Head'
-            },
-            asResponse: true
-        })
-
-        if (response.status !== 200) {
-            throw new Error('Failed to create DAR user')
-        }
-
-        const responseData = await response.json()
-
-        darUser = {
-            id: responseData.user.id,
-            name: responseData.user.name,
-            email: responseData.user.email,
-        }
-    }
+    let darUser = await createUser(darEmail, darOS?.id as string, "John Dar", "Agency Head")
 
     // Check if DAR Personnel exists
     const darPersonnelEmail = 'dar-personnel-test@dar.com'
-    let darPersonnelUser: Partial<User> | null | undefined = await db.selectFrom('users')
-        .where('email', '=', darPersonnelEmail)
-        .executeTakeFirst()
-
-    if (!darPersonnelUser) {
-        // Create DAR Personnel user
-        const response = await auth.api.signUpEmail({
-            body: {
-                email: darPersonnelEmail,
-                password: 'T#st1234T#st1234',
-                name: 'John Dar Personnel',
-                entity_id: darOU?.id as string,
-                position: 'Personnel Officer'
-            },
-            asResponse: true
-        })
-
-        if (response.status !== 200) {
-            throw new Error('Failed to create DAR Personnel user')
-        }
-
-        const responseData = await response.json()
-
-        darPersonnelUser = {
-            id: responseData.user.id,
-            name: responseData.user.name,
-            email: responseData.user.email,
-        }
-    }
+    let darPersonnelUser = await createUser(darPersonnelEmail, darOU?.id as string, "John Dar Personnel", "Personnel Officer")
 
     // Check if DAR Budget exists
     const darBudgetEmail = 'dar-budget-test@dar.com'
-    let darBudgetUser: Partial<User> | null | undefined = await db.selectFrom('users')
-        .where('email', '=', darBudgetEmail)
-        .executeTakeFirst()
+    let darBudgetUser = await createUser(darBudgetEmail, darOU?.id as string, "John Dar Budget", "Budget Officer")
 
-    if (!darBudgetUser) {
-        // Create DAR Budget user
-        const response = await auth.api.signUpEmail({
-            body: {
-                email: darBudgetEmail,
-                password: 'T#st1234T#st1234',
-                name: 'John Dar Budget',
-                entity_id: darOU?.id as string,
-                position: 'Budget Officer'
-            },
-            asResponse: true
-        })
+    // Check if DAR Planning Officer exists
+    const darPlanningEmail = 'dar-planning-test@dar.com'
+    let darPlanningUser = await createUser(darPlanningEmail, darOU?.id as string, "John Dar Planning", "Planning Officer")
 
-        if (response.status !== 200) {
-            throw new Error('Failed to create DAR Budget user')
-        }
+    // Check if DAR Chief Accountant exists
+    const darCAEmail = 'dar-ca-test@dar.com'
+    let darCAUser = await createUser(darCAEmail, darOU?.id as string, "John Dar CA", "Chief Accountant")
 
-        const responseData = await response.json()
+    // Check if DPWH Budget exists
+    const dpwhBudgetEmail = 'dpwh-budget-test'
+    let dpwhBudgetUser1 = await createUser(`${dpwhBudgetEmail}1@dpwh.com`, dpwhOU1?.id as string, "John DPWH Budget 1", "Budget Officer")
+    let dpwhBudgetUser2 = await createUser(`${dpwhBudgetEmail}2@dpwh.com`, dpwhOU2?.id as string, "John DPWH Budget 2", "Budget Officer")
 
-        darBudgetUser = {
-            id: responseData.user.id,
-            name: responseData.user.name,
-            email: responseData.user.email,
-        }
-    }
+    // Check if DPWH Planning Officer exists
+    const dpwhPlanningEmail = 'dpwh-planning-test'
+    let dpwhPlanningUser1 = await createUser(`${dpwhPlanningEmail}1@dpwh.com`, dpwhOU1?.id as string, "John DPWH Planning 1", "Planning Officer")
+    let dpwhPlanningUser2 = await createUser(`${dpwhPlanningEmail}2@dpwh.com`, dpwhOU2?.id as string, "John DPWH Planning 2", "Planning Officer")
+
+    // Check if DPWH Chief Accountant exists
+    const dpwhCAEmail = 'dpwh-ca-test@dpwh.com'
+    let dpwhCAUser = await createUser(dpwhCAEmail, dpwhOS?.id as string, "John DPWH CA", "Chief Accountant")
+
+    // Check if DPWH Agency Head exists
+    const dpwhAgencyEmail = 'dpwh-agency-test@dpwh.com'
+    let dpwhAgencyUser = await createUser(dpwhAgencyEmail, dpwhOS?.id as string, "John DPWH Agency", "Agency Head")
 
     // Set privileges
     await EntityRepository.updateUser(dbmUser.id ?? '', {
@@ -231,6 +215,63 @@ export default async function globalSetup() {
         role: 'ou',
         access_level: 'encode',
         workflow_role: 'budget_officer',
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(darPlanningUser.id ?? '', {
+        role: 'ou',
+        access_level: 'encode',
+        workflow_role: 'planning_officer',
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(darCAUser.id ?? '', {
+        role: 'ou',
+        access_level: 'encode',
+        workflow_role: 'chief_accountant',
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(dpwhBudgetUser1.id ?? '', {
+        role: 'ou',
+        access_level: 'encode',
+        workflow_role: 'budget_officer',
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(dpwhBudgetUser2.id ?? '', {
+        role: 'ou',
+        access_level: 'encode',
+        workflow_role: 'budget_officer',
+        status: 'active',
+    })
+    
+    await EntityRepository.updateUser(dpwhPlanningUser1.id ?? '', {
+        role: 'ou',
+        access_level: 'encode',
+        workflow_role: 'planning_officer',
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(dpwhPlanningUser2.id ?? '', {
+        role: 'ou',
+        access_level: 'encode',
+        workflow_role: 'planning_officer',
+        status: 'active',
+    })
+    
+    await EntityRepository.updateUser(dpwhCAUser.id ?? '', {
+        role: 'ou',
+        access_level: 'encode',
+        workflow_role: 'chief_accountant',
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(dpwhAgencyUser.id ?? '', {
+        role: 'ou',
+        access_level: 'approve',
+        workflow_role: 'agency_head',
+        is_admin: true,
         status: 'active',
     })
 

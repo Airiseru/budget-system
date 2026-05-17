@@ -8,6 +8,8 @@ import {
 
 export interface ProjectProposalTable {
     id: Generated<string>;
+    parent_form_id: string | null;
+    root_form_id: string;
     entity_id: string;
     title: string;
     proposal_year: number;
@@ -126,6 +128,7 @@ export interface FullProjectProposal extends ProjectProposal {
     prerequisites: PAPPrerequisite[];
     components: CostComponent[];
     cost_by_components?: (CostComponent & {
+        fund_description?: string | null;
         costs?: CostByExpenseClass[];
     })[];
     financial_attributions?: LocalFinancialAttribution[];
@@ -134,6 +137,8 @@ export interface FullProjectProposal extends ProjectProposal {
     foreign_financials?: ForeignFinancialTarget[];
     foreign_physical_targets?: ForeignPhysicalTarget[];
     auth_status: string | null;
+    pap_id?: string | null;
+    version?: number | null;
 }
 
 export interface CostSourceTable {
@@ -145,7 +150,7 @@ export type CostSource = Selectable<CostSourceTable>;
 export interface CostByExpenseClassTable {
     id: Generated<string>;
     cost_source_id: string;
-    expense_class: "PS" | "MOOE" | "CO" | "FE";
+    expense_class: "PS" | "MOOE" | "CO" | "FINEX";
     fund_category: "LP" | "Grant" | "GOP" | null;
     fund_method: "cash" | "non-cash" | null;
     currency: string;

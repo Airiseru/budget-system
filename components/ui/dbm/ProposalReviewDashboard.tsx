@@ -1,13 +1,9 @@
 import Link from 'next/link'
 import BackButton from '@/components/ui/BackButton'
 import {
-    acceptProposalAction,
     completeProposalScopeAction,
-    rejectProposalAction,
 } from '@/src/actions/dbmProposalReview'
 import type { DbmProposalReviewRow } from '@/src/db/postgres/repositories/proposalRepository'
-import type { PapOption } from '@/src/db/postgres/repositories/papRepository'
-import type { UacsFundingSource } from '@/src/types/uacs'
 import { STATUS_COLOR_MAPPER, STATUS_LABELS } from '@/src/lib/constants'
 
 type EntitySegment = {
@@ -32,8 +28,6 @@ type Props = {
     departments: EntitySegment[]
     agencies: EntitySegment[]
     operatingUnits: EntitySegment[]
-    paps: PapOption[]
-    fundingSources: UacsFundingSource[]
 }
 
 const formatAmount = (value: number) =>
@@ -82,7 +76,7 @@ function groupRows(rows: DbmProposalReviewRow[]) {
 
 export default function ProposalReviewDashboard(props: Props) {
     const groupedRows = groupRows(props.rows)
-    const statuses = ['pending_dbm', 'approved', 'rejected', 'draft', 'pending_budget']
+    const statuses = ['pending_dbm', 'draft', 'pending_budget']
 
     return (
         <main className="mx-auto max-w-[1700px] space-y-6 px-4 py-8 pb-20">
@@ -222,30 +216,8 @@ export default function ProposalReviewDashboard(props: Props) {
                                             </div>
                                         </div>
 
-                                        <form action={acceptProposalAction} className="mt-4 rounded-md border border-border p-4">
-                                            <input type="hidden" name="proposal_id" value={proposal.id} />
-                                            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                                                <label className="space-y-1 text-sm font-medium">
-                                                    <span>PREXC/PAP</span>
-                                                    <select name="pap_code" className="w-full rounded border border-border bg-background px-3 py-2" required>
-                                                        <option value="">Select PAP</option>
-                                                        {props.paps.map((pap) => (
-                                                            <option key={pap.id} value={pap.id}>{pap.title}{pap.entity_name ? ` - ${pap.entity_name}` : ''}</option>
-                                                        ))}
-                                                    </select>
-                                                </label>
-                                                <label className="space-y-1 text-sm font-medium">
-                                                    <span>Default Fund Source</span>
-                                                    <select name="default_fund_code" className="w-full rounded border border-border bg-background px-3 py-2" required>
-                                                        <option value="">Select fund source</option>
-                                                        {props.fundingSources.map((fund) => (
-                                                            <option key={fund.code} value={fund.code}>{fund.code} - {fund.description}</option>
-                                                        ))}
-                                                    </select>
-                                                </label>
-                                            </div>
-
-                                            <div className="mt-4 overflow-x-auto">
+                                        <div className="mt-4 rounded-md border border-border p-4">
+                                            <div className="overflow-x-auto">
                                                 <table className="w-full min-w-[760px] text-sm">
                                                     <thead className="text-left text-xs uppercase text-muted-foreground">
                                                         <tr>
@@ -253,7 +225,6 @@ export default function ProposalReviewDashboard(props: Props) {
                                                             <th className="px-3 py-2">Item Catalog</th>
                                                             <th className="px-3 py-2">Fund</th>
                                                             <th className="px-3 py-2 text-right">Proposed</th>
-                                                            <th className="px-3 py-2 text-right">DBM Recommended</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-border">
@@ -261,33 +232,28 @@ export default function ProposalReviewDashboard(props: Props) {
                                                             <tr key={component.id}>
                                                                 <td className="px-3 py-2">{component.component_name}</td>
                                                                 <td className="px-3 py-2">{component.item_name ?? 'Missing item catalog'} {component.expense_class ? `(${component.expense_class})` : ''}</td>
-                                                                <td className="px-3 py-2">{component.fund_code || 'Default fund source'}</td>
+                                                                <td className="px-3 py-2">{component.fund_description || component.fund_code || 'Default fund source'}</td>
                                                                 <td className="px-3 py-2 text-right font-mono">{component.currency} {formatAmount(Number(component.proposed_amt))}</td>
-                                                                <td className="px-3 py-2">
-                                                                    <input
-                                                                        name={`dbm_rec_amt_${component.id}`}
-                                                                        type="number"
-                                                                        min="0"
-                                                                        step="0.01"
-                                                                        defaultValue={Number(component.proposed_amt)}
-                                                                        className="w-full rounded border border-border bg-background px-3 py-2 text-right"
-                                                                    />
-                                                                </td>
                                                             </tr>
                                                         ))}
                                                     </tbody>
                                                 </table>
                                             </div>
 
-                                            <div className="mt-4 flex flex-wrap justify-end gap-2">
-                                                <button formAction={rejectProposalAction} className="rounded border border-red-200 px-4 py-2 text-sm font-semibold text-red-700">
-                                                    Reject
-                                                </button>
-                                                <button className="rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={proposal.auth_status !== 'pending_dbm' || proposal.components.length === 0}>
-                                                    Accept and Create Allocations
-                                                </button>
+                                            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                                                <p className="text-sm text-muted-foreground">
+                                                    Accepting or rejecting this proposal requires opening the form and submitting a digital signature.
+                                                </p>
+                                                {proposal.auth_status === 'pending_dbm' ? (
+                                                    <Link
+                                                        href={`/forms/proposals/${proposal.id}`}
+                                                        className="rounded bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
+                                                    >
+                                                        Open Form to Sign
+                                                    </Link>
+                                                ) : null}
                                             </div>
-                                        </form>
+                                        </div>
                                     </article>
                                 ))}
                             </div>

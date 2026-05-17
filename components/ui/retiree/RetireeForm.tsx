@@ -164,6 +164,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
       } else {
         const err = await response.json();
         setError(err.error || "Failed to save");
+        window.scrollTo({ top: 0, behavior: "smooth" })
       }
     } catch {
       setError("A network error occurred.");
@@ -243,15 +244,17 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
           </div>
 
           <div className="flex gap-3">
-            <button
-              type="submit"
-              onClick={() => setSubmitAction(isDBM ? 'pending_dbm' : 'draft')}
-              disabled={isLoading}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-accent-foreground text-primary px-4 py-2 disabled:opacity-50 hover:bg-accent-foreground/80 transition-all border rounded-md "
-            >
-              <Save size={16} />
-              {isLoading && (submitAction === 'draft' || submitAction === 'pending_dbm') ? 'Saving...' : (isDBM ? 'Overwrite Form' : 'Save Draft')}
-            </button>
+            {!isDBM && (
+              <button
+                type="submit"
+                onClick={() => setSubmitAction('draft')}
+                disabled={isLoading}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-accent-foreground text-primary disabled:opacity-50 hover:bg-accent-foreground/80 transition-all border rounded-md "
+              >
+                <Save size={16} />
+                {isLoading && submitAction === 'draft' ? 'Saving...' : 'Save Draft'}
+              </button>
+            )}
             
             <button
               type="submit"
@@ -260,7 +263,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
               className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md bg-secondary-foreground text-primary disabled:opacity-50 hover:bg-secondary-foreground/80 transition-all"
             >
               <Send size={16} />
-              {isLoading && (submitAction === 'pending_personnel' || submitAction === 'pending_dbm') ? 'Submitting...' : (isDBM ? 'Finalize Overwrite' : 'Finalize & Submit')}
+              {isLoading && (submitAction === 'pending_personnel' || submitAction === 'pending_dbm') ? 'Submitting...' : (isDBM ? 'Overwrite Form' : 'Finalize & Submit')}
             </button>
 
             <button
@@ -436,7 +439,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
         <div className="flex justify-between items-start text-xs text-muted-500 px-2">
           <p>* Ensure &quot;Effectivity Date&quot; falls within FY {fiscalYear} for TLP eligibility.</p>
           <div className="text-right">
-              <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary) * (Number(r.number_vacation_leave) + Number(r.number_sick_leave)) * TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
+            <p className="font-bold text-muted-700">Total Projected Requirement: ₱{retirees.reduce((sum: number, r) => sum + Number(r.highest_monthly_salary) + Number(r.highest_monthly_salary) * (Number(r.number_vacation_leave) + Number(r.number_sick_leave)) * TLB_FACTOR + Number(r.rg_amount), 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</p>
           </div>
         </div>
       </form>

@@ -28,6 +28,7 @@ export interface SignatoryTable {
     id: Generated<string>
     target_table: 'forms' | 'budget_cycles'
     target_record_id: string
+    source_record_id: string
     user_id: string
     role: string // prepared by, certified correct, approved by
     event_type: SignedAuditEventType

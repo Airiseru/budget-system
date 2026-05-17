@@ -9,7 +9,7 @@ import {
     OperatingUnitsTable,
     EntityRequestsTable,
 } from "./entities"
-import { AuditLogTable, MerkleRootTable } from "./audit"
+import { AuditConcurrencyTestTable, AuditLogTable, MerkleRootTable } from "./audit"
 import {
     SalarySchedulesTable,
     SalaryRatesTable,
@@ -71,6 +71,7 @@ export interface Database {
     // audit
     audit_logs: AuditLogTable
     merkle_roots: MerkleRootTable
+    audit_concurrency_test: AuditConcurrencyTestTable
     administrative_overrides: AdministrativeOverrideTable
 
     // paps

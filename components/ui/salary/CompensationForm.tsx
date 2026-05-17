@@ -93,7 +93,7 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                                 required
                             >
                                 <option value="fixed">Fixed Amount (PHP)</option>
-                                <option value="percentage">Percentage (%)</option>
+                                <option value="percentage">Salary Percentage (%)</option>
                                 <option value="salary_multiplier">Salary Multiplier</option>
                                 <option value="value_multiplier">Value Multiplier</option>
                             </select>
@@ -129,7 +129,7 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                                 min={0}
                                 step={calcType !== 'fixed' ? 0.01 : 1}
                                 defaultValue={state?.values?.rule_value ?? ''}
-                                placeholder={calcType !== 'fixed' ? 'e.g. 10.5' : 'e.g. 2000'}
+                                placeholder={(calcType !== 'fixed' && calcType !== 'value_multiplier') ? 'e.g. 10.5' : 'e.g. 2000'}
                                 className="border px-3 py-2 rounded bg-background w-full text-sm"
                                 required
                             />

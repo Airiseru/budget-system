@@ -29,6 +29,12 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn("id", "uuid", (col) =>
             col.primaryKey().references("forms.id").onDelete("cascade"),
         )
+        .addColumn("parent_form_id", "uuid", (col) =>
+            col.references("forms.id").onDelete("cascade"),
+        )
+        .addColumn("root_form_id", "uuid", (col) =>
+            col.references("forms.id").onDelete("cascade").notNull(),
+        )
         .addColumn("entity_id", "uuid", (col) => col.notNull())
         .addColumn("title", "text", (col) => col.notNull())
         .addColumn("proposal_year", "integer", (col) => col.notNull())
@@ -54,10 +60,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn("updated_at", "timestamp", (col) =>
             col.defaultTo(sql`now()`),
         )
-        .addUniqueConstraint("unique_entity_rank", [
-            "entity_id",
-            "priority_rank",
-        ])
         .execute();
 
     // PAP Prerequisites
@@ -219,10 +221,24 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn("cost_source_id", "uuid", (col) =>
             col.references("cost_sources.id").onDelete("cascade").notNull(),
         )
-        .execute();
+        .execute()
+
+    await sql`
+        CREATE UNIQUE INDEX unique_root_project_proposals_entity_rank
+        ON project_proposals (entity_id, proposal_year, priority_rank)
+        WHERE parent_form_id IS NULL;
+    `.execute(db)
+
+    await db.schema
+        .createIndex("idx_project_proposals_root_form_id")
+        .on("project_proposals")
+        .column("root_form_id")
+        .execute()
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
+    await db.schema.dropIndex("idx_project_proposals_root_form_id").ifExists().execute();
+    await sql`DROP INDEX IF EXISTS unique_root_project_proposals_entity_rank;`.execute(db)
     await db.schema.dropTable("cost_by_expense_class").ifExists().execute();
     await db.schema.dropTable("foreign_physical_targets").ifExists().execute();
     await db.schema.dropTable("foreign_financial_targets").ifExists().execute();

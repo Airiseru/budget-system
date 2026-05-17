@@ -34,6 +34,8 @@ type ProposalCostEntry = {
     year?: number;
     tier?: number;
     expense_class?: ProposalExpenseClass;
+    fund_category?: "LP" | "Grant" | "GOP" | null;
+    fund_method?: "cash" | "non_cash" | "non-cash" | null;
     amount?: number;
     expense_classes?: ProposalExpenseValue[];
 };
@@ -43,6 +45,7 @@ type ProposalCostedItem = {
     description?: string;
     location?: string;
     fund_code?: string | null;
+    fund_description?: string | null;
     specific_description?: string | null;
     currency?: string;
     proposed_amt?: number;
@@ -61,18 +64,65 @@ type ProposalLocalPhysicalTarget = {
     year: number;
 };
 
+type ProposalAttributionCost = {
+    year?: number | string;
+    tier?: number | string;
+    costs?: ProposalCostEntry[] | null;
+};
+
+type ProposalFinancialAttribution = {
+    description?: string;
+    attribution_costs?: ProposalAttributionCost[] | null;
+};
+
+type ProposalForeignFinancialTarget = {
+    year?: number;
+    lp_imprest?: number;
+    lp_direct?: number;
+    grant?: number;
+    gop?: number;
+};
+
+type ProposalForeignPhysicalTarget = {
+    name?: string;
+    costs?: ProposalCostEntry[];
+};
+
+type ProposalSignatureSummary = {
+    id: string;
+    user_name: string;
+    role: string;
+    created_at: Date;
+};
+
+type ExistingProposalSignature = {
+    role: string;
+};
+
+type ProposalSession = {
+    user: {
+        id: string;
+        role: string;
+        access_level: string;
+    };
+};
+
 type ProposalViewData = FullProjectProposal & {
+    fiscal_year?: number | null;
     pap_prerequisites?: ProposalPrerequisite[];
     cost_by_components?: ProposalCostedItem[];
-    local_financial_attributions?: ProposalCostedItem[];
+    local_financial_attributions?: ProposalFinancialAttribution[];
     local_locations?: ProposalCostedItem[];
     local_physical_targets?: ProposalLocalPhysicalTarget[];
     local_infrastructure_requirements?: ProposalCostedItem[];
+    foreign_financial_targets?: ProposalForeignFinancialTarget[];
+    foreign_physical_targets?: ProposalForeignPhysicalTarget[];
+    pap_id?: string | null;
 };
 
 interface ProposalViewProps {
-    data: any;
-    session: any;
+    data: ProposalViewData;
+    session: ProposalSession;
     backUrl: string;
     isDbmEvaluator?: boolean;
     originalFormId: string;
@@ -86,15 +136,11 @@ interface ProposalViewProps {
     userInWorkflow: boolean;
     userCanSign: boolean;
     budgetPrepClosedForEntityActions?: boolean;
+    allowClosedCycleActions?: boolean;
     currentSignatoryRole: string | null;
-    existingSignature: any;
-    allSignatures: any[];
-    pastSignatures: {
-        id: string;
-        user_name: string;
-        role: string;
-        created_at: Date;
-    }[];
+    existingSignature: ExistingProposalSignature | null;
+    allSignatures: ProposalSignatureSummary[];
+    pastSignatures: ProposalSignatureSummary[];
     latestRejection: {
         remarks: string | null;
         changed_at: Date;
@@ -106,6 +152,9 @@ interface ProposalViewProps {
 }
 
 const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FINEX"];
+
+const getFundSourceLabel = (item: ProposalCostedItem) =>
+    item.fund_description || item.fund_code || "-";
 
 const CostBreakdownColumns = ({ item }: { item: ProposalCostedItem }) => {
     if (!item.costs || item.costs.length === 0) {
@@ -125,7 +174,7 @@ const CostBreakdownColumns = ({ item }: { item: ProposalCostedItem }) => {
                 return (
                     <td
                         key={cls}
-                        className="p-4 text-right border-l font-mono text-sm"
+                        className="p-4 text-center border-l font-mono text-sm"
                     >
                         {costEntry
                             ? Number(costEntry.amount).toLocaleString(
@@ -155,12 +204,6 @@ const getStatusStyles = (status: string) => {
     }
 };
 
-const FUND_SOURCES = [
-    { label: "LP - Cash", category: "LP", method: "cash" },
-    { label: "LP - Non-Cash", category: "LP", method: "non_cash" },
-    { label: "GOP", category: "GOP", method: null },
-];
-
 export default function ProposalView({
     data,
     session,
@@ -171,6 +214,7 @@ export default function ProposalView({
     userInWorkflow,
     userCanSign,
     budgetPrepClosedForEntityActions = false,
+    allowClosedCycleActions = false,
     currentSignatoryRole,
     existingSignature,
     allSignatures,
@@ -180,12 +224,6 @@ export default function ProposalView({
     deleteFormAction,
     canVerifyIntegrity = false,
 }: ProposalViewProps) {
-    const formData = {
-        id: data.id,
-        fiscal_year: data.fiscal_year,
-        form_id: data.id,
-    };
-
     const budgetYear = Number(data.proposal_year);
     const forwardYear1 = budgetYear + 1;
     const forwardYear2 = budgetYear + 2;
@@ -201,6 +239,12 @@ export default function ProposalView({
             (data.auth_status === "pending_dbm" && isDbmEvaluator));
 
     const canSignCurrentVersion = !familyHasApprovedVersion && userCanSign;
+    const approvedRedirectHref =
+        session.user.role === "dbm" &&
+        data.auth_status === "pending_dbm" &&
+        data.pap_id
+            ? `/dbm/paps/${data.pap_id}`
+            : undefined;
 
     const signSectionStatusMessage =
         familyHasApprovedVersion && data.auth_status !== "approved"
@@ -217,36 +261,35 @@ export default function ProposalView({
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
                 <div className="flex flex-row gap-2">
-                    {canVerifyIntegrity && (
-                        <VerifyIntegrityDialog
-                            tableName="project_proposals"
-                            formId={data.id ?? ""}
-                        />
-                    )}
-                    {canEditCurrentVersion &&
-                        !budgetPrepClosedForEntityActions && (
-                            <>
-                                <Link
-                                    href={`/forms/proposals/${data.id}/edit`}
-                                    className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
+                {canVerifyIntegrity && (
+                    <VerifyIntegrityDialog
+                        tableName="project_proposals"
+                        formId={data.id ?? ""}
+                    />
+                )}
+                {canEditCurrentVersion && !budgetPrepClosedForEntityActions && (
+                    <>
+                        <Link
+                            href={`/forms/proposals/${data.id}/edit`}
+                            className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
+                        >
+                            <Pencil size={14} />
+                            {session.user.role !== "dbm"
+                                ? "Edit Form"
+                                : "Overwrite Form"}
+                        </Link>
+                        {session.user.role !== "dbm" && (    
+                            <form action={updateAuthStatus}>
+                                <button
+                                    type="submit"
+                                    className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
                                 >
-                                    <Pencil size={14} />
-                                    {session.user.role !== "dbm"
-                                        ? "Edit Form"
-                                        : "Overwrite Form"}
-                                </Link>
-                                <form action={updateAuthStatus}>
-                                    <button
-                                        type="submit"
-                                        className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
-                                    >
-                                        {session.user.role !== "dbm"
-                                            ? "Submit Form"
-                                            : "Finalize Overwrite"}
-                                    </button>
-                                </form>
-                            </>
+                                    Submit Form
+                                </button>
+                            </form>
                         )}
+                    </>
+                )}
                 </div>
             </div>
 
@@ -368,7 +411,7 @@ export default function ProposalView({
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
                             {data.pap_prerequisites?.map(
-                                (pre: any, i: number) =>
+                                (pre: ProposalPrerequisite, i: number) =>
                                     pre.type === "authority" && (
                                         <div
                                             key={i}
@@ -403,7 +446,7 @@ export default function ProposalView({
                         </h3>
                         <div className="grid grid-cols-3 gap-4">
                             {data.pap_prerequisites?.map(
-                                (pre: any, i: number) =>
+                                (pre: ProposalPrerequisite, i: number) =>
                                     pre.type === "document" && (
                                         <div
                                             key={i}
@@ -447,7 +490,7 @@ export default function ProposalView({
                         <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
                             <table className="w-full text-sm">
                                 <thead>
-                                    <tr className="bg-muted-50/50 border-b border-muted-100">
+                                    <tr className="bg-muted-50/50 border-b border-muted-100 text-left">
                                         <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
                                             Item Catalog
                                         </th>
@@ -457,20 +500,20 @@ export default function ProposalView({
                                         <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase">
                                             Description
                                         </th>
-                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                        <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-right">
                                             Amount
                                         </th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y">
                                     {data.cost_by_components?.map(
-                                        (comp: any, i: number) => (
+                                        (comp: ProposalCostedItem, i: number) => (
                                             <tr key={i}>
                                                 <td className="p-4 font-medium text-muted-700">
                                                     {comp.component_name}
                                                 </td>
                                                 <td className="p-4 text-muted-700">
-                                                    {comp.fund_code || "-"}
+                                                    {getFundSourceLabel(comp)}
                                                 </td>
                                                 <td className="p-4 text-muted-600">
                                                     {comp.specific_description ||
@@ -547,7 +590,7 @@ export default function ProposalView({
                                 </thead>
 
                                 {data.local_financial_attributions?.map(
-                                    (attr: any, pIdx: number) => {
+                                    (attr: ProposalFinancialAttribution, pIdx: number) => {
                                         const order = [
                                             "PS",
                                             "MOOE",
@@ -558,21 +601,25 @@ export default function ProposalView({
                                         const uniqueClasses = Array.from(
                                             new Set(
                                                 attr.attribution_costs?.flatMap(
-                                                    (c: any) =>
+                                                    (c: ProposalAttributionCost) =>
+                                                        // Add a check for c?.costs to handle the null in your FY 2028 data
                                                         c?.costs
                                                             ?.map(
-                                                                (cost: any) =>
+                                                                (cost: ProposalCostEntry) =>
                                                                     cost?.expense_class,
                                                             )
                                                             .filter(Boolean) ||
                                                         [],
                                                 ),
                                             ),
+                                        ).filter(
+                                            (cls): cls is ProposalExpenseClass =>
+                                                typeof cls === "string",
                                         ).sort(
-                                            (a: any, b: any) =>
+                                            (a: string, b: string) =>
                                                 order.indexOf(a) -
                                                 order.indexOf(b),
-                                        ) as string[];
+                                        );
 
                                         const getVal = (
                                             year: number,
@@ -581,8 +628,8 @@ export default function ProposalView({
                                         ) => {
                                             const yData =
                                                 attr.attribution_costs?.find(
-                                                    (c: any) =>
-                                                        c &&
+                                                    (c: ProposalAttributionCost) =>
+                                                        c && // Ensure c is not null (fixes the FY 2028 issue)
                                                         Number(c.year) ===
                                                             year &&
                                                         (tier === null ||
@@ -596,7 +643,7 @@ export default function ProposalView({
                                             if (cls) {
                                                 return Number(
                                                     yData.costs.find(
-                                                        (cost: any) =>
+                                                        (cost: ProposalCostEntry) =>
                                                             cost?.expense_class ===
                                                             cls,
                                                     )?.amount || 0,
@@ -605,7 +652,7 @@ export default function ProposalView({
 
                                             // Sum all costs for that year/tier
                                             return yData.costs.reduce(
-                                                (sum: number, cost: any) =>
+                                                (sum: number, cost: ProposalCostEntry) =>
                                                     sum +
                                                     Number(cost?.amount || 0),
                                                 0,
@@ -617,23 +664,23 @@ export default function ProposalView({
                                                 key={pIdx}
                                                 className="border-b-2 border-chart-5/50"
                                             >
-                                                <tr className="bg-muted-50/20 font-bold divide-x border-b border-chart-5/20">
-                                                    <td className="p-4 text-muted-900">
+                                                <tr className="bg-muted-50/20 font-bold divide-x border-b border-chart-5/20 text-center">
+                                                    <td className="p-4 text-left text-muted-900">
                                                         {attr.description}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             budgetYear,
                                                             1,
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             budgetYear,
                                                             2,
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono bg-muted-100/20">
+                                                    <td className="p-4 font-mono bg-muted-100/20">
                                                         {(
                                                             getVal(
                                                                 budgetYear,
@@ -645,13 +692,13 @@ export default function ProposalView({
                                                             )
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             forwardYear1,
                                                             1,
                                                         ).toLocaleString()}
                                                     </td>
-                                                    <td className="p-4 text-right font-mono">
+                                                    <td className="p-4 font-mono">
                                                         {getVal(
                                                             forwardYear2,
                                                             1,
@@ -684,9 +731,9 @@ export default function ProposalView({
                                                     return (
                                                         <tr
                                                             key={cls}
-                                                            className="hover:bg-muted-50/30 transition-colors"
+                                                            className="hover:bg-muted-50/30 transition-colors text-center"
                                                         >
-                                                            <td className="p-3 pl-8 text-sm font-medium text-muted-500 border-r border-muted-100 italic">
+                                                            <td className="p-3 pl-8 text-left text-sm font-medium text-muted-500 border-r border-muted-100 italic">
                                                                 {cls}
                                                             </td>
                                                             <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-50">
@@ -699,7 +746,7 @@ export default function ProposalView({
                                                                     ? vbyt2.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-600 bg-muted-50/10 border-r border-muted-100">
+                                                            <td className="p-3 font-mono text-sm text-muted-600 bg-muted-50/10 border-r border-muted-100">
                                                                 {(
                                                                     vbyt1 +
                                                                     vbyt2
@@ -735,7 +782,7 @@ export default function ProposalView({
                             <table className="border rounded-xl w-full bg-white overflow-hidden divide-y">
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100">
-                                        <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                        <th className="py-3 px-4 text-left text-sm font-black text-muted-400 uppercase w-1/3">
                                             Locations
                                         </th>
                                         <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
@@ -754,7 +801,7 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y">
                                     {data.local_locations?.map(
-                                        (loc: any, i: number) => (
+                                        (loc: ProposalCostedItem, i: number) => (
                                             <tr key={i}>
                                                 <td className="p-4 text-muted-700">
                                                     {loc.location}
@@ -777,7 +824,7 @@ export default function ProposalView({
                         </h4>
                         <div className="border rounded-xl bg-white overflow-hidden divide-y">
                             {data.local_physical_targets?.map(
-                                (pt: any, i: number) => (
+                                (pt: ProposalLocalPhysicalTarget, i: number) => (
                                     <div
                                         key={i}
                                         className="p-4 flex justify-between"
@@ -795,7 +842,7 @@ export default function ProposalView({
                     </div>
 
                     {/* Infrastructure Requirements */}
-                    {data.local_infrastructure_requirements?.length > 0 && (
+                    {(data.local_infrastructure_requirements?.length ?? 0) > 0 && (
                         <div className="space-y-3">
                             <h4 className="text-md font-black text-secondary-foreground uppercase flex items-center tracking-widest gap-2">
                                 <Building size={12} />
@@ -824,7 +871,7 @@ export default function ProposalView({
                                     </thead>
                                     <tbody className="divide-y">
                                         {data.local_infrastructure_requirements?.map(
-                                            (infra: any, i: number) => (
+                                            (infra: ProposalCostedItem, i: number) => (
                                                 <tr key={i}>
                                                     <td className="p-4 text-muted-700">
                                                         {infra.description}
@@ -872,11 +919,8 @@ export default function ProposalView({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
-                                    {data.cost_by_components.map(
-                                        (
-                                            comp: ProposalCostedItem,
-                                            i: number,
-                                        ) => (
+                                    {data.cost_by_components?.map(
+                                        (comp: ProposalCostedItem, i: number) => (
                                             <tr
                                                 key={i}
                                                 className="hover:bg-muted-50/30 divide-x transition-colors group"
@@ -885,7 +929,7 @@ export default function ProposalView({
                                                     {comp.component_name}
                                                 </td>
                                                 <td className="py-3 px-4 align-top">
-                                                    {comp.fund_code || "-"}
+                                                    {getFundSourceLabel(comp)}
                                                 </td>
                                                 <td className="py-3 px-4 align-top">
                                                     {comp.specific_description ||
@@ -967,8 +1011,8 @@ export default function ProposalView({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
-                                    {data.foreign_financial_targets.map(
-                                        (target: any, i: any) => {
+                                    {data.foreign_financial_targets?.map(
+                                        (target: ProposalForeignFinancialTarget, i: number) => {
                                             const rowTotal =
                                                 Number(target.lp_imprest || 0) +
                                                 Number(target.lp_direct || 0) +
@@ -1046,8 +1090,8 @@ export default function ProposalView({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
-                                    {data.foreign_physical_targets.map(
-                                        (phys: any, i: any) => (
+                                    {data.foreign_physical_targets?.map(
+                                        (phys: ProposalForeignPhysicalTarget, i: number) => (
                                             <tr
                                                 key={i}
                                                 className="hover:bg-muted-50/30 divide-x transition-colors group"
@@ -1068,14 +1112,17 @@ export default function ProposalView({
                                                             | "non_cash",
                                                     ) =>
                                                         phys.costs?.find(
-                                                            (c: any) =>
+                                                            (c: ProposalCostEntry) =>
                                                                 c.expense_class ===
                                                                     ec &&
                                                                 c.fund_category ===
                                                                     cat &&
                                                                 (cat !== "LP" ||
                                                                     c.fund_method ===
-                                                                        method),
+                                                                        method ||
+                                                                    (method === "non_cash" &&
+                                                                        c.fund_method ===
+                                                                            "non-cash")),
                                                         )?.amount || "";
 
                                                     const lpCash = Number(
@@ -1214,6 +1261,8 @@ export default function ProposalView({
                 pastSignatories={pastSignatures}
                 latestRejection={latestRejection}
                 workflow={PROPOSAL_WORKFLOW}
+                allowClosedCycleAction={allowClosedCycleActions}
+                approvedRedirectHref={approvedRedirectHref}
             />
 
             {/* DANGER ZONE */}

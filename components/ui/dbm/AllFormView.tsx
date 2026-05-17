@@ -34,6 +34,7 @@ interface DBMFormViewProps {
     selectedYear?: number
     selectedStatus: string
     selectedType: string
+    includeVersionHistory: boolean
 }
 
 // Helper to generate the pagination array with ellipses
@@ -56,12 +57,14 @@ export default function AllFormView({
     totalPages,
     selectedYear, 
     selectedStatus, 
-    selectedType 
+    selectedType,
+    includeVersionHistory,
 }: DBMFormViewProps) {
     const router = useRouter();
     const [year, setYear] = useState(selectedYear?.toString() ?? "")
     const [status, setStatus] = useState(selectedStatus || "")
     const [type, setType] = useState(selectedType || "")
+    const [showVersionHistory, setShowVersionHistory] = useState(includeVersionHistory)
 
     const handleFilter = (e: React.SyntheticEvent<HTMLFormElement>) => {
         e.preventDefault();
@@ -71,6 +74,7 @@ export default function AllFormView({
         if (year) params.set('year', year);
         if (status) params.set('status', status);
         if (type) params.set('type', type);
+        if (showVersionHistory) params.set('includeHistory', 'true');
         router.push(`/dbm/forms?${params.toString()}`);
     }
 
@@ -81,6 +85,7 @@ export default function AllFormView({
         if (selectedYear) params.set('year', selectedYear.toString());
         if (selectedStatus) params.set('status', selectedStatus);
         if (selectedType) params.set('type', selectedType);
+        if (includeVersionHistory) params.set('includeHistory', 'true');
         
         params.set('page', targetPage.toString());
         
@@ -103,64 +108,80 @@ export default function AllFormView({
             {/* Filter Bar */}
             <div className="bg-accent p-4 rounded-xl border border-border/30 shadow-sm">
                 <h2 className="text-lg font-semibold mb-2 text-secondary-foreground">Filters</h2>
-                <form onSubmit={handleFilter} className="flex flex-wrap items-end gap-4">
-                    <div className="space-y-1 flex-1 min-w-[150px]">
-                        <label htmlFor='year' className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Fiscal Year</label>
-                        <input 
-                            type="number" 
-                            name="year" 
-                            value={year}
-                            onChange={(e) => setYear(e.target.value)}
-                            placeholder="e.g. 2026"
-                            className="w-full p-2 text-sm border border-border/50 bg-accent text-secondary-foreground rounded-md focus:ring-2 focus:ring-ring outline-none" 
-                        />
-                    </div>
-                    
-                    <div className="space-y-1 flex-1 min-w-[200px]">
-                        <label htmlFor='type' className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Status</label>
-                        <Select value={status || "none"} onValueChange={(value: string | null) => setStatus(value ? (value === "none" ? "" : value) : "")}>
-                            <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mb-0 height-[38px]">
-                                <SelectValue placeholder="Select a status">
-                                    {status ? STATUS_LABELS[status] : "All"}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                                    <SelectItem key={key} value={key !== 'none' ? key : 'none'}>
-                                        {label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                <form onSubmit={handleFilter} className="flex flex-wrap flex-col gap-4">
+                    <div className="flex flex-wrap gap-4">
+                        <div className="space-y-1 flex-1 min-w-[150px]">
+                            <label htmlFor='year' className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Fiscal Year</label>
+                            <input 
+                                type="number" 
+                                name="year" 
+                                value={year}
+                                onChange={(e) => setYear(e.target.value)}
+                                placeholder="e.g. 2026"
+                                className="w-full p-2 text-sm border border-border/50 bg-accent text-secondary-foreground rounded-md focus:ring-2 focus:ring-ring outline-none" 
+                            />
+                        </div>
+                        
+                        <div className="space-y-1 flex-1 min-w-[200px]">
+                            <label htmlFor='type' className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Status</label>
+                            <Select value={status || "none"} onValueChange={(value: string | null) => setStatus(value ? (value === "none" ? "" : value) : "")}>
+                                <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mb-0 height-[38px]">
+                                    <SelectValue placeholder="Select a status">
+                                        {status ? STATUS_LABELS[status] : "All"}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(STATUS_LABELS).map(([key, label]) => (
+                                        <SelectItem key={key} value={key !== 'none' ? key : 'none'}>
+                                            {label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-1 flex-1 min-w-[150px]">
+                            <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Form Type</label>
+                            <Select value={type || "all"} onValueChange={(value) => setType(value ? (value === "all" ? "" : value) : "")}>
+                                <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mb-0 height-[38px]">
+                                    <SelectValue placeholder="Select a form type">
+                                        {type ? FORM_TYPES[type] : "All"}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(FORM_TYPES).map(([key, label]) => (
+                                        <SelectItem key={key} value={key}>
+                                            {label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
 
-                    <div className="space-y-1 flex-1 min-w-[150px]">
-                        <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Form Type</label>
-                        <Select value={type || "all"} onValueChange={(value) => setType(value ? (value === "all" ? "" : value) : "")}>
-                            <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mb-0 height-[38px]">
-                                <SelectValue placeholder="Select a form type">
-                                    {type ? FORM_TYPES[type] : "All"}
-                                </SelectValue>
-                            </SelectTrigger>
-                            <SelectContent>
-                                {Object.entries(FORM_TYPES).map(([key, label]) => (
-                                    <SelectItem key={key} value={key}>
-                                        {label}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
+                    <div className="flex flex-wrap gap-4 justify-between">
+                        <label className="flex h-[38px] items-center gap-2 rounded-md border border-border/50 bg-accent px-3 text-sm font-semibold text-secondary-foreground">
+                            <input
+                                type="checkbox"
+                                checked={showVersionHistory}
+                                onChange={(event) => setShowVersionHistory(event.target.checked)}
+                                className="h-4 w-4"
+                            />
+                            Show all versions
+                        </label>
 
-                    <button type="submit" className="flex items-center gap-2 bg-secondary-foreground text-accent px-5 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/90 transition-colors h-[38px]">
-                        <Filter size={16} /> Filter
-                    </button>
-                    
-                    {(year || status || type) && (
-                        <Link href="/dbm/forms" className="text-sm text-muted-foreground hover:text-secondary-foreground underline underline-offset-2 px-2 h-[38px] flex items-center">
-                            Clear
-                        </Link>
-                    )}
+                        <div className="flex flex-wrap gap-4">
+                            <button type="submit" className="flex items-center gap-2 bg-secondary-foreground text-accent px-5 py-2 rounded-md text-md font-semibold hover:bg-secondary-foreground/90 transition-colors h-[38px]">
+                                <Filter size={16} /> Filter
+                            </button>
+                            
+                            {(year || status || type || showVersionHistory) && (
+                                <Link href="/dbm/forms" className="text-sm text-muted-foreground hover:text-secondary-foreground underline underline-offset-2 px-2 h-[38px] flex items-center">
+                                    Clear
+                                </Link>
+                            )}
+                        </div>
+                    </div>
                 </form>
             </div>
 
