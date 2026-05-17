@@ -259,6 +259,8 @@ export default function StaffForm({
             ...prev,
             positions: [...prev.positions, buildDefaultPosition()],
         }));
+
+        window.scrollTo({ top: 0, behavior: "smooth" })
     };
 
     const removeRow = (index: number) => {
