@@ -4,19 +4,15 @@ import { moveProposalToRank } from "@/src/db/postgres/repositories/proposalRepos
 export async function POST(req: Request) {
     try {
         // POST /api/proposals/move
-        const { proposalId, newRank, scope, entityId, proposalIds } =
-            await req.json();
+        const { entityId, proposalId, newRank } = await req.json();
 
-        await moveProposalToRank(scope, proposalId, newRank, {
-            entityId,
-            proposalIds,
-        });
+        await moveProposalToRank(entityId, proposalId, newRank);
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {
-        console.error("SWAP ERROR:", error);
+        console.error("MOVE ERROR:", error);
         return NextResponse.json(
-            { error: "Failed to swap ranks" },
+            { error: "Failed to move proposal" },
             { status: 500 },
         );
     }
