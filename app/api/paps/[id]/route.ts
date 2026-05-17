@@ -1,5 +1,6 @@
 import { createPapRepository } from '@/src/db/factory'
 import { PapUpdate } from '@/src/types/pap'
+import { getPapUacsFieldErrors, PapUacsUpdateSchema } from '@/src/lib/validations/uacs'
 
 export const dynamic = 'force-dynamic';
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -25,6 +26,15 @@ export async function PUT(
 ) {
     const { id } = await params
     const pap: PapUpdate = await request.json()
+    const validatedPapUacs = PapUacsUpdateSchema.safeParse(pap)
+
+    if (!validatedPapUacs.success) {
+        return Response.json(
+            { fieldErrors: getPapUacsFieldErrors(validatedPapUacs.error) },
+            { status: 400 }
+        )
+    }
+
     const result = await PapRepository.updatePap(id, pap)
     return new Response(JSON.stringify(result))
 }

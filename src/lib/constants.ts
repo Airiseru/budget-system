@@ -11,6 +11,28 @@ export type UACS_CATEOGIRES = 'funding_source' | 'location' | 'object_code'
 
 export const VALID_UACS_CATEGORIES: UACS_CATEOGIRES[] = ['funding_source', 'location', 'object_code']
 
+export const PAP_UACS_SEGMENTS = {
+    cost_structure_code: 1,
+    organizational_outcome_code: 1,
+    program_code: 2,
+    subprogram_code: 2,
+    identifier_code: 1,
+    project_title_code: 5,
+    reserved_codes: 3,
+} as const
+
+export type PapUacsFieldName = keyof typeof PAP_UACS_SEGMENTS
+
+export const PAP_UACS_LABELS: Record<PapUacsFieldName, string> = {
+    cost_structure_code: 'Cost Structure Code',
+    organizational_outcome_code: 'Organizational Outcome Code',
+    program_code: 'Program Code',
+    subprogram_code: 'Subprogram Code',
+    identifier_code: 'Identifier Code',
+    project_title_code: 'Project Title Code',
+    reserved_codes: 'Reserved Codes',
+}
+
 export const FORM_TYPES: Record<string, string> = {
     all: 'All',
     bp_staffing: 'BP Form 204',
