@@ -114,9 +114,8 @@ type CostSourceTableName =
 const toNumber = (value: number | string | undefined, fallback = 0) =>
     value === undefined || value === "" ? fallback : Number(value);
 
-const normalizeFundMethod = (
-    method: ProposalExpenseClass["fund_method"],
-) => (method === "non_cash" ? "non-cash" : method);
+const normalizeFundMethod = (method: ProposalExpenseClass["fund_method"]) =>
+    method === "non_cash" ? "non-cash" : method;
 
 async function assertProposalRankAvailable(
     trx: Transaction<Database>,
@@ -275,7 +274,13 @@ async function insertWithCostSource(
         const costs = item.costs;
 
         // 3. Insert the entity (e.g., the Component Row)
-        await insertCostSourceEntity(trx, tableName, proposalId, source.id, item);
+        await insertCostSourceEntity(
+            trx,
+            tableName,
+            proposalId,
+            source.id,
+            item,
+        );
 
         // 4. Insert the nested expense classes (PS, MOOE, CO, FE)
         if (costs && costs.length > 0) {
@@ -479,7 +484,8 @@ export async function createProjectProposal(
                     // These columns are NOT NULL in your schema,
                     // so ensure they exist in proposalData or use defaults:
                     org_outcome_id: payload.org_outcome_id || "O-1",
-                    description: payload.description || "No description provided.",
+                    description:
+                        payload.description || "No description provided.",
                     purpose: payload.purpose || "No purpose provided.",
                     beneficiaries: payload.beneficiaries || "General Public",
 
@@ -739,6 +745,7 @@ export async function getAllProposalSummaries(
             "f.codename", // e.g., "BP Form 202"
             "pp.proposal_year",
             "pp.priority_rank",
+            "pp.dept_priority_rank",
             "pp.type",
             "pp.total_proposal_cost",
             "pp.total_proposal_currency",
@@ -925,8 +932,9 @@ export async function createAllocationsForApprovedProposalWithExecutor(
         const itemCatalogId = component.item_catalog_id;
 
         const proposedAmount =
-            originalAmountByComponent.get(getComponentAllocationKey(component)) ??
-            0;
+            originalAmountByComponent.get(
+                getComponentAllocationKey(component),
+            ) ?? 0;
         const dbmRecommendedAmount = Number(component.proposed_amt ?? 0);
         const duplicate = await trx
             .selectFrom("budget_allocations")
@@ -949,7 +957,8 @@ export async function createAllocationsForApprovedProposalWithExecutor(
                     proposed_amt: proposedAmount,
                     dbm_rec_amt: dbmRecommendedAmount,
                     currency: component.currency ?? "PHP",
-                    specific_description: component.specific_description ?? null,
+                    specific_description:
+                        component.specific_description ?? null,
                     auth_status: "dbm_approved",
                     updated_at: new Date(),
                 })
@@ -965,7 +974,8 @@ export async function createAllocationsForApprovedProposalWithExecutor(
                     fund_code: component.fund_code ?? null,
                     item_catalog_id: itemCatalogId,
                     tier: 2,
-                    specific_description: component.specific_description ?? null,
+                    specific_description:
+                        component.specific_description ?? null,
                     currency: component.currency ?? "PHP",
                     proposed_amt: proposedAmount,
                     dbm_rec_amt: dbmRecommendedAmount,
@@ -1168,13 +1178,7 @@ export async function createDbmProjectProposalOverwrite(
 ) {
     const sourceForm = await db
         .selectFrom("forms")
-        .select([
-            "id",
-            "entity_id",
-            "parent_form_id",
-            "version",
-            "auth_status",
-        ])
+        .select(["id", "entity_id", "parent_form_id", "version", "auth_status"])
         .where("id", "=", sourceFormId)
         .executeTakeFirstOrThrow();
 
@@ -1267,14 +1271,21 @@ export async function swapProposalRanks(
             .forUpdate()
             .execute();
 
-        const proposalA = proposals.find((proposal) => proposal.id === proposalIdA);
-        const proposalB = proposals.find((proposal) => proposal.id === proposalIdB);
+        const proposalA = proposals.find(
+            (proposal) => proposal.id === proposalIdA,
+        );
+        const proposalB = proposals.find(
+            (proposal) => proposal.id === proposalIdB,
+        );
 
         if (!proposalA || !proposalB) {
             throw new Error("proposal_not_found");
         }
 
-        if (proposalA.entity_id !== entityId || proposalB.entity_id !== entityId) {
+        if (
+            proposalA.entity_id !== entityId ||
+            proposalB.entity_id !== entityId
+        ) {
             throw new Error("proposal_entity_mismatch");
         }
 
@@ -1285,7 +1296,10 @@ export async function swapProposalRanks(
             throw new Error("proposal_year_mismatch");
         }
 
-        if (proposalA.auth_status !== "draft" || proposalB.auth_status !== "draft") {
+        if (
+            proposalA.auth_status !== "draft" ||
+            proposalB.auth_status !== "draft"
+        ) {
             throw new Error("submitted_rank_change");
         }
 
@@ -1563,25 +1577,34 @@ async function listFilteredDbmProposalReviewBaseRows(
             "f.updated_at",
             "f.parent_form_id",
             "f.version",
-            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
+            sql<
+                string | null
+            >`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as(
                 "department_id",
             ),
-            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
+            sql<
+                string | null
+            >`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as(
                 "department_name",
             ),
             sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as(
                 "agency_id",
             ),
-            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as(
-                "agency_name",
-            ),
+            sql<
+                string | null
+            >`COALESCE(agencies.name, parent_agencies.name)`.as("agency_name"),
             "operating_units.id as operating_unit_id",
             "operating_units.name as operating_unit_name",
-            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
+            sql<
+                string | null
+            >`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
                 "entity_name",
             ),
         ])
-        .orderBy(sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`, "asc")
+        .orderBy(
+            sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`,
+            "asc",
+        )
         .orderBy(sql`COALESCE(agencies.name, parent_agencies.name)`, "asc")
         .orderBy("operating_units.name", "asc")
         .orderBy("pp.priority_rank", "asc")
@@ -1599,16 +1622,26 @@ async function listFilteredDbmProposalReviewBaseRows(
     }
 
     return Array.from(latestByFamily.values())
-        .filter((row) => row.auth_status !== "approved" && row.auth_status !== "rejected")
+        .filter(
+            (row) =>
+                row.auth_status !== "approved" &&
+                row.auth_status !== "rejected",
+        )
         .filter((row) => !filters.status || row.auth_status === filters.status)
         .sort((a, b) => {
-            const departmentCompare = (a.department_name ?? "").localeCompare(b.department_name ?? "");
+            const departmentCompare = (a.department_name ?? "").localeCompare(
+                b.department_name ?? "",
+            );
             if (departmentCompare !== 0) return departmentCompare;
 
-            const agencyCompare = (a.agency_name ?? "").localeCompare(b.agency_name ?? "");
+            const agencyCompare = (a.agency_name ?? "").localeCompare(
+                b.agency_name ?? "",
+            );
             if (agencyCompare !== 0) return agencyCompare;
 
-            const ouCompare = (a.operating_unit_name ?? "").localeCompare(b.operating_unit_name ?? "");
+            const ouCompare = (a.operating_unit_name ?? "").localeCompare(
+                b.operating_unit_name ?? "",
+            );
             if (ouCompare !== 0) return ouCompare;
 
             return a.priority_rank - b.priority_rank;
@@ -1660,7 +1693,11 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
             await trx
                 .updateTable("paps")
                 .set({ project_status: "rejected", updated_at: sql`now()` })
-                .where("id", "in", linkedPaps.map((row) => row.pap_id))
+                .where(
+                    "id",
+                    "in",
+                    linkedPaps.map((row) => row.pap_id),
+                )
                 .execute();
         }
     });

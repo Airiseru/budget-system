@@ -53,6 +53,7 @@ export default async function NewProposalPage({
     return (
         <RankManager
             initialProposals={data}
+            isDepartmentUser={session.user.role === "department"}
             entityId={session.user.entity_id}
             lockedYear={lockedYear}
             viewingYear={viewingYear}

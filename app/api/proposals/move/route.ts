@@ -4,9 +4,10 @@ import { moveProposalToRank } from "@/src/db/postgres/repositories/proposalRepos
 export async function POST(req: Request) {
     try {
         // POST /api/proposals/move
-        const { entityId, proposalId, newRank } = await req.json();
+        const { entityId, proposalId, newRank, proposal_year } =
+            await req.json();
 
-        await moveProposalToRank(entityId, proposalId, newRank);
+        await moveProposalToRank(entityId, proposalId, newRank, proposal_year);
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {
