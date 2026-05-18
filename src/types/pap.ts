@@ -29,7 +29,6 @@ export interface PapTable {
     reserved_codes: string | null
     actual_start_date: Date | null
     project_status: PAP_PROJECT_STATUS_TYPES
-    auth_status: string | null
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }

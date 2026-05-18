@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
-import { CheckCircle2, XCircle } from 'lucide-react'
+import { CheckCircle2, X, XCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type FloatingStatusMessage = {
@@ -49,7 +49,20 @@ export default function FloatingStatus({
         >
             <div className="flex items-start gap-2">
                 <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                <span>{status.message}</span>
+                <span className="min-w-0 flex-1">{status.message}</span>
+                <button
+                    type="button"
+                    onClick={onClear}
+                    aria-label="Dismiss status message"
+                    className={cn(
+                        '-mr-1 rounded p-0.5 transition-colors',
+                        isSuccess
+                            ? 'text-emerald-700 hover:bg-emerald-100 hover:text-emerald-900'
+                            : 'text-red-700 hover:bg-red-100 hover:text-red-900'
+                    )}
+                >
+                    <X className="h-4 w-4" />
+                </button>
             </div>
         </div>
     )

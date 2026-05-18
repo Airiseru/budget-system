@@ -17,7 +17,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('email_verified', 'boolean', (col) => col.notNull().defaultTo(false))
         .addColumn('position', 'varchar', (col) => col.notNull())
         .addColumn('role', 'varchar', (col) => col.check(sql`role IN ('dbm', 'department', 'agency', 'ou', 'others')`))
-        .addColumn('workflow_role', 'varchar', (col) => col.check(sql`workflow_role IN ('personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head', 'dbm')`))
+        .addColumn('workflow_role', 'varchar', (col) => col.check(sql`workflow_role IN ('personnel_officer', 'budget_officer', 'planning_officer', 'chief_accountant', 'office_head', 'agency_head', 'department_secretary', 'dbm')`))
         .addColumn('access_level', 'varchar', (col) => col.notNull().defaultTo('none'))
         .addColumn('is_admin', 'boolean', (col) => col.notNull().defaultTo(false))
         .addColumn('signing_pin_hash', 'varchar(60)') // hashed pin for digital signatures

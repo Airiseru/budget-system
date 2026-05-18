@@ -726,7 +726,7 @@ export async function verifyFormSignature(
         }
     }
 
-    const cryptoValid = await verifySignature(
+    const cryptoValidPromise = verifySignature(
         signatory.signature_payload,
         signatory.signature,
         signatory.public_key_snapshot
@@ -739,6 +739,8 @@ export async function verifyFormSignature(
     const keyNotExpiredAtSigning =
         signatory.expires_at === null ||
         signatory.expires_at > signatory.created_at
+
+    const cryptoValid = await cryptoValidPromise
 
     console.log("Crypto valid:", cryptoValid)
     console.log("Key valid at signing:", keyValidAtSigning)

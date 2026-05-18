@@ -26,7 +26,6 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
         .addColumn('actual_start_date', 'date')
         .addColumn('project_status', 'varchar', (col) => col.defaultTo('draft'))
-        .addColumn('auth_status', 'varchar')
         .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()

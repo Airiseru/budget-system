@@ -41,7 +41,6 @@ export default function PapForm({
         identifier_code: pap?.identifier_code || '1',
         actual_start_date: pap?.actual_start_date || null,
         project_status: pap?.project_status || defaultProjectStatus,
-        auth_status: pap?.auth_status || '',
     })
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {

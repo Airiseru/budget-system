@@ -19,7 +19,6 @@ type PapViewData = {
     title: string
     category: string
     project_status: string
-    auth_status?: string | null
     description: string | null
     purpose: string | null
     beneficiaries: string | null

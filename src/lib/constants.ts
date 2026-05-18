@@ -97,6 +97,7 @@ export const WORKFLOW_ROLE_LABELS: Record<string, string> = {
     chief_accountant: 'Chief Accountant',
     office_head: 'Office Head',
     agency_head: 'Agency Head',
+    department_secretary: 'Department Secretary',
     dbm: 'DBM',
 }
 

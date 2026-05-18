@@ -62,23 +62,6 @@ type ProposalForeignFinancialPayload = {
     gop: number;
 };
 
-// type ProposalSummaryData = {
-//     title: string;
-//     proposal_year: number;
-//     priority_rank: number;
-//     is_new?: boolean;
-//     is_infrastructure?: boolean;
-//     for_ict?: boolean | null;
-//     myca_issuance?: boolean | null;
-//     total_proposal_currency?: string;
-//     total_proposal_cost?: number;
-//     type: "202" | "203";
-//     org_outcome_id?: string;
-//     description?: string;
-//     purpose?: string;
-//     beneficiaries?: string;
-// };
-
 type ProposalWritePayload = {
     title: string;
     proposal_year: number;
@@ -493,7 +476,6 @@ export async function createProjectProposal(
                         ? "infrastructure"
                         : "non-infrastructure",
                     project_status: "proposed",
-                    auth_status: authStatus,
                     category: payload.type === "202" ? "local" : "foreign",
                     identifier_code: payload.type === "202" ? "2" : "3",
                 })
@@ -1297,6 +1279,20 @@ export async function swapProposalRanks(
         }
 
         if (
+            proposalA.proposal_year !== proposalYear ||
+            proposalB.proposal_year !== proposalYear
+        ) {
+            throw new Error("proposal_year_mismatch");
+        }
+
+        if (
+            proposalA.proposal_year !== proposalYear ||
+            proposalB.proposal_year !== proposalYear
+        ) {
+            throw new Error("proposal_year_mismatch");
+        }
+
+        if (
             proposalA.auth_status !== "draft" ||
             proposalB.auth_status !== "draft"
         ) {
@@ -1693,11 +1689,7 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
             await trx
                 .updateTable("paps")
                 .set({ project_status: "rejected", updated_at: sql`now()` })
-                .where(
-                    "id",
-                    "in",
-                    linkedPaps.map((row) => row.pap_id),
-                )
+                .where("id", "in", linkedPaps.map((row) => row.pap_id))
                 .execute();
         }
     });
