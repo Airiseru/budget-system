@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
@@ -282,6 +282,7 @@ export default function RankManager({
                         defaultValue={viewingYear ?? ""}
                         className="rounded border border-border bg-background px-3 py-2 text-sm"
                     >
+                        <option value="">All years</option>
                         {availableYears.map((year) => (
                             <option key={year} value={year}>
                                 FY {year}
