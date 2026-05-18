@@ -1,7 +1,7 @@
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
-import { ROLE_LABELS, ACCESS_LEVEL_LABELS } from '@/src/lib/constants'
+import { ROLE_LABELS, ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '@/src/lib/constants'
 
 export default async function UserSettingsPage() {
     const session = await sessionWithEntity()
@@ -36,6 +36,10 @@ export default async function UserSettingsPage() {
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Role</p>
                     <p className="font-medium capitalize">{ROLE_LABELS[session.user.role] ?? session.user.role}</p>
+                </div>
+                <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground">Workflow Role</p>
+                    <p className="font-medium capitalize">{WORKFLOW_ROLE_LABELS[session.user.workflow_role ?? ''] ?? session.user.workflow_role}</p>
                 </div>
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Administrator Access</p>

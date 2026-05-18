@@ -1,7 +1,7 @@
 import { db } from "@/src/db/postgres/database"
 import { createEntityRepository } from "@/src/db/factory"
 import { auth } from "@/src/lib/auth"
-import { User, Agency, OperatingUnit } from "@/src/types/entities"
+import { User, Department, Agency, OperatingUnit } from "@/src/types/entities"
 
 const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
 
@@ -47,9 +47,13 @@ export default async function globalSetup() {
     let dbmExists = false
     let darExists = false
     let dpwhExists = false
+
+    let dbm: Partial<Department> | null | undefined = null
     let dbmOS: Partial<Agency> | null | undefined = null
+    let dar: Partial<Department> | null | undefined = null
     let darOS: Partial<Agency> | null | undefined = null
     let darOU: Partial<OperatingUnit> | null | undefined = null
+    let dpwh: Partial<Department> | null | undefined = null
     let dpwhOS: Partial<Agency> | null | undefined = null
     let dpwhOU1: Partial<OperatingUnit> | null | undefined = null
     let dpwhOU2: Partial<OperatingUnit> | null | undefined = null
@@ -61,7 +65,7 @@ export default async function globalSetup() {
 
     if (!dbmExists) {
         // Create DBM
-        const dbm = await EntityRepository.createDepartment({
+        dbm = await EntityRepository.createDepartment({
             name: 'Department of Budget and Management',
             abbr: 'DBM',
             uacs_code: '06'
@@ -72,7 +76,7 @@ export default async function globalSetup() {
             name: 'Office of the Secretary',
             uacs_code: '001',
             type: 'bureau'
-        }, dbm.id)
+        }, dbm.id as string)
     }
     else {
         dbmOS = agencies.find(a =>
@@ -85,7 +89,7 @@ export default async function globalSetup() {
 
     if (!darExists) {
         // Create DAR
-        const dar = await EntityRepository.createDepartment({
+        dar = await EntityRepository.createDepartment({
             name: 'Department of Agrarian Reform',
             abbr: 'DAR',
             uacs_code: '04'
@@ -96,7 +100,7 @@ export default async function globalSetup() {
             name: 'Office of the Secretary',
             uacs_code: '001',
             type: 'bureau'
-        }, dar.id)
+        }, dar.id as string)
 
         // Create OU
         const parentOU = await EntityRepository.createOperatingUnit({
@@ -113,7 +117,7 @@ export default async function globalSetup() {
 
     if (!dpwhExists) {
         // Create DPWH
-        const dpwh = await EntityRepository.createDepartment({
+        dpwh = await EntityRepository.createDepartment({
             name: 'Department of Public Works and Highways',
             abbr: 'DPWH',
             uacs_code: '18'
@@ -124,7 +128,7 @@ export default async function globalSetup() {
             name: 'Office of the Secretary',
             uacs_code: '001',
             type: 'bureau'
-        }, dpwh.id)
+        }, dpwh.id as string)
 
         // Create OU
         const parentOU = await EntityRepository.createOperatingUnit({
@@ -146,8 +150,16 @@ export default async function globalSetup() {
     }
 
     // Check if DBM user exists
+    const dbmSecretaryEmail = 'dbm-secretary-test@dbm.com'
+    let dbmSecretaryUser = await createUser(dbmSecretaryEmail, dbm?.id as string, "John Dbm Secretary", "Department Secretary")
+
+    // Check if DBM Agency Head exists
     const dbmEmail = 'dbm-test@dbm.com'
     let dbmUser = await createUser(dbmEmail, dbmOS?.id as string, "John Dbm", "Agency Head")
+
+    // Check if DAR user exists
+    const darSecretaryEmail = 'dar-secretary-test@dar.com'
+    let darSecretaryUser = await createUser(darSecretaryEmail, dar?.id as string, "John Dar Secretary", "Department Secretary")
 
     // Check if DAR OS Agency Head exists
     const darEmail = 'dar-test@dar.com'
@@ -169,6 +181,10 @@ export default async function globalSetup() {
     const darCAEmail = 'dar-ca-test@dar.com'
     let darCAUser = await createUser(darCAEmail, darOU?.id as string, "John Dar CA", "Chief Accountant")
 
+    // Check if DPWH Secretary exists
+    const dpwhSecretaryEmail = 'dpwh-secretary-test@dpwh.com'
+    let dpwhSecretaryUser = await createUser(dpwhSecretaryEmail, dpwh?.id as string, "John DPWH Secretary", "Department Secretary")
+
     // Check if DPWH Budget exists
     const dpwhBudgetEmail = 'dpwh-budget-test'
     let dpwhBudgetUser1 = await createUser(`${dpwhBudgetEmail}1@dpwh.com`, dpwhOU1?.id as string, "John DPWH Budget 1", "Budget Officer")
@@ -188,10 +204,26 @@ export default async function globalSetup() {
     let dpwhAgencyUser = await createUser(dpwhAgencyEmail, dpwhOS?.id as string, "John DPWH Agency", "Agency Head")
 
     // Set privileges
+    await EntityRepository.updateUser(dbmSecretaryUser.id ?? '', {
+        role: 'dbm',
+        access_level: 'approve',
+        workflow_role: 'department_secretary',
+        is_admin: true,
+        status: 'active',
+    })
+
     await EntityRepository.updateUser(dbmUser.id ?? '', {
         role: 'dbm', 
         access_level: 'approve',
         workflow_role: 'dbm',
+        is_admin: true,
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(darSecretaryUser.id ?? '', {
+        role: 'department',
+        access_level: 'approve',
+        workflow_role: 'department_secretary',
         is_admin: true,
         status: 'active',
     })
@@ -229,6 +261,13 @@ export default async function globalSetup() {
         role: 'ou',
         access_level: 'encode',
         workflow_role: 'chief_accountant',
+        status: 'active',
+    })
+
+    await EntityRepository.updateUser(dpwhSecretaryUser.id ?? '', {
+        role: 'department',
+        access_level: 'approve',
+        workflow_role: 'department_secretary',
         status: 'active',
     })
 
