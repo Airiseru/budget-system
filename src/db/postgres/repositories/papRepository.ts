@@ -256,10 +256,6 @@ export async function getPap(criteria: Partial<Pap>): Promise<Pap[]> {
         query = query.where('project_status', '=', criteria.project_status)
     }
 
-    if (criteria.auth_status !== undefined) {
-        query = query.where('auth_status', '=', criteria.auth_status)
-    }
-
     return await query.selectAll().execute()
 }
 

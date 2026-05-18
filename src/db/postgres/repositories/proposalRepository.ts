@@ -470,7 +470,6 @@ export async function createProjectProposal(
                         ? "infrastructure"
                         : "non-infrastructure",
                     project_status: "proposed",
-                    auth_status: authStatus,
                     category: payload.type === "202" ? "local" : "foreign",
                     identifier_code: payload.type === "202" ? "2" : "3",
                 })
