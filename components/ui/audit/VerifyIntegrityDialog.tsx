@@ -68,7 +68,11 @@ export default function VerifyIntegrityDialog({
                                     {error}
                                 </div>
                             ) : (
-                                <FormIntegrityPanel result={result} />
+                                <FormIntegrityPanel
+                                    result={result}
+                                    tableName={tableName}
+                                    formId={formId}
+                                />
                             )}
                         </div>
                     </div>

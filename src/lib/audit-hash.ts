@@ -212,19 +212,159 @@ export function buildGlobalMerkleTree(allEntityLogs: AuditLog[]): MerkleTree {
     })
 }
 
-export function generateMerkleProofForEntry(
-    logs: AuditLog[],
-    targetLog: AuditLog
-): {
+export type MerkleProofCheck = {
     isValid: boolean
     proofArray: string[]
     root: string
-} {
+    leafHash: string | null
+    reason?: string
+}
+
+export type AuditSealReference = {
+    root_hash: string
+    log_count: number
+    created_at?: Date | string
+}
+
+export type SealedMerkleProofCheck = MerkleProofCheck & {
+    isSealed: boolean
+    sealedAt: Date | string | null
+    sealedLogCount: number | null
+    rebuiltRootMatchesSeal: boolean
+}
+
+export function checkCurrentProof(
+    allEntityLogs: AuditLog[],
+    latestFormLog: AuditLog
+): MerkleProofCheck {
+    if (allEntityLogs.length === 0) {
+        return {
+            isValid: false,
+            proofArray: [],
+            root: '',
+            leafHash: null,
+            reason: 'No audit logs found for this entity.',
+        }
+    }
+
+    const targetExists = allEntityLogs.some(log => log.id === latestFormLog.id)
+    if (!targetExists) {
+        return {
+            isValid: false,
+            proofArray: [],
+            root: '',
+            leafHash: latestFormLog.hash,
+            reason: 'Latest form log is not present in the current entity audit logs.',
+        }
+    }
+
+    const tree = buildGlobalMerkleTree(allEntityLogs)
+    const root = tree.getHexRoot()
+    const leaf = Buffer.from(latestFormLog.hash, 'hex')
+    const proof = tree.getProof(leaf)
+
+    return {
+        isValid: tree.verify(proof, leaf, root),
+        proofArray: proof.map((entry) => entry.data.toString('hex')),
+        root,
+        leafHash: latestFormLog.hash,
+    }
+}
+
+export function checkSealedProof(
+    allEntityLogs: AuditLog[],
+    latestFormLog: AuditLog,
+    lastSeal: AuditSealReference | null | undefined
+): SealedMerkleProofCheck {
+    if (!lastSeal) {
+        return {
+            isValid: false,
+            isSealed: false,
+            proofArray: [],
+            root: '',
+            leafHash: latestFormLog.hash,
+            sealedAt: null,
+            sealedLogCount: null,
+            rebuiltRootMatchesSeal: false,
+            reason: 'No official seal exists yet.',
+        }
+    }
+
+    if (allEntityLogs.length < lastSeal.log_count) {
+        return {
+            isValid: false,
+            isSealed: false,
+            proofArray: [],
+            root: lastSeal.root_hash,
+            leafHash: latestFormLog.hash,
+            sealedAt: lastSeal.created_at ?? null,
+            sealedLogCount: lastSeal.log_count,
+            rebuiltRootMatchesSeal: false,
+            reason: 'The current audit log has fewer entries than the last official seal.',
+        }
+    }
+
+    const sealedLogs = allEntityLogs.slice(0, lastSeal.log_count)
+    const isSealed = sealedLogs.some(log => log.id === latestFormLog.id)
+
+    if (!isSealed) {
+        return {
+            isValid: false,
+            isSealed: false,
+            proofArray: [],
+            root: lastSeal.root_hash,
+            leafHash: latestFormLog.hash,
+            sealedAt: lastSeal.created_at ?? null,
+            sealedLogCount: lastSeal.log_count,
+            rebuiltRootMatchesSeal: false,
+            reason: 'Latest form log is not included in the last official seal yet.',
+        }
+    }
+
+    const sealedTree = buildGlobalMerkleTree(sealedLogs)
+    const rebuiltRoot = sealedTree.getHexRoot()
+    const rebuiltRootMatchesSeal = rebuiltRoot === lastSeal.root_hash
+
+    if (!rebuiltRootMatchesSeal) {
+        return {
+            isValid: false,
+            isSealed: true,
+            proofArray: [],
+            root: rebuiltRoot,
+            leafHash: latestFormLog.hash,
+            sealedAt: lastSeal.created_at ?? null,
+            sealedLogCount: lastSeal.log_count,
+            rebuiltRootMatchesSeal,
+            reason: 'Rebuilt sealed root does not match the official seal.',
+        }
+    }
+
+    const leaf = Buffer.from(latestFormLog.hash, 'hex')
+    const proof = sealedTree.getProof(leaf)
+
+    return {
+        isValid: sealedTree.verify(proof, leaf, lastSeal.root_hash),
+        isSealed: true,
+        proofArray: proof.map((entry) => entry.data.toString('hex')),
+        root: lastSeal.root_hash,
+        leafHash: latestFormLog.hash,
+        sealedAt: lastSeal.created_at ?? null,
+        sealedLogCount: lastSeal.log_count,
+        rebuiltRootMatchesSeal,
+    }
+}
+
+export function checkMerkleProofForEntry(
+    logs: AuditLog[],
+    targetLog: AuditLog
+): MerkleProofCheck {
     if (logs.length === 0) {
         return {
             isValid: false,
             proofArray: [],
             root: '',
+            leafHash: null,
+            reason: 'No audit logs found.',
         }
     }
 
@@ -237,5 +377,6 @@ export function generateMerkleProofForEntry(
         isValid: tree.verify(proof, leaf, root),
         proofArray: proof.map((entry) => entry.data.toString('hex')),
         root,
+        leafHash: targetLog.hash,
     }
 }

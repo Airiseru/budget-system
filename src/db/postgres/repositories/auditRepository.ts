@@ -7,6 +7,8 @@ import {
     verifyChainSegment,
     buildGlobalMerkleTree,
     buildSignaturePayload,
+    checkCurrentProof,
+    checkSealedProof,
 } from "@/src/lib/audit-hash"
 import { verifySignature } from "@/src/lib/crypto"
 import { 
@@ -321,43 +323,34 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
 
     if (!firstLog) return null
 
-    // Fetch the latest OFFICIAL seal for this entity
-    const lastSeal = await db
-        .selectFrom('merkle_roots')
-        .selectAll()
-        .where('entity_id', '=', firstLog.entity_id)
-        .orderBy('created_at', 'desc')
-        .limit(1)
-        .executeTakeFirst()
+    // Fetch all logs in parallel
+    const [lastSeal, allEntityLogs] = await Promise.all([
+        db
+            .selectFrom('merkle_roots')
+            .selectAll()
+            .where('entity_id', '=', firstLog.entity_id)
+            .orderBy('created_at', 'desc')
+            .limit(1)
+            .executeTakeFirst(),
+        db
+            .selectFrom('audit_logs')
+            .selectAll()
+            .where('entity_id', '=', firstLog.entity_id)
+            .orderBy('changed_at', 'asc')
+            .orderBy('id', 'asc')
+            .execute(),
+    ])
 
-    // Fetch all current logs for the entity
-    const allEntityLogs = await db
-        .selectFrom('audit_logs')
-        .selectAll()
-        .where('entity_id', '=', firstLog.entity_id)
-        .orderBy('changed_at', 'asc')
-        .orderBy('id', 'asc')
-        .execute()
-
-    // Standard verification does not rebuild Merkle trees.
-    // We only treat the published seal as usable if enough logs still exist
-    // to cover the sealed checkpoint.
-    let isSealedRootValid = true
     const sealedLogCount = lastSeal?.log_count ?? 0
     const sealedLogs = lastSeal ? allEntityLogs.slice(0, sealedLogCount) : []
     const postSealLogs = lastSeal ? allEntityLogs.slice(sealedLogCount) : allEntityLogs
-    
-    if (lastSeal) {
-        if (allEntityLogs.length < sealedLogCount) {
-            isSealedRootValid = false
-        }
-    }
+    const sealHasEnoughLogs = !lastSeal || allEntityLogs.length >= sealedLogCount
 
     const formLogs = allEntityLogs.filter(
         l => l.table_name === tableName && l.record_id === recordId
     )
+    const latestFormLog = formLogs[formLogs.length - 1] ?? null
     const logIndexMap = new Map(allEntityLogs.map((log, index) => [log.id, index]))
-    const currentGlobalRoot = lastSeal?.root_hash ?? null
 
     const formLogsWithProofs = formLogs.map(log => {
         const logIndex = logIndexMap.get(log.id) ?? -1
@@ -370,146 +363,65 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
         }
     })
 
-    // Run ledger integrity and state reconstruction in parallel
-    const [chainResult, stateResult] = await Promise.all([
-        // Verify the chain
-        Promise.resolve(
-            lastSeal && isSealedRootValid
-                ? verifyChainSegment(
-                    postSealLogs,
-                    sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
-                )
-                : verifyChain(allEntityLogs)
-        ),
+    // Preload the form state
+    const statePreloadPromise = formLogs.length > 0
+        ? Promise.all([
+            fetchHydratedFormState(tableName, recordId),
+            keyRepository.listSignatoriesByTarget('forms', recordId),
+            db
+                .selectFrom('forms')
+                .select(['id', 'type'])
+                .where('id', '=', recordId)
+                .executeTakeFirst(),
+        ])
+        : Promise.resolve(null)
 
-        // Verify the data state
-        (async () => {
-            let isDataMatch = false
-            let reconstructedState = null
-            let currentState = null
-            let approvalHashesValid = true
-            let snapshotsMatchHistory = true
-            let signatureEventsValid = true
-            let signatoryRowsValid = true
-            let authorizationSnapshotsValid = true
+    // Merkle proof logic
+    const proofTask = Promise.resolve().then(() => {
+        const currentProof = latestFormLog
+            ? checkCurrentProof(allEntityLogs, latestFormLog)
+            : null
+        const sealedProof = latestFormLog
+            ? checkSealedProof(allEntityLogs, latestFormLog, lastSeal)
+            : null
+        const isSealedRootValid = !lastSeal
+            ? true
+            : !sealHasEnoughLogs
+            ? false
+            : sealedProof?.isSealed
+            ? sealedProof.rebuiltRootMatchesSeal
+            : true
 
-            if (formLogs.length === 0) {
-                return {
-                    isMissingCurrentState: false,
-                    isDataMatch,
-                    debugState: {
-                        reconstructedState,
-                        currentState,
-                        approvalHashesValid,
-                        snapshotsMatchHistory,
-                        signatureEventsValid,
-                        signatoryRowsValid,
-                        authorizationSnapshotsValid,
-                        isDataMatch,
-                    },
-                }
-            }
+        return {
+            currentProof,
+            sealedProof,
+            isSealedRootValid,
+            currentGlobalRoot: currentProof?.root ?? null,
+        }
+    })
 
-            const [hydratedState, targetSignatories, formRecord] = await Promise.all([
-                fetchHydratedFormState(tableName, recordId),
-                keyRepository.listSignatoriesByTarget('forms', recordId),
-                db
-                    .selectFrom('forms')
-                    .select(['id', 'type'])
-                    .where('id', '=', recordId)
-                    .executeTakeFirst(),
-            ])
-            currentState = hydratedState
-            const workflow = formRecord ? getWorkflow(formRecord.type) : null
-            const usedSignatoryIds = new Set<string>()
+    // Chain verification logic
+    const chainTask = Promise.resolve().then(() =>
+        lastSeal && sealHasEnoughLogs
+            ? verifyChainSegment(
+                postSealLogs,
+                sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
+            )
+            : verifyChain(allEntityLogs)
+    )
 
-            if (!currentState) {
-                return {
-                    isMissingCurrentState: true,
-                    isDataMatch: false,
-                    debugState: { error: "Form missing from database." },
-                }
-            }
+    // Data state reconstruction & verification
+    const stateTask = (async () => {
+        let isDataMatch = false
+        let reconstructedState = null
+        let currentState = null
+        let approvalHashesValid = true
+        let snapshotsMatchHistory = true
+        let signatureEventsValid = true
+        let signatoryRowsValid = true
+        let authorizationSnapshotsValid = true
 
-            for (const log of formLogsWithProofs) {
-                const payload = log.payload as Record<string, unknown>
-
-                if (log.event_type === 'CREATE_FORM') {
-                    reconstructedState = JSON.parse(JSON.stringify(payload))
-                }
-                else if (log.event_type === 'EDIT_FORM') {
-                    if (reconstructedState) {
-                        reconstructedState = replayDiffs(reconstructedState, [payload as Diff])
-                    }
-                }
-                else if (log.event_type === 'SUBMIT_FORM') {
-                    if (reconstructedState) {
-                        const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
-                        const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
-
-                        const historyMatch = isEqual(cleanedReconstructedState, cleanedPayload)
-                        if (!historyMatch) {
-                            snapshotsMatchHistory = false
-                            console.log(`[AUDIT] Broken Snapshot: Log ${log.id} expected state ${JSON.stringify(cleanedReconstructedState)} BUT GOT ${JSON.stringify(cleanedPayload)}`)
-                        }
-                    } else {
-                        snapshotsMatchHistory = false
-                    }
-
-                    reconstructedState = JSON.parse(canonicalStringify(payload))
-
-                }
-                else if (isSignedAuditEvent(log.event_type)) {
-                    if (!workflow || !reconstructedState) {
-                        signatureEventsValid = false
-                        signatoryRowsValid = false
-                        authorizationSnapshotsValid = false
-                        approvalHashesValid = false
-                        continue
-                    }
-
-                    const verificationResult = await verifySignedAuditEventAgainstSignatory({
-                        log: log as SignedAuditLog,
-                        workflow,
-                        reconstructedState,
-                        tableName,
-                        usedSignatoryIds,
-                        signatories: targetSignatories,
-                    })
-
-                    if (!verificationResult.formStateHashValid) {
-                        console.log(`[AUDIT] Broken Approval Hash: Log ${log.id} with event type ${log.event_type} expected reconstructed state hash to match signed form_state_hash ${payload?.form_state_hash ?? 'missing'}. Reconstructed state: ${JSON.stringify(reconstructedState)}`)
-                        approvalHashesValid = false
-                    }
-                    if (!verificationResult.cryptographicValid) {
-                        signatureEventsValid = false
-                    }
-                    if (!verificationResult.matched) {
-                        signatoryRowsValid = false
-                    }
-                    if (!verificationResult.authorizationValid) {
-                        authorizationSnapshotsValid = false
-                    }
-                }
-            }
-
-            const cleanedReconstructedState = reconstructedState
-                ? cleanDataBasedOnTable(tableName, reconstructedState)
-                : null
-
-            const cleanedCurrentState = currentState
-                ? cleanDataBasedOnTable(tableName, currentState)
-                : null
-
-            isDataMatch =
-                !!cleanedReconstructedState &&
-                isEqual(cleanedReconstructedState, cleanedCurrentState) &&
-                approvalHashesValid &&
-                snapshotsMatchHistory &&
-                signatureEventsValid &&
-                signatoryRowsValid &&
-                authorizationSnapshotsValid
-
+        if (formLogs.length === 0) {
             return {
                 isMissingCurrentState: false,
                 isDataMatch,
@@ -524,19 +436,154 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
                     isDataMatch,
                 },
             }
-        })(),
+        }
+
+        const preloadedState = await statePreloadPromise
+        if (!preloadedState) {
+            return {
+                isMissingCurrentState: false,
+                isDataMatch,
+                debugState: {
+                    reconstructedState,
+                    currentState,
+                    approvalHashesValid,
+                    snapshotsMatchHistory,
+                    signatureEventsValid,
+                    signatoryRowsValid,
+                    authorizationSnapshotsValid,
+                    isDataMatch,
+                },
+            }
+        }
+
+        const [hydratedState, targetSignatories, formRecord] = preloadedState
+        currentState = hydratedState
+        const workflow = formRecord ? getWorkflow(formRecord.type) : null
+        const usedSignatoryIds = new Set<string>()
+
+        if (!currentState) {
+            return {
+                isMissingCurrentState: true,
+                isDataMatch: false,
+                debugState: { error: "Form missing from database." },
+            }
+        }
+
+        for (const log of formLogsWithProofs) {
+            const payload = log.payload as Record<string, unknown>
+
+            if (log.event_type === 'CREATE_FORM') {
+                reconstructedState = JSON.parse(JSON.stringify(payload))
+            }
+            else if (log.event_type === 'EDIT_FORM') {
+                if (reconstructedState) {
+                    reconstructedState = replayDiffs(reconstructedState, [payload as Diff])
+                }
+            }
+            else if (log.event_type === 'SUBMIT_FORM') {
+                if (reconstructedState) {
+                    const cleanedPayload = cleanDataBasedOnTable(tableName, payload)
+                    const cleanedReconstructedState = cleanDataBasedOnTable(tableName, reconstructedState)
+
+                    const historyMatch = isEqual(cleanedReconstructedState, cleanedPayload)
+                    if (!historyMatch) {
+                        snapshotsMatchHistory = false
+                        console.log(`[AUDIT] Broken Snapshot: Log ${log.id} expected state ${JSON.stringify(cleanedReconstructedState)} BUT GOT ${JSON.stringify(cleanedPayload)}`)
+                    }
+                } else {
+                    snapshotsMatchHistory = false
+                }
+
+                reconstructedState = JSON.parse(canonicalStringify(payload))
+
+            }
+            else if (isSignedAuditEvent(log.event_type)) {
+                if (!workflow || !reconstructedState) {
+                    signatureEventsValid = false
+                    signatoryRowsValid = false
+                    authorizationSnapshotsValid = false
+                    approvalHashesValid = false
+                    continue
+                }
+
+                const verificationResult = await verifySignedAuditEventAgainstSignatory({
+                    log: log as SignedAuditLog,
+                    workflow,
+                    reconstructedState,
+                    tableName,
+                    usedSignatoryIds,
+                    signatories: targetSignatories,
+                })
+
+                if (!verificationResult.formStateHashValid) {
+                    console.log(`[AUDIT] Broken Approval Hash: Log ${log.id} with event type ${log.event_type} expected reconstructed state hash to match signed form_state_hash ${payload?.form_state_hash ?? 'missing'}. Reconstructed state: ${JSON.stringify(reconstructedState)}`)
+                    approvalHashesValid = false
+                }
+                if (!verificationResult.cryptographicValid) {
+                    signatureEventsValid = false
+                }
+                if (!verificationResult.matched) {
+                    signatoryRowsValid = false
+                }
+                if (!verificationResult.authorizationValid) {
+                    authorizationSnapshotsValid = false
+                }
+            }
+        }
+
+        const cleanedReconstructedState = reconstructedState
+            ? cleanDataBasedOnTable(tableName, reconstructedState)
+            : null
+
+        const cleanedCurrentState = currentState
+            ? cleanDataBasedOnTable(tableName, currentState)
+            : null
+
+        isDataMatch =
+            !!cleanedReconstructedState &&
+            isEqual(cleanedReconstructedState, cleanedCurrentState) &&
+            approvalHashesValid &&
+            snapshotsMatchHistory &&
+            signatureEventsValid &&
+            signatoryRowsValid &&
+            authorizationSnapshotsValid
+
+        return {
+            isMissingCurrentState: false,
+            isDataMatch,
+            debugState: {
+                reconstructedState,
+                currentState,
+                approvalHashesValid,
+                snapshotsMatchHistory,
+                signatureEventsValid,
+                signatoryRowsValid,
+                authorizationSnapshotsValid,
+                isDataMatch,
+            },
+        }
+    })()
+
+    // Run all tasks in parallel
+    const [proofResult, chainResult, stateResult] = await Promise.all([
+        proofTask,
+        chainTask,
+        stateTask,
     ])
 
     return {
         isTimelineIntact: chainResult.isValid,
-        isSealedRootValid: isSealedRootValid,
+        isSealedRootValid: proofResult.isSealedRootValid,
         timelineBrokenAt: chainResult.brokenAt,
         chainFailureReport: chainResult.report ?? null,
         isDataMatch: stateResult.isMissingCurrentState ? false : stateResult.isDataMatch,
-        currentGlobalRoot: currentGlobalRoot,
+        currentGlobalRoot: proofResult.currentGlobalRoot,
         lastSealedRoot: lastSeal?.root_hash || null,
         totalEntityEvents: allEntityLogs.length,
         formEventCount: formLogs.length,
+        latestFormLogId: latestFormLog?.id ?? null,
+        currentProof: proofResult.currentProof,
+        sealedProof: proofResult.sealedProof,
         formLogs: formLogsWithProofs,
         debugState: stateResult.debugState
     }
@@ -787,7 +834,7 @@ export async function sealDailyAuditLog(entityId: string) {
     return { success: true, rootHash }
 }
 
-export async function generateMerkleProofForEntry(entityId: string, logId: string) {
+export async function checkSealedProofForEntry(entityId: string, logId: string) {
     const lastSeal = await db
         .selectFrom('merkle_roots')
         .selectAll()
@@ -807,20 +854,105 @@ export async function generateMerkleProofForEntry(entityId: string, logId: strin
         .limit(lastSeal.log_count)
         .execute()
 
-    const tree = buildGlobalMerkleTree(sealedLogs)
     const index = sealedLogs.findIndex(l => l.id === logId)
     if (index === -1) throw new Error('Entry not found in sealed logs')
 
-    const leaf = Buffer.from(sealedLogs[index].hash, 'hex')
-    const proof = tree.getProof(leaf, index)
+    const proof = checkSealedProof(sealedLogs, sealedLogs[index], {
+        root_hash: lastSeal.root_hash,
+        log_count: lastSeal.log_count,
+        created_at: lastSeal.created_at,
+    })
 
     return {
         entryId: logId,
         leaf: sealedLogs[index].hash,
-        proof: proof.map(p => p.data.toString('hex')),
-        root: lastSeal.root_hash,
+        proof: proof.proofArray,
+        root: proof.root,
         sealedAt: lastSeal.created_at,
+        isValid: proof.isValid,
     }
+}
+
+export async function checkSealConsistency(entityId: string) {
+    const seals = await db
+        .selectFrom('merkle_roots')
+        .selectAll()
+        .where('entity_id', '=', entityId)
+        .orderBy('created_at', 'desc')
+        .limit(2)
+        .execute()
+
+    if (seals.length < 2) {
+        return {
+            isValid: false,
+            reason: 'At least two seals are required to check seal consistency.',
+            previousSeal: null,
+            latestSeal: seals[0] ?? null,
+        }
+    }
+
+    const [latestSeal, previousSeal] = seals
+    const allEntityLogs = await db
+        .selectFrom('audit_logs')
+        .selectAll()
+        .where('entity_id', '=', entityId)
+        .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
+        .execute()
+
+    const countsAreMonotonic = latestSeal.log_count >= previousSeal.log_count
+    const hasEnoughLogs = allEntityLogs.length >= latestSeal.log_count
+    const previousLogs = hasEnoughLogs
+        ? allEntityLogs.slice(0, previousSeal.log_count)
+        : []
+    const latestLogs = hasEnoughLogs
+        ? allEntityLogs.slice(0, latestSeal.log_count)
+        : []
+    const rebuiltPreviousRoot = previousLogs.length > 0
+        ? buildGlobalMerkleTree(previousLogs).getHexRoot()
+        : ''
+    const rebuiltLatestRoot = latestLogs.length > 0
+        ? buildGlobalMerkleTree(latestLogs).getHexRoot()
+        : ''
+    const previousRootMatches = rebuiltPreviousRoot === previousSeal.root_hash
+    const latestRootMatches = rebuiltLatestRoot === latestSeal.root_hash
+
+    return {
+        isValid: countsAreMonotonic && hasEnoughLogs && previousRootMatches && latestRootMatches,
+        reason: !countsAreMonotonic
+            ? 'Latest seal log count is smaller than the previous seal log count.'
+            : !hasEnoughLogs
+            ? 'Current audit log has fewer entries than the latest seal.'
+            : !previousRootMatches
+            ? 'Previous seal root does not match the rebuilt audit prefix.'
+            : !latestRootMatches
+            ? 'Latest seal root does not match the rebuilt audit prefix.'
+            : null,
+        previousSeal,
+        latestSeal,
+        currentLogCount: allEntityLogs.length,
+        rebuiltPreviousRoot,
+        rebuiltLatestRoot,
+        previousRootMatches,
+        latestRootMatches,
+        countsAreMonotonic,
+    }
+}
+
+export async function checkSealConsistencyForForm(tableName: string, recordId: string) {
+    const firstLog = await db
+        .selectFrom('audit_logs')
+        .select('entity_id')
+        .where('table_name', '=', tableName)
+        .where('record_id', '=', recordId)
+        .orderBy('changed_at', 'asc')
+        .orderBy('id', 'asc')
+        .limit(1)
+        .executeTakeFirst()
+
+    if (!firstLog) return null
+
+    return await checkSealConsistency(firstLog.entity_id)
 }
 
 export async function getPayloadOfFormSignEvent(

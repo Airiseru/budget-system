@@ -18,7 +18,7 @@ export function FormProofDetails({ isValid, leafHash, root, proof }: ProofDetail
         return (
             <div className="mt-2 p-2 bg-destructive/10 border border-destructive/20 rounded flex items-center gap-2 text-xs text-destructive font-medium">
                 <ShieldAlert className="h-4 w-4" />
-                Cryptographic signature failed verification.
+                Merkle proof failed verification.
             </div>
         )
     }
@@ -29,7 +29,7 @@ export function FormProofDetails({ isValid, leafHash, root, proof }: ProofDetail
             <div className="px-3 py-2 bg-emerald-50/50 flex items-center justify-between">
                 <div className="flex items-center gap-2 text-emerald-700 font-medium text-xs">
                     <ShieldCheck className="h-4 w-4" />
-                    <span>Cryptographically Verified</span>
+                    <span>Merkle Proof Verified</span>
                 </div>
                 <button 
                     onClick={() => setExpanded(!expanded)}

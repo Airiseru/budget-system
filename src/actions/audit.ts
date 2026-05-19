@@ -369,6 +369,15 @@ export async function getFormIntegrity(tableName: string, recordId: string) {
     return res
 }
 
+export async function getFormSealConsistency(tableName: string, recordId: string) {
+    const session = await sessionDetails()
+    if (!session || (session.user.role !== 'dbm' && !isAdminUser(session.user))) {
+        throw new Error('Unauthorized')
+    }
+
+    return await AuditRepository.checkSealConsistencyForForm(tableName, recordId)
+}
+
 export async function getAllocationSignoffIntegrity(
     fiscalYear: number,
     signoffType: 'nep' | 'gaa'

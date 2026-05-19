@@ -3,7 +3,115 @@
 import { useState } from 'react'
 import { ShieldCheck, ShieldX, ChevronDown, ChevronUp, Database, Lock, Unlock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { FormProofDetails } from './FormProofDetails'
+import { getFormSealConsistency } from '@/src/actions/audit'
+
+type ProofCheck = {
+    isValid: boolean
+    proofArray: string[]
+    root: string
+    leafHash: string | null
+    reason?: string
+}
+
+type SealedProofCheck = ProofCheck & {
+    isSealed: boolean
+    sealedAt: string | Date | null
+    sealedLogCount: number | null
+    rebuiltRootMatchesSeal: boolean
+}
+
+type SealConsistencyResult = {
+    isValid: boolean
+    reason: string | null
+    previousSeal: {
+        root_hash: string
+        log_count: number
+        created_at: string | Date
+    } | null
+    latestSeal: {
+        root_hash: string
+        log_count: number
+        created_at: string | Date
+    } | null
+    currentLogCount?: number
+    rebuiltPreviousRoot?: string
+    rebuiltLatestRoot?: string
+    previousRootMatches?: boolean
+    latestRootMatches?: boolean
+    countsAreMonotonic?: boolean
+} | null
+
+type IntegrityDebugState = {
+    error?: string
+    reconstructedState?: unknown
+    currentState?: unknown
+    approvalHashesValid?: boolean
+    snapshotsMatchHistory?: boolean
+    signatureEventsValid?: boolean
+    signatoryRowsValid?: boolean
+    authorizationSnapshotsValid?: boolean
+    isDataMatch?: boolean
+}
+
+function formatDebugValue(value: unknown) {
+    if (value === undefined || value === null) return 'Not available'
+
+    try {
+        return JSON.stringify(value, null, 2)
+    } catch {
+        return String(value)
+    }
+}
+
+function getDataMismatchReasons(debugState?: IntegrityDebugState | null) {
+    if (!debugState) {
+        return ['No detailed debug state was returned by the verifier.']
+    }
+
+    const reasons: string[] = []
+
+    if (debugState.error) reasons.push(debugState.error)
+    if (debugState.reconstructedState === null || debugState.reconstructedState === undefined) {
+        reasons.push('The verifier could not reconstruct the form state from the audit trail.')
+    }
+    if (debugState.currentState === null || debugState.currentState === undefined) {
+        reasons.push('The current form record could not be loaded from the database.')
+    }
+    if (debugState.snapshotsMatchHistory === false) {
+        reasons.push('A submitted form snapshot does not match the state reconstructed from earlier audit events.')
+    }
+    if (debugState.approvalHashesValid === false) {
+        reasons.push('A signed approval/rejection hash does not match the reconstructed form state.')
+    }
+    if (debugState.signatureEventsValid === false) {
+        reasons.push('At least one signature event failed cryptographic verification.')
+    }
+    if (debugState.signatoryRowsValid === false) {
+        reasons.push('A signed audit event does not match its stored signatory record.')
+    }
+    if (debugState.authorizationSnapshotsValid === false) {
+        reasons.push('A signer authorization snapshot does not match the expected workflow role/access level.')
+    }
+
+    const explicitChecksPassed =
+        debugState.reconstructedState !== undefined &&
+        debugState.reconstructedState !== null &&
+        debugState.currentState !== undefined &&
+        debugState.currentState !== null &&
+        debugState.snapshotsMatchHistory !== false &&
+        debugState.approvalHashesValid !== false &&
+        debugState.signatureEventsValid !== false &&
+        debugState.signatoryRowsValid !== false &&
+        debugState.authorizationSnapshotsValid !== false
+
+    if (reasons.length === 0 && explicitChecksPassed) {
+        reasons.push('The reconstructed form state and current database state are different.')
+    }
+
+    return reasons
+}
 
 export type IntegrityResult = {
     isTimelineIntact: boolean
@@ -14,6 +122,10 @@ export type IntegrityResult = {
     lastSealedRoot: string | null
     totalEntityEvents: number
     formEventCount: number
+    latestFormLogId?: string | null
+    currentProof?: ProofCheck | null
+    sealedProof?: SealedProofCheck | null
+    debugState?: IntegrityDebugState | null
     formLogs: Array<{
         id: string
         entity_id: string
@@ -36,8 +148,37 @@ export type IntegrityResult = {
     }>
 }
 
-export function FormIntegrityPanel({ result }: { result: IntegrityResult | null }) {
+export function FormIntegrityPanel({
+    result,
+    tableName,
+    formId,
+}: {
+    result: IntegrityResult | null
+    tableName?: string
+    formId?: string
+}) {
     const [showLogs, setShowLogs] = useState(false)
+    const [showDataMismatchDetails, setShowDataMismatchDetails] = useState(false)
+    const [sealConsistency, setSealConsistency] = useState<SealConsistencyResult>(null)
+    const [sealConsistencyLoading, setSealConsistencyLoading] = useState(false)
+    const [sealConsistencyError, setSealConsistencyError] = useState<string | null>(null)
+
+    async function handleSealConsistencyCheck() {
+        if (!tableName || !formId) return
+
+        setSealConsistencyLoading(true)
+        setSealConsistencyError(null)
+
+        try {
+            const consistencyResult = await getFormSealConsistency(tableName, formId)
+            setSealConsistency(consistencyResult as SealConsistencyResult)
+        } catch (error) {
+            console.error('Failed to verify seal consistency', error)
+            setSealConsistencyError('Failed to verify seal consistency. Please try again.')
+        } finally {
+            setSealConsistencyLoading(false)
+        }
+    }
 
     if (!result) {
         return (
@@ -53,6 +194,7 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
     const Icon = isFullyValid ? ShieldCheck : ShieldX
     const iconColor = isFullyValid ? 'text-emerald-600' : 'text-destructive'
     const headerBg = isFullyValid ? 'bg-emerald-50/50' : 'bg-destructive/10'
+    const dataMismatchReasons = getDataMismatchReasons(result.debugState)
 
     return (
         <div className="border border-border rounded-lg overflow-hidden shadow-sm">
@@ -94,9 +236,66 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
                 
                 {/* Data State Tampering Warning */}
                 {!result.isDataMatch && result.isTimelineIntact && (
-                    <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs border border-destructive/20 flex gap-2">
-                        <Database className="h-4 w-4 shrink-0 mt-0.5" />
-                        <p><strong>Database Tampering Detected:</strong> The ledger history is intact, but the current database row does not match the digitally signed history.</p>
+                    <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs border border-destructive/20">
+                        <div className="flex gap-2">
+                            <Database className="h-4 w-4 shrink-0 mt-0.5" />
+                            <div className="flex-1 space-y-2">
+                                <p><strong>Database Tampering Detected:</strong> The ledger history is intact, but the current database row does not match the digitally signed history.</p>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowDataMismatchDetails((current) => !current)}
+                                    className="inline-flex items-center gap-1 text-xs font-semibold text-destructive underline-offset-2 hover:underline"
+                                >
+                                    {showDataMismatchDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                    {showDataMismatchDetails ? 'Hide mismatch details' : 'Show mismatch details'}
+                                </button>
+                            </div>
+                        </div>
+
+                        {showDataMismatchDetails && (
+                            <div className="mt-3 space-y-3 rounded-md border border-destructive/20 bg-white p-3 text-slate-700">
+                                <div>
+                                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-destructive">Detected Cause</p>
+                                    <ul className="list-disc space-y-1 pl-4">
+                                        {dataMismatchReasons.map((reason) => (
+                                            <li key={reason}>{reason}</li>
+                                        ))}
+                                    </ul>
+                                </div>
+
+                                <div className="grid gap-3 md:grid-cols-2">
+                                    <div>
+                                        <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Reconstructed From Audit Logs</p>
+                                        <pre className="max-h-48 overflow-auto rounded border bg-slate-50 p-2 text-[10px] text-slate-600">
+                                            {formatDebugValue(result.debugState?.reconstructedState)}
+                                        </pre>
+                                    </div>
+                                    <div>
+                                        <p className="mb-1 text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Current Database State</p>
+                                        <pre className="max-h-48 overflow-auto rounded border bg-slate-50 p-2 text-[10px] text-slate-600">
+                                            {formatDebugValue(result.debugState?.currentState)}
+                                        </pre>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-2 md:grid-cols-2">
+                                    {[
+                                        ['Submitted snapshots match history', result.debugState?.snapshotsMatchHistory],
+                                        ['Signed form hashes match reconstructed state', result.debugState?.approvalHashesValid],
+                                        ['Signature events are cryptographically valid', result.debugState?.signatureEventsValid],
+                                        ['Signatory records match audit events', result.debugState?.signatoryRowsValid],
+                                        ['Authorization snapshots match workflow', result.debugState?.authorizationSnapshotsValid],
+                                    ].map(([label, value]) => (
+                                        <div key={String(label)} className="flex items-center justify-between gap-2 rounded border bg-slate-50 px-2 py-1.5">
+                                            <span>{label}</span>
+                                            <Badge variant={value === false ? 'destructive' : 'outline'} className={value === false ? '' : 'border-emerald-600 text-emerald-700 bg-white'}>
+                                                {value === false ? 'Failed' : value === true ? 'Passed' : 'N/A'}
+                                            </Badge>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -127,6 +326,130 @@ export function FormIntegrityPanel({ result }: { result: IntegrityResult | null 
                         </p>
                     </div>
                 </div>
+
+                {/* Latest Form Log Merkle Proofs */}
+                {result.latestFormLogId && (
+                    <div className="space-y-3 border-b border-border/50 pb-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Latest Form Log Merkle Proofs</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Proofs are generated for the most recent audit event for this form.
+                                </p>
+                            </div>
+                            <Badge variant="secondary" className="font-mono text-[10px]">
+                                {result.latestFormLogId}
+                            </Badge>
+                        </div>
+
+                        {result.currentProof ? (
+                            <div className="rounded-lg border p-3">
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                    <p className="text-xs font-bold uppercase tracking-wider text-slate-700">Current Audit Tree</p>
+                                    <Badge variant={result.currentProof.isValid ? 'default' : 'destructive'} className={result.currentProof.isValid ? 'bg-emerald-600 text-white' : ''}>
+                                        {result.currentProof.isValid ? 'Included' : 'Invalid'}
+                                    </Badge>
+                                </div>
+                                {result.currentProof.leafHash ? (
+                                    <FormProofDetails
+                                        isValid={result.currentProof.isValid}
+                                        leafHash={result.currentProof.leafHash}
+                                        root={result.currentProof.root}
+                                        proof={result.currentProof.proofArray}
+                                    />
+                                ) : (
+                                    <p className="text-xs text-muted-foreground">{result.currentProof.reason ?? 'Current proof unavailable.'}</p>
+                                )}
+                            </div>
+                        ) : null}
+
+                        {result.sealedProof ? (
+                            <div className="rounded-lg border p-3">
+                                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                    <div>
+                                        <p className="text-xs font-bold uppercase tracking-wider text-slate-700">Last Official Seal</p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                            {result.sealedProof.isSealed
+                                                ? `Covered by seal with ${result.sealedProof.sealedLogCount} logs.`
+                                                : result.sealedProof.reason}
+                                        </p>
+                                    </div>
+                                    <Badge
+                                        variant={result.sealedProof.isValid ? 'default' : result.sealedProof.isSealed ? 'destructive' : 'outline'}
+                                        className={result.sealedProof.isValid ? 'bg-emerald-600 text-white' : ''}
+                                    >
+                                        {result.sealedProof.isValid ? 'Sealed' : result.sealedProof.isSealed ? 'Invalid' : 'Not Yet Sealed'}
+                                    </Badge>
+                                </div>
+                                {result.sealedProof.leafHash && result.sealedProof.isSealed ? (
+                                    <FormProofDetails
+                                        isValid={result.sealedProof.isValid}
+                                        leafHash={result.sealedProof.leafHash}
+                                        root={result.sealedProof.root}
+                                        proof={result.sealedProof.proofArray}
+                                    />
+                                ) : null}
+                            </div>
+                        ) : null}
+                    </div>
+                )}
+
+                {/* Advanced Seal Consistency Check */}
+                {tableName && formId ? (
+                    <div className="space-y-3 border-b border-border/50 pb-4">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Advanced Seal Consistency</p>
+                                <p className="text-xs text-muted-foreground">
+                                    Checks whether the latest seal preserves the previous sealed history.
+                                </p>
+                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={handleSealConsistencyCheck}
+                                disabled={sealConsistencyLoading}
+                            >
+                                {sealConsistencyLoading ? 'Checking...' : 'Check Seal Consistency'}
+                            </Button>
+                        </div>
+
+                        {sealConsistencyError && (
+                            <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
+                                {sealConsistencyError}
+                            </div>
+                        )}
+
+                        {sealConsistency && (
+                            <div className="rounded-lg border p-3 text-xs">
+                                <div className="mb-2 flex items-center justify-between gap-2">
+                                    <p className="font-bold uppercase tracking-wider text-slate-700">Seal Consistency Result</p>
+                                    <Badge variant={sealConsistency.isValid ? 'default' : 'destructive'} className={sealConsistency.isValid ? 'bg-emerald-600 text-white' : ''}>
+                                        {sealConsistency.isValid ? 'Consistent' : 'Needs Attention'}
+                                    </Badge>
+                                </div>
+                                <p className={sealConsistency.isValid ? 'text-emerald-700' : 'text-destructive'}>
+                                    {sealConsistency.isValid
+                                        ? 'The latest seal is a valid continuation of the previous seal.'
+                                        : sealConsistency.reason ?? 'Seal consistency could not be confirmed.'}
+                                </p>
+                                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                                    <div className="rounded bg-slate-50 p-2">
+                                        <p className="font-semibold text-slate-700">Previous seal</p>
+                                        <p>Logs: {sealConsistency.previousSeal?.log_count ?? 'N/A'}</p>
+                                        <p className="font-mono break-all text-[10px]">{sealConsistency.previousSeal?.root_hash ?? 'N/A'}</p>
+                                    </div>
+                                    <div className="rounded bg-slate-50 p-2">
+                                        <p className="font-semibold text-slate-700">Latest seal</p>
+                                        <p>Logs: {sealConsistency.latestSeal?.log_count ?? 'N/A'}</p>
+                                        <p className="font-mono break-all text-[10px]">{sealConsistency.latestSeal?.root_hash ?? 'N/A'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : null}
 
                 {/* Audit Log Timeline Toggle */}
                 {result.formLogs.length > 0 && (
