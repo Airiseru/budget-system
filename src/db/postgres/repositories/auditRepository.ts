@@ -32,6 +32,11 @@ import type { Database } from "@/src/types"
 import { getNextStatus, getWorkflow, type Workflow } from "@/src/lib/workflows"
 import * as keyRepository from "./keyRepository"
 import * as budgetAllocationRepository from "./budgetAllocationRepository"
+import type { AllocationSignoffSnapshot } from "./budgetAllocationRepository"
+import type {
+    AllocationAuditPayload,
+    AllocationFieldChange,
+} from "@/src/lib/allocation-audit"
 
 type DbExecutor = Kysely<Database> | Transaction<Database>
 type SignedAuditLog = AuditLog & {
@@ -69,6 +74,181 @@ function getWorkflowActionForEvent(eventType: SignedAuditEventType): 'approve' |
 
 function didTimestampsMatch(left: Date | string, right: Date | string) {
     return new Date(left).getTime() === new Date(right).getTime()
+}
+
+function parseAuditPayload<T>(payload: unknown): T | null {
+    if (!payload) return null
+
+    if (typeof payload === 'string') {
+        try {
+            return JSON.parse(payload) as T
+        } catch {
+            return null
+        }
+    }
+
+    return payload as T
+}
+
+function valuesMatch(left: unknown, right: unknown) {
+    if (typeof left === 'number' || typeof right === 'number') {
+        return Number(left ?? 0) === Number(right ?? 0)
+    }
+
+    return (left ?? null) === (right ?? null)
+}
+
+function getSnapshotComparableValue(
+    snapshot: AllocationSignoffSnapshot,
+    allocationId: string,
+    field: string,
+) {
+    const row = snapshot.allocations.find(
+        (allocation) => allocation.allocation_id === allocationId,
+    )
+
+    if (!row) return undefined
+
+    if (field === 'nep_amt' || field === 'gaa_amt') return Number(row.amount ?? 0)
+    if (field === 'valid_from') return row.valid_from ?? null
+    if (field === 'valid_until') return row.valid_until ?? null
+
+    return undefined
+}
+
+function verifyAllocationAuditTrail(params: {
+    signoffType: 'nep' | 'gaa'
+    currentState: AllocationSignoffSnapshot
+    logs: AuditLog[]
+}) {
+    const relevantEventTypes =
+        params.signoffType === 'nep'
+            ? new Set<AuditEventType>([
+                'UPDATE_ALLOCATION_AMOUNT',
+                'VETO_NEP_ALLOCATION',
+            ])
+            : new Set<AuditEventType>([
+                'UPDATE_ALLOCATION_AMOUNT',
+                'UPDATE_ALLOCATION_VALIDITY',
+                'INSERT_LEGISLATIVE_ALLOCATION',
+                'REMOVE_GAA_ALLOCATION',
+                'BULK_UPDATE_ALLOCATION_VALIDITY',
+            ])
+    const comparableFields =
+        params.signoffType === 'nep'
+            ? new Set(['nep_amt'])
+            : new Set(['gaa_amt', 'valid_from', 'valid_until'])
+    const orderedLogs = params.logs
+        .filter((log) => relevantEventTypes.has(log.event_type))
+        .sort((a, b) => {
+            const timeDiff = new Date(a.changed_at).getTime() - new Date(b.changed_at).getTime()
+            return timeDiff === 0 ? a.id.localeCompare(b.id) : timeDiff
+        })
+    const lastValueByAllocationField = new Map<string, unknown>()
+    const mismatches: Array<{
+        log_id: string
+        allocation_id: string | null
+        field: string | null
+        reason: string
+        expected?: unknown
+        actual?: unknown
+    }> = []
+
+    for (const log of orderedLogs) {
+        const payload = parseAuditPayload<AllocationAuditPayload>(log.payload)
+
+        if (!payload?.allocation_id) {
+            mismatches.push({
+                log_id: log.id,
+                allocation_id: null,
+                field: null,
+                reason: 'Allocation audit log is missing allocation_id.',
+            })
+            continue
+        }
+
+        if (
+            params.signoffType === 'gaa' &&
+            log.event_type === 'INSERT_LEGISLATIVE_ALLOCATION'
+        ) {
+            const currentRow = params.currentState.allocations.find(
+                (allocation) => allocation.allocation_id === payload.allocation_id,
+            )
+
+            if (!currentRow) {
+                mismatches.push({
+                    log_id: log.id,
+                    allocation_id: payload.allocation_id,
+                    field: null,
+                    reason: 'Legislative insertion is missing from the current GAA snapshot.',
+                })
+            }
+        }
+
+        const fieldChanges = payload.field_changes ?? {}
+
+        for (const [field, change] of Object.entries(fieldChanges) as Array<[string, AllocationFieldChange]>) {
+            if (!comparableFields.has(field)) continue
+
+            const stateKey = `${payload.allocation_id}:${field}`
+            const previousValue = lastValueByAllocationField.get(stateKey)
+
+            if (
+                previousValue !== undefined &&
+                !valuesMatch(previousValue, change.from)
+            ) {
+                mismatches.push({
+                    log_id: log.id,
+                    allocation_id: payload.allocation_id,
+                    field,
+                    reason: 'Allocation audit diff is not continuous with the previous logged value.',
+                    expected: previousValue,
+                    actual: change.from,
+                })
+            }
+
+            lastValueByAllocationField.set(stateKey, change.to)
+        }
+    }
+
+    for (const [stateKey, lastLoggedValue] of lastValueByAllocationField.entries()) {
+        const [allocationId, field] = stateKey.split(':')
+        const currentValue = getSnapshotComparableValue(
+            params.currentState,
+            allocationId,
+            field,
+        )
+
+        if (currentValue === undefined) {
+            mismatches.push({
+                log_id: 'current-snapshot',
+                allocation_id: allocationId,
+                field,
+                reason: 'Allocation with logged changes is missing from the current signoff snapshot.',
+                expected: lastLoggedValue,
+                actual: undefined,
+            })
+            continue
+        }
+
+        if (!valuesMatch(lastLoggedValue, currentValue)) {
+            mismatches.push({
+                log_id: 'current-snapshot',
+                allocation_id: allocationId,
+                field,
+                reason: 'Latest logged allocation value does not match the current signoff snapshot.',
+                expected: lastLoggedValue,
+                actual: currentValue,
+            })
+        }
+    }
+
+    return {
+        isAllocationAuditTrailValid: mismatches.length === 0,
+        allocationAuditMismatchCount: mismatches.length,
+        allocationAuditLogsChecked: orderedLogs.length,
+        allocationAuditMismatches: mismatches.slice(0, 25),
+    }
 }
 
 function findMatchingPreloadedSignatory(params: {
@@ -595,58 +775,93 @@ export async function verifyAllocationSignoffIntegrity(
 ) {
     const signoffRecordId = `${signoffType}:${fiscalYear}`
 
-    const firstLog = await db
+    const allocationRecordLogs = await db
         .selectFrom('audit_logs')
-        .select('entity_id')
+        .selectAll()
         .where('table_name', '=', 'budget_allocations')
         .where('record_id', '=', signoffRecordId)
-        .limit(1)
-        .executeTakeFirst()
-
-    if (!firstLog) return null
-
-    const lastSeal = await db
-        .selectFrom('merkle_roots')
-        .selectAll()
-        .where('entity_id', '=', firstLog.entity_id)
-        .orderBy('created_at', 'desc')
-        .limit(1)
-        .executeTakeFirst()
-
-    const allEntityLogs = await db
-        .selectFrom('audit_logs')
-        .selectAll()
-        .where('entity_id', '=', firstLog.entity_id)
         .orderBy('changed_at', 'asc')
         .orderBy('id', 'asc')
         .execute()
 
-    let isSealedRootValid = true
-    const sealedLogCount = lastSeal?.log_count ?? 0
-    const sealedLogs = lastSeal ? allEntityLogs.slice(0, sealedLogCount) : []
-    const postSealLogs = lastSeal ? allEntityLogs.slice(sealedLogCount) : allEntityLogs
+    if (allocationRecordLogs.length === 0) return null
 
-    if (lastSeal && allEntityLogs.length < sealedLogCount) {
-        isSealedRootValid = false
-    }
-
-    const chainResult =
-        lastSeal && isSealedRootValid
-            ? verifyChainSegment(
-                postSealLogs,
-                sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
-            )
-            : verifyChain(allEntityLogs)
-
-    const signoffLogs = allEntityLogs.filter(
-        (log) => log.table_name === 'budget_allocations' && log.record_id === signoffRecordId
+    const entityIds = Array.from(
+        new Set(allocationRecordLogs.map((log) => log.entity_id)),
     )
-    const logIndexMap = new Map(allEntityLogs.map((log, index) => [log.id, index]))
-    const currentGlobalRoot = lastSeal?.root_hash ?? null
+    const entityLedgerResults = await Promise.all(
+        entityIds.map(async (entityId) => {
+            const [lastSeal, allEntityLogs] = await Promise.all([
+                db
+                    .selectFrom('merkle_roots')
+                    .selectAll()
+                    .where('entity_id', '=', entityId)
+                    .orderBy('created_at', 'desc')
+                    .limit(1)
+                    .executeTakeFirst(),
+                db
+                    .selectFrom('audit_logs')
+                    .selectAll()
+                    .where('entity_id', '=', entityId)
+                    .orderBy('changed_at', 'asc')
+                    .orderBy('id', 'asc')
+                    .execute(),
+            ])
 
-    const signoffLogsWithProofs = signoffLogs.map((log) => {
-        const logIndex = logIndexMap.get(log.id) ?? -1
-        const isSealed = lastSeal ? logIndex > -1 && logIndex < sealedLogCount : false
+            let isSealedRootValid = true
+            const sealedLogCount = lastSeal?.log_count ?? 0
+            const sealedLogs = lastSeal ? allEntityLogs.slice(0, sealedLogCount) : []
+            const postSealLogs = lastSeal ? allEntityLogs.slice(sealedLogCount) : allEntityLogs
+
+            if (lastSeal && allEntityLogs.length < sealedLogCount) {
+                isSealedRootValid = false
+            }
+
+            const chainResult =
+                lastSeal && isSealedRootValid
+                    ? verifyChainSegment(
+                        postSealLogs,
+                        sealedLogs.length > 0 ? sealedLogs[sealedLogs.length - 1].hash : null
+                    )
+                    : verifyChain(allEntityLogs)
+
+            const logIndexMap = new Map(allEntityLogs.map((log, index) => [log.id, index]))
+
+            return {
+                entityId,
+                lastSeal,
+                allEntityLogs,
+                sealedLogCount,
+                isSealedRootValid,
+                chainResult,
+                logIndexMap,
+            }
+        }),
+    )
+
+    const anchorLedger = entityLedgerResults.find((result) =>
+        allocationRecordLogs.some((log) =>
+            log.entity_id === result.entityId && isSignedAuditEvent(log.event_type)
+        )
+    ) ?? entityLedgerResults[0]
+
+    const isSealedRootValid = entityLedgerResults.every((result) => result.isSealedRootValid)
+    const firstBrokenChain = entityLedgerResults.find((result) => !result.chainResult.isValid)
+    const chainResult = firstBrokenChain?.chainResult ?? {
+        isValid: true,
+        brokenAt: null,
+        report: null,
+    }
+    const totalEntityEvents = entityLedgerResults.reduce(
+        (sum, result) => sum + result.allEntityLogs.length,
+        0,
+    )
+    const currentGlobalRoot = anchorLedger.lastSeal?.root_hash ?? null
+
+    const signoffLogsWithProofs = allocationRecordLogs.map((log) => {
+        const ledger = entityLedgerResults.find((result) => result.entityId === log.entity_id)
+        const logIndex = ledger?.logIndexMap.get(log.id) ?? -1
+        const isSealed = ledger?.lastSeal ? logIndex > -1 && logIndex < ledger.sealedLogCount : false
 
         return {
             ...log,
@@ -670,13 +885,21 @@ export async function verifyAllocationSignoffIntegrity(
     let signatoryRowsValid = true
     let authorizationSnapshotsValid = true
     let stateHashValid = true
+    const allocationAuditTrailResult = verifyAllocationAuditTrail({
+        signoffType,
+        currentState,
+        logs: allocationRecordLogs,
+    })
+    const signedSignoffLogs = signoffLogsWithProofs.filter((log) =>
+        isSignedAuditEvent(log.event_type),
+    )
 
     for (const log of signoffLogsWithProofs) {
         if (!isSignedAuditEvent(log.event_type)) {
             continue
         }
 
-        const payload = log.payload as FormSignaturePayload | null
+        const payload = parseAuditPayload<FormSignaturePayload>(log.payload)
         if (!payload) {
             cryptographicValid = false
             signatoryRowsValid = false
@@ -765,12 +988,15 @@ export async function verifyAllocationSignoffIntegrity(
         }
     }
 
-    const isDataMatch =
-        signoffLogs.length > 0 &&
+    const isSignedSnapshotValid =
+        signedSignoffLogs.length > 0 &&
         cryptographicValid &&
         signatoryRowsValid &&
         authorizationSnapshotsValid &&
         stateHashValid
+    const isDataMatch =
+        isSignedSnapshotValid &&
+        allocationAuditTrailResult.isAllocationAuditTrailValid
 
     return {
         isTimelineIntact: chainResult.isValid,
@@ -778,16 +1004,20 @@ export async function verifyAllocationSignoffIntegrity(
         timelineBrokenAt: chainResult.brokenAt,
         chainFailureReport: chainResult.report ?? null,
         isDataMatch,
+        isSignedSnapshotValid,
+        ...allocationAuditTrailResult,
         currentGlobalRoot,
-        lastSealedRoot: lastSeal?.root_hash || null,
-        totalEntityEvents: allEntityLogs.length,
-        formEventCount: signoffLogs.length,
+        lastSealedRoot: anchorLedger.lastSeal?.root_hash || null,
+        totalEntityEvents,
+        formEventCount: allocationRecordLogs.length,
         formLogs: signoffLogsWithProofs,
         debugState: {
             currentState,
             cryptographicValid,
             signatoryRowsValid,
             authorizationSnapshotsValid,
+            isSignedSnapshotValid,
+            ...allocationAuditTrailResult,
             stateHashValid,
             isDataMatch,
         },
