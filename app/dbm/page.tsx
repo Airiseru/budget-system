@@ -18,12 +18,12 @@ const moduleLinks = [
     {
         href: "/dbm/proposals",
         title: "Review Project Proposals",
-        description: "Evaluate BP 202 and BP 203 project proposals.",
+        description: "Review and evaluate new and expanded project proposals.",
     },
     {
         href: "/dbm/tier-one",
         title: "Tier One Allocations",
-        description: "Create and update DBM-originated allocations.",
+        description: "Create and update Tier One allocations.",
     },
     {
         href: "/dbm/allocations",
@@ -38,7 +38,7 @@ const moduleLinks = [
     {
         href: "/dbm/items",
         title: "Manage Line Items",
-        description: "Create, update, and retire item catalog entries.",
+        description: "Create, update, and inactivate item catalog entries.",
     },
     {
         href: "/dbm/entities",
@@ -53,7 +53,7 @@ const moduleLinks = [
     {
         href: "/dbm/uacs",
         title: "Manage UACS Codes",
-        description: "Maintain funding, object, and related UACS codes.",
+        description: "Maintain funding, object, and other relevant UACS codes.",
     },
     {
         href: "/dbm/salary",

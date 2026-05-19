@@ -7,6 +7,7 @@ import PaginationControls from '@/components/ui/PaginationControls'
 import Link from "next/link"
 import { sessionDetails } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
+import { PAP_PROJECT_TYPE_LABELS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,6 +19,11 @@ const formatProjectStatus = (status: string | null | undefined) =>
     status
         ? status.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
         : 'N/A'
+
+const formatProjectType = (type: string | null | undefined) =>
+    type && type in PAP_PROJECT_TYPE_LABELS
+        ? PAP_PROJECT_TYPE_LABELS[type as keyof typeof PAP_PROJECT_TYPE_LABELS]
+        : type?.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? 'N/A'
 
 const getProjectStatusClassName = (status: string | null | undefined) => {
     switch (status) {
@@ -144,8 +150,8 @@ export default async function PapPage({
                                                 <div className="text-xs text-muted-foreground">{pap.department_name}</div>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 uppercase text-muted-foreground">
-                                            {pap.project_type || 'N/A'}
+                                        <td className="px-4 py-3 text-muted-foreground">
+                                            {formatProjectType(pap.project_type)}
                                         </td>
                                         <td className="px-4 py-3">
                                             <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getProjectStatusClassName(pap.project_status)}`}>

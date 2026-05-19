@@ -13,7 +13,15 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('description', 'varchar', (col) => col.notNull())
         .addColumn('purpose', 'varchar', (col) => col.notNull())
         .addColumn('beneficiaries', 'varchar', (col) => col.notNull())
-        .addColumn('project_type', 'varchar')
+        .addColumn('project_type', 'varchar', (col) => col.check(sql`
+            project_type IS NULL OR project_type IN (
+                'local',
+                'foreign',
+                'general_administration_and_support',
+                'support_to_operations',
+                'operations'
+            )
+        `))
 
         // PREXC_FPAP_ID (0 = not set)
         .addColumn('cost_structure_code', 'varchar(1)', (col) => col.defaultTo('0'))

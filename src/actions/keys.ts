@@ -63,6 +63,24 @@ async function validateAllocationSignoffPhase(formType: string, fiscalYear: numb
     }
 }
 
+async function assertSignerCanAccessEntity(targetEntityId: string, session: Awaited<ReturnType<typeof sessionWithEntity>>) {
+    if (!session) throw new Error('Unauthorized')
+
+    if (session.user.role === 'dbm') {
+        return
+    }
+
+    const signerEntityId = session.user.entity_id
+    if (!signerEntityId) {
+        throw new Error('You are not assigned to an entity that can sign this form.')
+    }
+
+    const accessibleEntityIds = await entityRepository.getAccessibleEntityIds(signerEntityId)
+    if (!accessibleEntityIds.includes(targetEntityId)) {
+        throw new Error('You can only sign forms owned by your entity or its child entities.')
+    }
+}
+
 function getSignatoryTarget(formType: string, formId: string, fiscalYear: number | null) {
     if ((formType === 'nep' || formType === 'gaa') && fiscalYear !== null) {
         return {
@@ -228,12 +246,18 @@ export async function prepareSignaturePayload({
         tableName === 'budget_allocations'
             ? parseAllocationSignoffRecordId(formId)
             : null
+    if (parsedAllocationSignoff && session.user.role !== 'dbm') {
+        throw new Error('Only DBM can sign allocation sign-offs.')
+    }
     const form = parsedAllocationSignoff
         ? {
             entity_id: session.user.entity_id ?? '',
             type: parsedAllocationSignoff.formType,
         }
         : await formRepository.getFormAuthStatus(formId)
+    if (!parsedAllocationSignoff) {
+        await assertSignerCanAccessEntity(form.entity_id, session)
+    }
     const fiscalYear = parsedAllocationSignoff?.fiscalYear ?? await getFormFiscalYear(tableName, formId)
     const target = getSignatoryTarget(form.type, formId, fiscalYear)
     const payload = await buildAuthoritativeFormPayload({
@@ -377,6 +401,9 @@ export async function verifyAndSubmitSignature(
             tableName === 'budget_allocations'
                 ? parseAllocationSignoffRecordId(formId)
                 : null
+        if (parsedAllocationSignoff && session.user.role !== 'dbm') {
+            throw new Error('Only DBM can sign allocation sign-offs.')
+        }
         const form = parsedAllocationSignoff
             ? {
                 auth_status: 'pending_dbm',
@@ -425,6 +452,7 @@ export async function verifyAndSubmitSignature(
                 const lockedForm = await formRepository.getFormAuthStatusForUpdate(formId, trx)
                 currentAuthStatus = lockedForm.auth_status ?? ''
                 currentEntityId = lockedForm.entity_id
+                await assertSignerCanAccessEntity(currentEntityId, session)
             }
 
             if (!canSign(currentAuthStatus, session.user.access_level, session.user.workflow_role ?? '', signatoryRole, workflow)) {
@@ -584,6 +612,7 @@ export async function verifyAndRejectSignature(
         if (publicKeySnapshot !== key.public_key) throw new Error('Public key snapshot mismatch')
 
         const form = await formRepository.getFormAuthStatus(formId)
+        await assertSignerCanAccessEntity(form.entity_id, session)
         const fiscalYear = await getFormFiscalYear(tableName, formId)
         const canBypassClosedCycle =
             allowClosedCycleAction &&
@@ -605,6 +634,7 @@ export async function verifyAndRejectSignature(
 
         await db.transaction().execute(async (trx) => {
             const lockedForm = await formRepository.getFormAuthStatusForUpdate(formId, trx)
+            await assertSignerCanAccessEntity(lockedForm.entity_id, session)
 
             if (!canSign(lockedForm.auth_status ?? '', session.user.access_level, session.user.workflow_role ?? "", signatoryRole, workflow)) {
                 throw new Error('You are not authorized to reject at this stage')

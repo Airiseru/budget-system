@@ -1,20 +1,30 @@
 import { createPapRepository } from '@/src/db/factory'
 import { PapUpdate } from '@/src/types/pap'
 import { getPapUacsFieldErrors, PapUacsUpdateSchema } from '@/src/lib/validations/uacs'
+import { PAP_PROJECT_TYPE_LABELS, type PAP_PROJECT_TYPE } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic';
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 const DUPLICATE_PAP_CODE_MESSAGE = 'Another PAP already uses this full PREXC/UACS/PAP code.'
 
+function normalizeProjectType(value?: string | null): PAP_PROJECT_TYPE | null {
+    if (!value) return null
+    const normalized = value.trim().toLowerCase().replaceAll(' ', '_')
+    if (normalized in PAP_PROJECT_TYPE_LABELS) return normalized as PAP_PROJECT_TYPE
+    return null
+}
+
 function normalizePapProjectType(pap: PapUpdate): PapUpdate {
-    if (pap.project_type !== 'local' && pap.project_type !== 'foreign') {
+    const projectType = normalizeProjectType(pap.project_type)
+    if (!projectType) {
         return pap
     }
 
     return {
         ...pap,
-        category: pap.project_type,
-        identifier_code: pap.project_type === 'local' ? '2' : '3',
+        project_type: projectType,
+        category: projectType === 'foreign' ? 'foreign' : 'local',
+        identifier_code: projectType === 'local' ? '2' : projectType === 'foreign' ? '3' : '1',
     }
 }
 
@@ -93,7 +103,10 @@ export async function PUT(
             return Response.json({ error: DUPLICATE_PAP_CODE_MESSAGE }, { status: 409 })
         }
 
-        throw error
+        return Response.json(
+            { error: error instanceof Error ? error.message : 'Failed to update PAP.' },
+            { status: 400 }
+        )
     }
 }
 

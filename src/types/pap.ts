@@ -5,7 +5,7 @@ import {
     Selectable,
     Updateable
 } from 'kysely'
-import { PAP_PROJECT_STATUS_TYPES } from '../lib/constants'
+import { PAP_PROJECT_STATUS_TYPES, PAP_PROJECT_TYPE } from '../lib/constants'
 
 import { Feature } from 'geojson'
 
@@ -19,7 +19,7 @@ export interface PapTable {
     description: string | null
     purpose: string
     beneficiaries: string
-    project_type: string | null
+    project_type: PAP_PROJECT_TYPE | null
     cost_structure_code: string | null
     organizational_outcome_code: string | null
     program_code: string | null

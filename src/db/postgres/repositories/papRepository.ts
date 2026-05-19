@@ -1,7 +1,7 @@
 import { db } from '../database'
 import { Pap, NewPap, PapUpdate } from '../../../types/pap'
 import { Kysely, sql, Transaction } from 'kysely'
-import { PAP_PROJECT_STATUS_TYPES, PAP_UACS_SEGMENTS, type PapUacsFieldName } from '@/src/lib/constants'
+import { PAP_PROJECT_STATUS_TYPES, PAP_UACS_SEGMENTS, type PAP_PROJECT_TYPE, type PapUacsFieldName } from '@/src/lib/constants'
 import type { Database } from '@/src/types'
 import { getAccessibleEntityIds } from './entityRepository'
 
@@ -507,7 +507,7 @@ export async function updatePapProjectStatusForFormWithExecutor(
 export async function updatePapProjectTypeForFormWithExecutor(
     executor: DbExecutor,
     formId: string,
-    projectType: string,
+    projectType: PAP_PROJECT_TYPE,
 ) {
     const linkedPaps = await executor
         .selectFrom('form_paps')

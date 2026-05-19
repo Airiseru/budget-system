@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from "next/navigation"
 import { Pap, NewPap } from "@/src/types/pap"
 import LoadingOverlay from '@/components/ui/LoadingOverlay'
+import { PAP_PROJECT_TYPE, PAP_PROJECT_TYPE_LABELS, PAP_PROJECT_TYPE_OPTIONS } from '@/src/lib/constants'
 
 interface PapFormProps {
     pap?: Pap
@@ -23,24 +24,25 @@ export default function PapForm({
     successBasePath = '/paps',
     cancelHref = '/paps',
     defaultProjectStatus = 'draft',
+    defaultProjectType = 'local',
     entityLockedLabel = 'Entity ID (Locked)',
 }: PapFormProps) {
     const router = useRouter()
     const isEditing = !!pap
+    const normalizedDefaultProjectType = normalizeProjectType(defaultProjectType)
+    const initialProjectType = normalizeProjectType(pap?.project_type ?? normalizedDefaultProjectType)
 
     const [formData, setFormData] = useState<NewPap>({
         entity_id: pap?.entity_id || entityId,
         org_outcome_id: pap?.org_outcome_id || '',
         pip_code: pap?.pip_code || '',
-        category: pap?.category || 'local',
+        category: pap?.category || (initialProjectType === 'foreign' ? 'foreign' : 'local'),
         title: pap?.title || '',
         description: pap?.description || '',
         purpose: pap?.purpose || '',
         beneficiaries: pap?.beneficiaries || '',
-        project_type: pap?.project_type === 'foreign' || pap?.project_type === 'local'
-            ? pap.project_type
-            : pap?.category || 'local',
-        identifier_code: pap?.identifier_code || '1',
+        project_type: initialProjectType,
+        identifier_code: pap?.identifier_code || getIdentifierCode(initialProjectType),
         actual_start_date: pap?.actual_start_date || null,
         project_status: pap?.project_status || defaultProjectStatus,
     })
@@ -50,12 +52,12 @@ export default function PapForm({
     }
 
     function handleProjectTypeChange(e: React.ChangeEvent<HTMLSelectElement>) {
-        const projectType = e.target.value as 'local' | 'foreign'
+        const projectType = normalizeProjectType(e.target.value)
         setFormData(prev => ({
             ...prev,
             project_type: projectType,
-            category: projectType,
-            identifier_code: projectType === 'local' ? '2' : '3',
+            category: projectType === 'foreign' ? 'foreign' : 'local',
+            identifier_code: getIdentifierCode(projectType),
         }))
     }
 
@@ -84,7 +86,8 @@ export default function PapForm({
                 router.refresh()
                 router.push(`${successBasePath}/${data.id}`)
             } else {
-                setError('Something went wrong')
+                const data = await response.json().catch(() => null)
+                setError(data?.error ?? 'Something went wrong')
             }
         } catch {
             setError('An error occurred while creating PAP')
@@ -158,8 +161,11 @@ export default function PapForm({
                         className="border p-2 w-full rounded"
                         disabled={isLoading}
                     >
-                        <option value="local">Local</option>
-                        <option value="foreign">Foreign</option>
+                        {PAP_PROJECT_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
                     </select>
                 </div>
 
@@ -223,4 +229,17 @@ export default function PapForm({
             </form>
         </div>
     )
+}
+
+function normalizeProjectType(value?: string | null): PAP_PROJECT_TYPE {
+    if (!value) return 'local'
+    const normalized = value.trim().toLowerCase().replaceAll(' ', '_')
+    if (normalized in PAP_PROJECT_TYPE_LABELS) return normalized as PAP_PROJECT_TYPE
+    return 'local'
+}
+
+function getIdentifierCode(projectType: PAP_PROJECT_TYPE): '1' | '2' | '3' {
+    if (projectType === 'local') return '2'
+    if (projectType === 'foreign') return '3'
+    return '1'
 }

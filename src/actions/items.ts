@@ -210,23 +210,30 @@ export async function createItemCatalogAction(state: ItemFormState, formData: Fo
         }
     }
 
-    const objectCodeResolution = await resolveObjectCode(formData, rawValues)
-    if (objectCodeResolution.objectCodeState) {
-        return objectCodeResolution.objectCodeState
+    try {
+        const objectCodeResolution = await resolveObjectCode(formData, rawValues)
+        if (objectCodeResolution.objectCodeState) {
+            return objectCodeResolution.objectCodeState
+        }
+
+        const parsed = ItemCatalogSchema.safeParse({
+            ...normalizedValues,
+            uacs_obj_code: objectCodeResolution.uacs_obj_code,
+        })
+
+        if (!parsed.success) {
+            return flattenState(parsed.error, stateValues)
+        }
+
+        await ItemRepository.createItemCatalog({
+            ...parsed.data,
+        })
+    } catch (error) {
+        return {
+            formErrors: [error instanceof Error ? error.message : 'Failed to create item catalog entry.'],
+            values: stateValues,
+        }
     }
-
-    const parsed = ItemCatalogSchema.safeParse({
-        ...normalizedValues,
-        uacs_obj_code: objectCodeResolution.uacs_obj_code,
-    })
-
-    if (!parsed.success) {
-        return flattenState(parsed.error, stateValues)
-    }
-
-    await ItemRepository.createItemCatalog({
-        ...parsed.data,
-    })
 
     revalidatePath('/dbm/items')
     redirect('/dbm/items')
@@ -255,23 +262,30 @@ export async function updateItemCatalogAction(state: ItemFormState, formData: Fo
         }
     }
 
-    const objectCodeResolution = await resolveObjectCode(formData, rawValues)
-    if (objectCodeResolution.objectCodeState) {
-        return objectCodeResolution.objectCodeState
+    try {
+        const objectCodeResolution = await resolveObjectCode(formData, rawValues)
+        if (objectCodeResolution.objectCodeState) {
+            return objectCodeResolution.objectCodeState
+        }
+
+        const parsed = ItemCatalogSchema.safeParse({
+            ...normalizedValues,
+            uacs_obj_code: objectCodeResolution.uacs_obj_code,
+        })
+
+        if (!parsed.success) {
+            return flattenState(parsed.error, stateValues)
+        }
+
+        await ItemRepository.updateItemCatalog(id, {
+            ...parsed.data,
+        })
+    } catch (error) {
+        return {
+            formErrors: [error instanceof Error ? error.message : 'Failed to update item catalog entry.'],
+            values: stateValues,
+        }
     }
-
-    const parsed = ItemCatalogSchema.safeParse({
-        ...normalizedValues,
-        uacs_obj_code: objectCodeResolution.uacs_obj_code,
-    })
-
-    if (!parsed.success) {
-        return flattenState(parsed.error, stateValues)
-    }
-
-    await ItemRepository.updateItemCatalog(id, {
-        ...parsed.data,
-    })
 
     revalidatePath('/dbm/items')
     redirect('/dbm/items')

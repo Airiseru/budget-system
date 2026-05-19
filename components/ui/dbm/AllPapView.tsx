@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/select'
 import { ChevronRight, FileText, Filter, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { PAP_PROJECT_TYPE_LABELS } from '@/src/lib/constants'
 
 type PapListItem = {
     id: string
@@ -34,6 +35,11 @@ type PapEntityOption = {
     abbr: string | null
     entity_type: string
 }
+
+const formatProjectType = (type: string | null | undefined) =>
+    type && type in PAP_PROJECT_TYPE_LABELS
+        ? PAP_PROJECT_TYPE_LABELS[type as keyof typeof PAP_PROJECT_TYPE_LABELS]
+        : type?.replace(/_/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase()) ?? 'N/A'
 
 type AllPapViewProps = {
     paps: PapListItem[]
@@ -159,7 +165,7 @@ export default function AllPapView({
                                             </div>
                                         </td>
                                         <td className="px-4 py-3 text-secondary-foreground max-w-md whitespace-normal break-words">
-                                            {pap.project_type?.toUpperCase() || 'N/A'}
+                                            {formatProjectType(pap.project_type)}
                                         </td>
                                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground break-all">
                                             {pap.full_pap_code || 'Not set'}

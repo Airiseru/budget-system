@@ -47,6 +47,26 @@ export const PAP_PROJECT_STATUS_LABELS: Record<PAP_PROJECT_STATUS_TYPES, string>
     cancelled: 'Cancelled',
 }
 
+export type PAP_PROJECT_TYPE =
+    | 'local'
+    | 'foreign'
+    | 'general_administration_and_support'
+    | 'support_to_operations'
+    | 'operations'
+
+export const PAP_PROJECT_TYPE_LABELS: Record<PAP_PROJECT_TYPE, string> = {
+    local: 'Local',
+    foreign: 'Foreign',
+    general_administration_and_support: 'General Administration and Support',
+    support_to_operations: 'Support to Operations',
+    operations: 'Operations',
+}
+
+export const PAP_PROJECT_TYPE_OPTIONS = Object.entries(PAP_PROJECT_TYPE_LABELS).map(([value, label]) => ({
+    value: value as PAP_PROJECT_TYPE,
+    label,
+}))
+
 export const FORM_TYPES: Record<string, string> = {
     all: 'All',
     bp_staffing: 'BP Form 204',

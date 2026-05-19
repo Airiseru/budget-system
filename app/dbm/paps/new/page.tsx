@@ -17,7 +17,7 @@ export default async function NewDbmPapPage() {
             successBasePath="/dbm/paps"
             cancelHref="/dbm/paps"
             defaultProjectStatus="approved"
-            defaultProjectType="General Administration and Support"
+            defaultProjectType="general_administration_and_support"
             entityLockedLabel="Entity ID (Global PAP)"
         />
     )

@@ -29,7 +29,7 @@ export default async function EditDbmPapPage({
             successBasePath="/dbm/paps"
             cancelHref={`/dbm/paps/${pap.id}`}
             defaultProjectStatus="approved"
-            defaultProjectType="General Administration and Support"
+            defaultProjectType="general_administration_and_support"
             entityLockedLabel={pap.entity_id ? 'Entity ID (Locked)' : 'Entity ID (Global PAP)'}
         />
     )
