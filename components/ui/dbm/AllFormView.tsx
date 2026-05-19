@@ -1,6 +1,7 @@
 "use client";
 
 import BackButton from '@/components/ui/BackButton'
+import PaginationControls from '@/components/ui/PaginationControls'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
@@ -36,20 +37,6 @@ interface DBMFormViewProps {
     selectedType: string
     includeVersionHistory: boolean
 }
-
-// Helper to generate the pagination array with ellipses
-const generatePageNumbers = (currentPage: number, totalPages: number) => {
-    if (totalPages <= 5) {
-        return Array.from({ length: totalPages }, (_, i) => i + 1);
-    }
-    if (currentPage <= 3) {
-        return [1, 2, 3, '...', totalPages];
-    }
-    if (currentPage >= totalPages - 2) {
-        return [1, '...', totalPages - 2, totalPages - 1, totalPages];
-    }
-    return [1, '...', currentPage, '...', totalPages];
-};
 
 export default function AllFormView({ 
     forms, 
@@ -257,52 +244,11 @@ export default function AllFormView({
                     </table>
                 </div>
                 
-                {/* Pagination Footer */}
-                <div className="bg-muted border-t border-border/30 p-4 flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">
-                        Showing page <span className="font-bold">{page}</span> of <span className="font-bold">{totalPages !== 0 ? totalPages : 1}</span>
-                    </p>
-                    <div className="flex gap-1 items-center">
-                        {/* Previous Button (<) */}
-                        <Link 
-                            href={page > 1 ? getPaginationLink(page - 1) : '#'}
-                            className={`px-2.5 py-1.5 rounded text-sm font-bold transition-colors ${page > 1 ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'bg-accent/50 text-muted-foreground/40 pointer-events-none'}`}
-                            aria-disabled={page <= 1}
-                        >
-                            &lt;
-                        </Link>
-
-                        {/* Numbered Pages with Ellipses */}
-                        {generatePageNumbers(page, totalPages).map((p, index) => (
-                            p === '...' ? (
-                                <span key={`ellipsis-${index}`} className="px-2 py-1.5 text-muted-foreground text-sm font-bold">
-                                    ...
-                                </span>
-                            ) : (
-                                <Link
-                                    key={`page-${p}`}
-                                    href={getPaginationLink(p as number)}
-                                    className={`px-3 py-1.5 border-b rounded text-sm font-bold transition-colors ${
-                                        page === p 
-                                            ? 'bg-secondary-foreground text-accent border-secondary-foreground' 
-                                            : 'border-border/50 bg-accent text-secondary-foreground hover:bg-secondary'
-                                    }`}
-                                >
-                                    {p}
-                                </Link>
-                            )
-                        ))}
-
-                        {/* Next Button (>) */}
-                        <Link 
-                            href={page < totalPages ? getPaginationLink(page + 1) : '#'}
-                            className={`px-2.5 py-1.5 rounded text-sm font-bold transition-colors ${page < totalPages ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'bg-accent/50 text-muted-foreground/40 pointer-events-none'}`}
-                            aria-disabled={page >= totalPages}
-                        >
-                            &gt;
-                        </Link>
-                    </div>
-                </div>
+                <PaginationControls
+                    page={page}
+                    totalPages={totalPages}
+                    getPageHref={getPaginationLink}
+                />
             </div>
         </main>
     )

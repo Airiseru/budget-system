@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
 import BudgetPrepClosedBanner from '@/components/ui/BudgetPrepClosedBanner'
+import PaginationControls from '@/components/ui/PaginationControls'
 import { Button } from '@/components/ui/button'
 import SearchableComboboxField, { type SearchableComboboxOption } from '@/components/ui/dbm/SearchableComboboxField'
 import {
@@ -298,13 +299,6 @@ export function TierOneAllocationManager({
         if (nextPage && nextPage !== '1') params.set('page', nextPage)
 
         return `/dbm/tier-one?${params.toString()}`
-    }
-
-    const generatePageNumbers = (currentPage: number, totalPages: number) => {
-        if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1)
-        if (currentPage <= 3) return [1, 2, 3, '...', totalPages]
-        if (currentPage >= totalPages - 2) return [1, '...', totalPages - 2, totalPages - 1, totalPages]
-        return [1, '...', currentPage, '...', totalPages]
     }
 
     return (
@@ -725,46 +719,11 @@ export function TierOneAllocationManager({
                                 </tbody>
                             </table>
                         </div>
-                        <div className="border-t border-border/30 p-4 flex items-center justify-between">
-                            <p className="text-sm text-muted-foreground">
-                                Showing page <span className="font-bold">{page}</span> of <span className="font-bold">{totalPages !== 0 ? totalPages : 1}</span>
-                            </p>
-                            <div className="flex gap-1 items-center">
-                                <Link
-                                    href={page > 1 ? getFilterLink({ page: String(page - 1) }) : '#'}
-                                    className={`px-2.5 py-1.5 rounded text-sm font-bold transition-colors ${page > 1 ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'bg-accent/50 text-muted-foreground/40 pointer-events-none'}`}
-                                    aria-disabled={page <= 1}
-                                >
-                                    &lt;
-                                </Link>
-                                {generatePageNumbers(page, totalPages).map((current, index) => (
-                                    current === '...' ? (
-                                        <span key={`ellipsis-${index}`} className="px-2 py-1.5 text-muted-foreground text-sm font-bold">
-                                            ...
-                                        </span>
-                                    ) : (
-                                        <Link
-                                            key={`page-${current}`}
-                                            href={getFilterLink({ page: String(current) })}
-                                            className={`px-3 py-1.5 border-b rounded text-sm font-bold transition-colors ${
-                                                current === page
-                                                    ? 'bg-secondary-foreground text-accent border-secondary-foreground'
-                                                    : 'border-border/50 bg-accent text-secondary-foreground hover:bg-secondary'
-                                            }`}
-                                        >
-                                            {current}
-                                        </Link>
-                                    )
-                                ))}
-                                <Link
-                                    href={page < totalPages ? getFilterLink({ page: String(page + 1) }) : '#'}
-                                    className={`px-2.5 py-1.5 rounded text-sm font-bold transition-colors ${page < totalPages ? 'bg-accent text-secondary-foreground hover:bg-secondary' : 'bg-accent/50 text-muted-foreground/40 pointer-events-none'}`}
-                                    aria-disabled={page >= totalPages}
-                                >
-                                    &gt;
-                                </Link>
-                            </div>
-                        </div>
+                        <PaginationControls
+                            page={page}
+                            totalPages={totalPages}
+                            getPageHref={(targetPage) => getFilterLink({ page: String(targetPage) })}
+                        />
                     </div>
                 </div>
             </div>

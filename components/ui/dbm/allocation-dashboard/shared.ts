@@ -116,13 +116,6 @@ export const initialBulkValidityState: BulkValidityState = {
     valid_until: '',
 }
 
-export const generatePageNumbers = (currentPage: number, totalPages: number) => {
-    if (totalPages <= 5) return Array.from({ length: totalPages }, (_, index) => index + 1)
-    if (currentPage <= 3) return [1, 2, 3, '...', totalPages]
-    if (currentPage >= totalPages - 2) return [1, '...', totalPages - 2, totalPages - 1, totalPages]
-    return [1, '...', currentPage, '...', totalPages]
-}
-
 export const formatAmount = (value: number) =>
     Number(value ?? 0).toLocaleString('en-PH', {
         minimumFractionDigits: 2,
