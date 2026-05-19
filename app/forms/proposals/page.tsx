@@ -1,255 +1,160 @@
-import { createProposalRepository } from "@/src/db/factory"; // Ensure this exists
-import { Button } from "@/components/ui/button";
-import { ButtonGroup } from "@/components/ui/button-group";
-import Link from "next/link";
-import { sessionWithEntity } from "@/src/actions/auth";
-import { redirect } from "next/navigation";
-import { Badge } from "@/components/ui/badge";
-import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
-import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
-import { STATUS_LABELS } from "@/src/lib/constants";
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { Button } from '@/components/ui/button'
+import EntityFormListView, { type EntityFormListRow } from '@/components/ui/forms/EntityFormListView'
+import { sessionWithEntity } from '@/src/actions/auth'
+import { createProposalRepository } from '@/src/db/factory'
+import { getActiveBudgetPrepCycle } from '@/src/lib/budget-cycle'
 
-export const dynamic = "force-dynamic";
+export const dynamic = 'force-dynamic'
 
-const ProposalRepo = createProposalRepository(
-    process.env.DATABASE_TYPE || "postgres",
-);
-
-const statusColors: Record<
-    string,
-    "default" | "secondary" | "destructive" | "outline"
-> = {
-    draft: "outline",
-    pending: "secondary",
-    approved: "default",
-    rejected: "destructive",
-};
-
-type ProposalSummary = {
-    id: string;
-    type: "202" | "203";
-    proposal_year: number;
-    priority_rank: number;
-    auth_status: string | null;
-    title: string;
-    total_proposal_currency: string;
-    total_proposal_cost: number;
-    is_infrastructure: boolean;
-    submission_date: Date | string | null;
-};
+const ProposalRepo = createProposalRepository(process.env.DATABASE_TYPE || 'postgres')
+const PAGE_SIZE = 15
 
 type ProposalsSearchParams = Promise<{
-    year?: string;
-}>;
+    page?: string
+    year?: string
+    status?: string
+    type?: string
+    search?: string
+}>
+
+type ProposalSummary = {
+    id: string
+    type: '202' | '203'
+    proposal_year: number
+    priority_rank: number
+    auth_status: string | null
+    title: string
+    total_proposal_currency: string
+    total_proposal_cost: number
+    is_infrastructure: boolean
+    submission_date: Date | string | null
+}
+
+function formatAmount(currency: string, amount: number) {
+    return `${currency} ${Number(amount ?? 0).toLocaleString('en-PH')}`
+}
+
+function paginate<T>(rows: T[], page: number) {
+    return rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+}
 
 export default async function ProposalsPage({
     searchParams,
 }: {
-    searchParams: ProposalsSearchParams;
+    searchParams: ProposalsSearchParams
 }) {
-    const session = await sessionWithEntity();
-
-    if (!session) return redirect("/login");
+    const session = await sessionWithEntity()
+    if (!session) return redirect('/login')
 
     try {
-        const params = await searchParams;
-        const activeCycle = await getActiveBudgetPrepCycle();
-        const selectedYear = params.year ? Number(params.year) : undefined;
-        const lockedYear = activeCycle?.fiscal_year;
-        const allYearsData = lockedYear
-            ? []
-            : await ProposalRepo.getAllProposalSummaries(
-                  session.user.id ?? "",
-                  session.user_entity.entity_type ?? "",
-                  session.user.entity_id ?? "",
-              );
-        const availableYears = Array.from(
-            new Set(allYearsData.map((proposal) => proposal.proposal_year)),
-        ).sort((a, b) => b - a);
-        const viewingYear = lockedYear ?? selectedYear;
-        const canCreate =
-            session?.user.access_level === "encode" &&
-            activeCycle?.current_phase === "preparation";
-        const shouldShowBudgetPrepBanner =
-            session?.user.access_level === "encode" && !canCreate;
-        // Fetching proposal summaries (assuming a similar method to staffing)
-        const data = await ProposalRepo.getAllProposalSummaries(
-            session.user.id ?? "",
-            session.user_entity.entity_type ?? "",
-            session.user.entity_id ?? "",
-            viewingYear,
-        );
+        const params = await searchParams
+        const activeCycle = await getActiveBudgetPrepCycle()
+        const lockedYear = activeCycle?.fiscal_year
+        const selectedYear = params.year ? Number(params.year) : undefined
+        const selectedStatus = params.status ?? ''
+        const selectedType = params.type ?? ''
+        const selectedSearch = params.search ?? ''
+        const page = Math.max(Number(params.page) || 1, 1)
+        const viewingYear = lockedYear ?? selectedYear
 
-        const renderHeader = () => (
-            <div className="my-4 flex flex-wrap items-center gap-3">
-                <ButtonGroup>
-                    <Link href="/home">
-                        <Button variant="outline">Go Back</Button>
-                    </Link>
-                </ButtonGroup>
-                {lockedYear ? (
-                    <div className="rounded border px-3 py-2 text-sm text-muted-foreground">
-                        Showing active FY {lockedYear}
-                    </div>
-                ) : (
-                    <form className="flex items-center gap-2">
-                        <select
-                            name="year"
-                            defaultValue={viewingYear ?? ""}
-                            className="rounded border border-border bg-background px-3 py-2 text-sm"
-                        >
-                            <option value="">All years</option>
-                            {availableYears.map((year) => (
-                                <option key={year} value={year}>
-                                    FY {year}
-                                </option>
-                            ))}
-                        </select>
-                        <Button type="submit" variant="outline">
-                            Filter
-                        </Button>
-                    </form>
-                )}
-                <div className="flex gap-2">
-                {canCreate && (
-                        <div className="flex gap-2">
-                        <Link href="/forms/proposals/new?type=202">
-                            <Button variant="default">
-                                New BP 202 (Local)
-                            </Button>
-                        </Link>
-                        <Link href="/forms/proposals/new?type=203">
-                            <Button variant="secondary">
-                                New BP 203 (Foreign)
-                            </Button>
-                        </Link>
-                        </div>
-             
-                )}
-                <Link href="/forms/proposals/rank">
-                            <Button variant="secondary">
+        const allRows = await ProposalRepo.getAllProposalSummaries(
+            session.user_entity.entity_type ?? '',
+            session.user.role ?? '',
+            session.user.entity_id ?? '',
+            viewingYear,
+        ) as ProposalSummary[]
+
+        const allYearsRows = lockedYear
+            ? allRows
+            : await ProposalRepo.getAllProposalSummaries(
+                session.user_entity.entity_type ?? '',
+                session.user.role ?? '',
+                session.user.entity_id ?? '',
+            ) as ProposalSummary[]
+
+        const availableYears = Array.from(
+            new Set(allYearsRows.map((proposal) => proposal.proposal_year)),
+        ).sort((a, b) => b - a)
+
+        const filteredRows = allRows.filter((proposal) => {
+            if (selectedStatus && proposal.auth_status !== selectedStatus) return false
+            if (selectedType && proposal.type !== selectedType) return false
+            if (selectedSearch && !proposal.title.toLowerCase().includes(selectedSearch.toLowerCase())) return false
+            return true
+        })
+
+        const totalPages = Math.max(Math.ceil(filteredRows.length / PAGE_SIZE), 1)
+        const safePage = Math.min(page, totalPages)
+        const visibleRows: EntityFormListRow[] = paginate(filteredRows, safePage).map((proposal) => ({
+            id: proposal.id,
+            href: `/forms/proposals/${proposal.id}`,
+            title: proposal.title,
+            subtitle: `Priority Rank #${proposal.priority_rank}`,
+            fiscalYear: proposal.proposal_year,
+            status: proposal.auth_status ?? 'draft',
+            updatedAt: proposal.submission_date,
+            amountLabel: formatAmount(proposal.total_proposal_currency, proposal.total_proposal_cost),
+            detailLabel: proposal.is_infrastructure ? 'Infrastructure project' : 'Non-infrastructure project',
+            typeLabel: `BP Form ${proposal.type}`,
+        }))
+
+        const canCreate =
+            session.user.access_level === 'encode' &&
+            activeCycle?.current_phase === 'preparation'
+        const shouldShowBudgetPrepBanner =
+            session.user.access_level === 'encode' && !canCreate
+
+        return (
+            <>
+                <EntityFormListView
+                    title="Budget Proposals"
+                    description="Manage BP Form 202/203 project proposals for your entity."
+                    basePath="/forms/proposals"
+                    rows={visibleRows}
+                    page={safePage}
+                    totalPages={totalPages}
+                    selectedYear={selectedYear}
+                    selectedStatus={selectedStatus}
+                    selectedType={selectedType}
+                    selectedSearch={selectedSearch}
+                    availableYears={availableYears}
+                    activeYear={lockedYear}
+                    phaseNotice={shouldShowBudgetPrepBanner ? (
+                        <span>The phase to create new proposals is closed. Please wait for further announcements from DBM.</span>
+                    ) : null}
+                    typeOptions={[
+                        { value: '202', label: 'BP Form 202 (Local)' },
+                        { value: '203', label: 'BP Form 203 (Foreign)' },
+                    ]}
+                    createActions={canCreate ? (
+                        <>
+                            <Link href="/forms/proposals/new?type=202">
+                                <Button>New BP 202</Button>
+                            </Link>
+                            <Link href="/forms/proposals/new?type=203">
+                                <Button variant="secondary">New BP 203</Button>
+                            </Link>
+                        </>
+                    ) : null}
+                    secondaryActions={ canCreate && (
+                        <Link href="/forms/proposals/rank">
+                            <Button variant="outline" className="hover:bg-primary-foreground hover:text-primary" disabled={!canCreate}>
                                 Change Priority Ranks
                             </Button>
                         </Link>
-                        </div>
-            </div>
-        );
-
-        if (data.length === 0) {
-            return (
-                <div className="m-4">
-                    {renderHeader()}
-                    {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
-                    <h1 className="text-xl opacity-50">
-                        No Project Proposals found.
-                    </h1>
-                </div>
-            );
-        }
-
+                    )}
+                />
+            </>
+        )
+    } catch (error) {
+        console.error(error)
         return (
             <div className="m-4">
-                {renderHeader()}
-                {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
-
-                <h1 className="text-2xl font-bold mb-6">
-                    Budget Proposals (BP 202/203)
-                </h1>
-                <div className="grid gap-4">
-                    {data.map((proposal: ProposalSummary) => (
-                        <Link
-                            href={`/forms/proposals/${proposal.id}`}
-                            key={proposal.id}
-                        >
-                            <div className="border rounded-lg p-4 hover:bg-accent transition-colors">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-3">
-                                            <Badge
-                                                variant="outline"
-                                                className={
-                                                    proposal.type === "202"
-                                                        ? "bg-primary-foreground/10 text-primary-foreground border-primary-foreground/20"
-                                                        : "bg-secondary-foreground/10 text-secondary-foreground border-secondary-foreground/20"
-                                                }
-                                            >
-                                                BP {proposal.type}
-                                            </Badge>
-                                            <h2 className="font-bold text-lg">
-                                                {proposal.title}
-                                            </h2>
-                                            <Badge
-                                                variant={
-                                                    statusColors[
-                                                        proposal.auth_status ??
-                                                            "draft"
-                                                    ]
-                                                }
-                                            >
-                                                {proposal.auth_status
-                                                    ? STATUS_LABELS[
-                                                          proposal.auth_status
-                                                      ]
-                                                    : "Draft"}
-                                            </Badge>
-                                        </div>
-                                        <p className="text-md text-primary-500 font-bold">
-                                            FY {proposal.proposal_year}
-                                        </p>
-                                        <p className="text-sm text-muted-foreground">
-                                            Cost:{" "}
-                                            {proposal.total_proposal_currency}{" "}
-                                            {Number(
-                                                proposal.total_proposal_cost,
-                                            ).toLocaleString()}
-                                            {proposal.is_infrastructure && (
-                                                <span className="ml-2 text-amber-600 dark:text-amber-400">
-                                                    • Infrastructure
-                                                </span>
-                                            )}
-                                        </p>
-                                    </div>
-                                    <div className="flex items-center gap-10">
-                                        <div className="text-right shrink-0">
-                                            <p className="text-xs text-muted-foreground uppercase font-semibold">
-                                                Submitted On
-                                            </p>
-                                            <span className="text-sm">
-                                                {proposal.submission_date
-                                                    ? new Date(
-                                                          proposal.submission_date,
-                                                      ).toLocaleDateString()
-                                                    : "N/A"}
-                                            </span>
-                                        </div>
-                                        <div className="font-bold flex flex-col items-center gap-1">
-                                            <p className="text-secondary-foreground">
-                                                Rank
-                                            </p>
-                                            <p className="text-secondary-foreground">
-                                                #{proposal.priority_rank}
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </Link>
-                    ))}
-                </div>
+                <h1 className="font-bold text-red-500">Error loading Proposals</h1>
+                <p>Verify that the <code>project_proposals</code> table is accessible.</p>
             </div>
-        );
-    } catch (e) {
-        console.error(e);
-        return (
-            <div className="m-4">
-                <h1 className="text-red-500 font-bold">
-                    Error loading Proposals
-                </h1>
-                <p>
-                    Verify that the <code>project_proposals</code> table is
-                    accessible.
-                </p>
-            </div>
-        );
+        )
     }
 }

@@ -1,35 +1,58 @@
-import { createStaffingRepository, createFormRepository } from '@/src/db/factory'
-import { Button } from '@/components/ui/button'
-import { ButtonGroup } from "@/components/ui/button-group"
-import Link from "next/link"
-import { sessionWithEntity } from '@/src/actions/auth'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { Badge } from '@/components/ui/badge'
-import { STATUS_LABELS, STATUS_BADGE_COLORS } from '@/src/lib/constants'
-import BudgetPrepClosedBanner from '@/components/ui/BudgetPrepClosedBanner'
+import { Button } from '@/components/ui/button'
+import EntityFormListView, { type EntityFormListRow } from '@/components/ui/forms/EntityFormListView'
+import { sessionWithEntity } from '@/src/actions/auth'
+import { createFormRepository, createStaffingRepository } from '@/src/db/factory'
 import { getActiveBudgetPrepCycle } from '@/src/lib/budget-cycle'
 
-export const dynamic = 'force-dynamic';
+export const dynamic = 'force-dynamic'
 
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const FormRepo = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
+const PAGE_SIZE = 15
 
-export default async function StaffingPage() {
+type StaffSearchParams = Promise<{
+    page?: string
+    year?: string
+    status?: string
+    search?: string
+}>
+
+type StaffingSummary = {
+    id: string
+    fiscal_year: number
+    auth_status: string | null
+    submission_date: Date | string | null
+    parent_form_id?: string | null
+}
+
+function paginate<T>(rows: T[], page: number) {
+    return rows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+}
+
+export default async function StaffingPage({
+    searchParams,
+}: {
+    searchParams: StaffSearchParams
+}) {
     const session = await sessionWithEntity()
-
-    if (!session) {
-        return redirect('/login')
-    }
+    if (!session) return redirect('/login')
 
     try {
+        const params = await searchParams
         const activeCycle = await getActiveBudgetPrepCycle()
-        const canCreate = session?.user.access_level === 'encode' && activeCycle?.current_phase === 'preparation'
-        const shouldShowBudgetPrepBanner = session?.user.access_level === 'encode' && !canCreate
+        const lockedYear = activeCycle?.fiscal_year
+        const selectedYear = params.year ? Number(params.year) : undefined
+        const selectedStatus = params.status ?? ''
+        const selectedSearch = params.search ?? ''
+        const page = Math.max(Number(params.page) || 1, 1)
+
         const data = await StaffingRepo.getAllStaffingSummaries(
             session.user_entity.entity_type ?? '',
             session.user.role ?? '',
-            session.user.entity_id ?? ''
-        ) 
+            session.user.entity_id ?? '',
+        ) as StaffingSummary[]
 
         const summariesWithDisplayStatus = await Promise.all(
             data.map(async (summary) => {
@@ -42,80 +65,76 @@ export default async function StaffingPage() {
                 return {
                     ...summary,
                     displayStatus,
-                    latestFormId: latestVersion?.id ?? summary.id
+                    latestFormId: latestVersion?.id ?? summary.id,
+                    latestUpdatedAt: latestVersion?.updated_at ?? summary.submission_date,
                 }
-            })
+            }),
         )
-    
-        if (summariesWithDisplayStatus.length === 0) {
-            return (
-                <div className='m-4'>
-                    <ButtonGroup className='my-4'>
-                        <Link href="/home">
-                            <Button variant="outline" aria-label="Home">Home</Button>
-                        </Link>
-                        {canCreate && (
-                            <Link href="/forms/staff/new">
-                                <Button variant="outline">Create New Staffing Form</Button>
-                            </Link>
-                        )}
-                    </ButtonGroup>
-                    {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
-                    <h1 className="text-xl opacity-50">No Staffing Forms submitted yet.</h1>
-                </div>
-            )
-        }
-    
+
+        const availableYears = Array.from(
+            new Set(summariesWithDisplayStatus.map((summary) => summary.fiscal_year)),
+        ).sort((a, b) => b - a)
+
+        const filteredRows = summariesWithDisplayStatus.filter((summary) => {
+            if (lockedYear && summary.fiscal_year !== lockedYear) return false
+            if (!lockedYear && selectedYear && summary.fiscal_year !== selectedYear) return false
+            if (selectedStatus && summary.displayStatus !== selectedStatus) return false
+            if (selectedSearch && !`FY ${summary.fiscal_year} Staffing Plan`.toLowerCase().includes(selectedSearch.toLowerCase())) return false
+            return true
+        })
+
+        const totalPages = Math.max(Math.ceil(filteredRows.length / PAGE_SIZE), 1)
+        const safePage = Math.min(page, totalPages)
+        const visibleRows: EntityFormListRow[] = paginate(filteredRows, safePage).map((summary) => ({
+            id: summary.id,
+            href: `/forms/staff/${summary.latestFormId}`,
+            title: `FY ${summary.fiscal_year} Staffing Plan`,
+            subtitle: 'BP Form 204',
+            fiscalYear: summary.fiscal_year,
+            status: summary.displayStatus ?? 'draft',
+            updatedAt: summary.latestUpdatedAt,
+            amountLabel: 'Staffing summary',
+            detailLabel: 'Personnel services and staffing requirements',
+            typeLabel: 'BP Form 204',
+        }))
+
+        const canCreate =
+            session.user.access_level === 'encode' &&
+            activeCycle?.current_phase === 'preparation'
+        const shouldShowBudgetPrepBanner =
+            session.user.access_level === 'encode' && !canCreate
+
         return (
-            <div className='m-4'>
-                <ButtonGroup className='my-4'>
-                    <Link href="/home">
-                        <Button variant="outline" aria-label="Home">Home</Button>
-                    </Link>
-                    {canCreate && (
+            <>
+                <EntityFormListView
+                    title="Staffing Submissions"
+                    description="Manage BP Form 204 staffing plans for your entity."
+                    basePath="/forms/staff"
+                    rows={visibleRows}
+                    page={safePage}
+                    totalPages={totalPages}
+                    selectedYear={selectedYear}
+                    selectedStatus={selectedStatus}
+                    selectedType=""
+                    selectedSearch={selectedSearch}
+                    availableYears={availableYears}
+                    activeYear={lockedYear}
+                    phaseNotice={shouldShowBudgetPrepBanner ? (
+                        <span>The phase to create new proposals is closed. Please wait for further announcements from DBM.</span>
+                    ) : null}
+                    createActions={canCreate ? (
                         <Link href="/forms/staff/new">
                             <Button variant="outline">Create New Staffing Form</Button>
                         </Link>
-                    )}
-                </ButtonGroup>
-
-                {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
-
-                <h1 className="text-2xl font-bold mb-6">Staffing Submissions</h1>
-                <div className="grid gap-4">
-                    {summariesWithDisplayStatus.map((summary) => (
-                        <Link href={`/forms/staff/${summary.latestFormId}`} key={summary.id}>
-                            <div className="border rounded-lg p-4 hover:bg-accent transition-colors">
-                                <div className="flex justify-between items-center">
-                                    <div className="flex items-center gap-3">
-                                        <h2 className="font-bold text-lg">FY {summary.fiscal_year} Staffing Plan</h2>
-                                        <Badge 
-                                            variant={STATUS_BADGE_COLORS[summary.displayStatus ?? 'draft'] ?? 'outline'}
-                                            className={
-                                                summary.displayStatus === 'approved' 
-                                                ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
-                                                : ''
-                                            }
-                                        >
-                                            {STATUS_LABELS[summary.displayStatus ?? 'draft'] ?? summary.displayStatus}
-                                        </Badge>
-                                    </div>
-
-                                    <span className="text-sm text-muted-foreground shrink-0">
-                                        {new Date(summary.submission_date).toLocaleDateString()}
-                                    </span>
-                                </div>
-                            </div>
-                        </Link>
-                    ))}
-                </div>
-            </div>
+                    ) : null}
+                />
+            </>
         )
-    } catch (e) {
-        console.error(e)
+    } catch (error) {
+        console.error(error)
         return (
             <div className="m-4">
-                <h1 className="text-red-500 font-bold">Error loading Staffing Forms</h1>
+                <h1 className="font-bold text-red-500">Error loading Staffing Forms</h1>
                 <p>Please check your database connection.</p>
             </div>
         )

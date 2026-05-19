@@ -893,6 +893,8 @@ export async function getAllProposalSummaries(
     entityId: string,
     fiscalYear?: number,
 ) {
+    const hierarchyScope = entityType === "operating_unit" ? "ou" : entityType;
+
     console.log("Fetching proposal summaries for:", {
         entityType,
         userRole,
@@ -928,7 +930,7 @@ export async function getAllProposalSummaries(
         query = query.where("pp.proposal_year", "=", fiscalYear);
     }
 
-    if (userRole === "national") {
+    if (hierarchyScope === "national" || userRole === "national" || userRole === "dbm") {
         const rows = await query
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
@@ -936,7 +938,7 @@ export async function getAllProposalSummaries(
         return getLatestProposalSummariesByFamily(rows);
     }
 
-    if (userRole === "department") {
+    if (hierarchyScope === "department") {
         const rows = await query
             .leftJoin("agencies", "agencies.id", "f.entity_id")
             .leftJoin("operating_units", "operating_units.id", "f.entity_id")
@@ -958,7 +960,7 @@ export async function getAllProposalSummaries(
         return getLatestProposalSummariesByFamily(rows);
     }
 
-    if (userRole === "agency") {
+    if (hierarchyScope === "agency") {
         const rows = await query
             .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
@@ -971,7 +973,7 @@ export async function getAllProposalSummaries(
         return getLatestProposalSummariesByFamily(rows);
     }
 
-    if (userRole === "ou") {
+    if (hierarchyScope === "ou") {
         const descendantOuIds = await getOperatingUnitDescendantIds(entityId);
         const rows = await query
             .where("f.entity_id", "in", [entityId, ...descendantOuIds])
