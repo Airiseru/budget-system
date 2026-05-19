@@ -7,6 +7,7 @@ import {
     getBudgetPrepClosedError,
     isBudgetPrepActiveForYear,
 } from "@/src/lib/budget-cycle";
+import { sessionWithEntity } from "@/src/actions/auth";
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
 type PgError = Error & { code?: string; detail?: string };
@@ -107,6 +108,15 @@ export async function POST(req: Request) {
 
 export async function GET(req: Request) {
     try {
+        const session = await sessionWithEntity();
+
+        if (!session?.user?.id || !session.user.entity_id) {
+            return NextResponse.json(
+                { error: "Unauthorized" },
+                { status: 401 },
+            );
+        }
+
         const { searchParams } = new URL(req.url);
         const entityId = searchParams.get("entityId");
         const yearParam = searchParams.get("year");
@@ -119,6 +129,10 @@ export async function GET(req: Request) {
             );
         }
 
+        if (entityId !== session.user.entity_id) {
+            return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+        }
+
         if (
             yearParam &&
             (!Number.isInteger(fiscalYear) || Number(fiscalYear) < 1)
@@ -129,15 +143,15 @@ export async function GET(req: Request) {
             );
         }
 
-        // Fetch using your existing repository function
-        // Note: adjust the userId/entityType based on your session logic
         const data = await repo.getAllProposalSummaries(
-            "",
-            "admin",
+            session.user_entity?.entity_type ?? "",
+            session.user.role,
             entityId,
             fiscalYear,
         );
 
+        // No filtering here — the frontend's visibleProposals already
+        // filters by priority_rank vs dept_priority_rank based on activeScope
         return NextResponse.json(data);
     } catch (error) {
         console.error("Fetch error:", error);

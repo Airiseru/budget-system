@@ -409,36 +409,37 @@ export async function createProjectProposal(
             .returningAll()
             .executeTakeFirstOrThrow();
 
+        const targetDeptSubquery = trx
+            .selectFrom("entities as e2")
+            .leftJoin("agencies as a", "a.id", "e2.id")
+            .leftJoin("operating_units as ou", "ou.id", "e2.id")
+            .select(sql`COALESCE(a.department_id, ou.agency_id)`.as("dept_id"))
+            .where("e2.id", "=", entityId)
+            .limit(1);
+
+        // Fetch Maximum Rank and lock corresponding matching records to serialize concurrent submissions
         const deptRankResult = await trx
             .selectFrom("project_proposals as pp")
             .innerJoin("forms as f", "f.id", "pp.id")
             .innerJoin("entities as e", "e.id", "f.entity_id")
-            // Join to resolve dept — adjust join path to match your schema
             .leftJoin("agencies", "agencies.id", "e.id")
-            .leftJoin(
-                "departments as dept",
-                "dept.id",
-                "agencies.department_id",
-            )
+            .leftJoin("operating_units as ou", "ou.id", "e.id")
             .select(({ fn }) =>
                 fn.max<number>("pp.dept_priority_rank").as("max_rank"),
             )
             .where("pp.proposal_year", "=", payload.proposal_year)
             .where(
-                // Match proposals from the same department
-                sql`COALESCE(dept.id, agencies.department_id)`,
+                sql`COALESCE(agencies.department_id, ou.agency_id)`,
                 "=",
-                sql`(SELECT COALESCE(a.department_id, ou.agency_id)
-             FROM entities e2
-             LEFT JOIN agencies a ON a.id = e2.id
-             LEFT JOIN operating_units ou ON ou.id = e2.id
-             WHERE e2.id = ${entityId}
-             LIMIT 1)`,
+                targetDeptSubquery,
             )
+            // CRITICAL: Prevent concurrent writes from reading the same maximum rank slot
+            .forUpdate()
             .executeTakeFirst();
 
         const nextDeptRank = (deptRankResult?.max_rank ?? 0) + 1;
 
+        // Apply calculated priority rank safely
         await trx
             .updateTable("project_proposals")
             .set({ dept_priority_rank: nextDeptRank })
@@ -715,6 +716,12 @@ export async function getAllProposalSummaries(
     entityId: string,
     fiscalYear?: number,
 ) {
+    console.log("Fetching proposal summaries for:", {
+        entityType,
+        userRole,
+        entityId,
+        fiscalYear,
+    });
     let query = db
         .selectFrom("project_proposals as pp")
         .innerJoin("forms as f", "f.id", "pp.id")
@@ -744,7 +751,7 @@ export async function getAllProposalSummaries(
         query = query.where("pp.proposal_year", "=", fiscalYear);
     }
 
-    if (entityType === "national") {
+    if (userRole === "national") {
         const rows = await query
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
@@ -752,7 +759,7 @@ export async function getAllProposalSummaries(
         return getLatestProposalSummariesByFamily(rows);
     }
 
-    if (entityType === "department") {
+    if (userRole === "department") {
         const rows = await query
             .leftJoin("agencies", "agencies.id", "f.entity_id")
             .leftJoin("operating_units", "operating_units.id", "f.entity_id")
@@ -774,7 +781,7 @@ export async function getAllProposalSummaries(
         return getLatestProposalSummariesByFamily(rows);
     }
 
-    if (entityType === "agency") {
+    if (userRole === "agency") {
         const rows = await query
             .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
@@ -787,7 +794,7 @@ export async function getAllProposalSummaries(
         return getLatestProposalSummariesByFamily(rows);
     }
 
-    if (entityType === "operating_unit") {
+    if (userRole === "ou") {
         const descendantOuIds = await getOperatingUnitDescendantIds(entityId);
         const rows = await query
             .where("f.entity_id", "in", [entityId, ...descendantOuIds])
@@ -1689,10 +1696,117 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
             await trx
                 .updateTable("paps")
                 .set({ project_status: "rejected", updated_at: sql`now()` })
-                .where("id", "in", linkedPaps.map((row) => row.pap_id))
+                .where(
+                    "id",
+                    "in",
+                    linkedPaps.map((row) => row.pap_id),
+                )
                 .execute();
         }
     });
 
     return proposals.length;
+}
+
+export async function moveDeptProposalToRank(
+    proposalId: string,
+    targetRank: number,
+    proposalYear: number,
+) {
+    return await db.transaction().execute(async (trx) => {
+        const movingProposal = await trx
+            .selectFrom("project_proposals as pp")
+            .innerJoin("forms as f", "f.id", "pp.id")
+            .select([
+                "pp.id",
+                "pp.dept_priority_rank",
+                "pp.proposal_year",
+                "f.auth_status",
+            ])
+            .where("pp.id", "=", proposalId)
+            .executeTakeFirst();
+
+        if (!movingProposal) {
+            throw new Error("proposal_not_found");
+        }
+
+        if (movingProposal.auth_status !== "draft") {
+            throw new Error("submitted_rank_change");
+        }
+
+        const currentRank = Number(movingProposal.dept_priority_rank);
+
+        const proposals = await trx
+            .selectFrom("project_proposals as pp")
+            .innerJoin("forms as f", "f.id", "pp.id")
+            .select(["pp.id", "pp.dept_priority_rank", "f.auth_status"])
+            .where("pp.proposal_year", "=", proposalYear)
+            .where("pp.dept_priority_rank", "is not", null)
+            .orderBy("pp.dept_priority_rank", "asc")
+            .forUpdate()
+            .execute();
+
+        const boundedTargetRank = Math.max(
+            1,
+            Math.min(Math.trunc(targetRank), proposals.length),
+        );
+
+        if (currentRank === boundedTargetRank) {
+            return { success: true, changedIds: [] as string[] };
+        }
+
+        const affectedProposals = proposals.filter((proposal) => {
+            const rank = Number(proposal.dept_priority_rank);
+
+            return currentRank < boundedTargetRank
+                ? rank >= currentRank && rank <= boundedTargetRank
+                : rank >= boundedTargetRank && rank <= currentRank;
+        });
+
+        if (
+            affectedProposals.some(
+                (proposal) => proposal.auth_status !== "draft",
+            )
+        ) {
+            throw new Error("submitted_rank_change");
+        }
+
+        // temporary negative ranks
+        for (const [index, proposal] of affectedProposals.entries()) {
+            await trx
+                .updateTable("project_proposals")
+                .set({
+                    dept_priority_rank: -(index + 1),
+                })
+                .where("id", "=", proposal.id)
+                .execute();
+        }
+
+        // assign final ranks
+        for (const proposal of affectedProposals) {
+            const rank = Number(proposal.dept_priority_rank);
+            let nextRank = rank;
+
+            if (proposal.id === proposalId) {
+                nextRank = boundedTargetRank;
+            } else if (currentRank < boundedTargetRank) {
+                nextRank = rank - 1;
+            } else {
+                nextRank = rank + 1;
+            }
+
+            await trx
+                .updateTable("project_proposals")
+                .set({
+                    dept_priority_rank: nextRank,
+                })
+                .where("id", "=", proposal.id)
+                .execute();
+        }
+
+        return {
+            success: true,
+            changedIds: affectedProposals.map((p) => p.id),
+        };
+    });
 }

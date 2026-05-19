@@ -114,8 +114,9 @@ export default async function ProposalsPage({
                         </Button>
                     </form>
                 )}
+                <div className="flex gap-2">
                 {canCreate && (
-                    <div className="flex gap-2">
+                        <div className="flex gap-2">
                         <Link href="/forms/proposals/new?type=202">
                             <Button variant="default">
                                 New BP 202 (Local)
@@ -126,13 +127,15 @@ export default async function ProposalsPage({
                                 New BP 203 (Foreign)
                             </Button>
                         </Link>
-                        <Link href="/forms/proposals/rank">
+                        </div>
+             
+                )}
+                <Link href="/forms/proposals/rank">
                             <Button variant="secondary">
                                 Change Priority Ranks
                             </Button>
                         </Link>
-                    </div>
-                )}
+                        </div>
             </div>
         );
 

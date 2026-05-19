@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ProposalSchema } from "@/src/lib/validations/proposal.schema";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import SearchableComboboxField, {
     SearchableComboboxOption,
 } from "@/components/ui/dbm/SearchableComboboxField";
@@ -121,7 +121,13 @@ type MatrixField = "cost_by_components" | "foreign_physical_targets";
 interface ExpenseRow {
     expense_class: keyof typeof EXPENSE_CLASSES;
     fund_category?: "LP" | "Grant" | "GOP" | null; // for BP 203
-    fund_method?: "cash" | "non_cash" | "non-cash" | "imprest" | "direct_payment" | null; // for BP 203
+    fund_method?:
+        | "cash"
+        | "non_cash"
+        | "non-cash"
+        | "imprest"
+        | "direct_payment"
+        | null; // for BP 203
     currency: string;
     amount: number;
 }
@@ -343,6 +349,87 @@ interface WrapperProps {
     existingPaps?: PapOption[];
 }
 
+type CollapsibleSection =
+    | "cost_by_components"
+    | "local_locations"
+    | "local_financial_attributions"
+    | "local_infrastructure_requirements"
+    | "local_physical_targets"
+    | "foreign_financial_targets"
+    | "foreign_physical_targets";
+
+interface CollapsibleTableSectionProps {
+    section: CollapsibleSection;
+    title: string;
+    subtitle?: string;
+    collapsed: boolean;
+    onToggle: () => void;
+    children: React.ReactNode;
+    summary?: React.ReactNode;
+    actions?: React.ReactNode;
+}
+
+function CollapsibleTableSection({
+    title,
+    subtitle,
+    collapsed,
+    onToggle,
+    children,
+    summary,
+    actions,
+}: CollapsibleTableSectionProps) {
+    return (
+        <div className="rounded-xl border border-muted-200 overflow-hidden bg-inherit">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4 border-b border-muted-200 px-5 py-4 bg-inherit">
+                <div className="flex items-center gap-4">
+                    <button
+                        type="button"
+                        onClick={onToggle}
+                        className="
+                                
+                        
+                                p-1
+                                text-sm
+                                font-medium
+                                text-muted-600
+                                transition
+                                hover:bg-muted-100
+                            "
+                    >
+                        {collapsed ? <ChevronUp /> : <ChevronDown />}
+                    </button>
+                    <div className="min-w-0">
+                        <div className="flex items-center gap-3">
+                            <h3 className="text-sm font-bold text-muted-700">
+                                {title}
+                            </h3>
+                        </div>
+
+                        {subtitle && (
+                            <p className="mt-1 text-sm text-muted-500">
+                                {subtitle}
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                {actions && (
+                    <div className="flex items-center gap-2">{actions}</div>
+                )}
+            </div>
+
+            {/* Summary when collapsed */}
+            {collapsed && summary && (
+                <div className="px-5 py-4 bg-inherit">{summary}</div>
+            )}
+
+            {/* Content */}
+            {!collapsed && <div className="bg-inherit">{children}</div>}
+        </div>
+    );
+}
+
 export default function ProposalForm({
     project,
     type,
@@ -561,6 +648,25 @@ export default function ProposalForm({
         });
     };
 
+    const [collapsedSections, setCollapsedSections] = useState<
+        Record<CollapsibleSection, boolean>
+    >({
+        cost_by_components: false,
+        local_locations: false,
+        local_financial_attributions: false,
+        local_infrastructure_requirements: false,
+        local_physical_targets: false,
+        foreign_financial_targets: false,
+        foreign_physical_targets: false,
+    });
+
+    const toggleSection = (section: CollapsibleSection) => {
+        setCollapsedSections((prev) => ({
+            ...prev,
+            [section]: !prev[section],
+        }));
+    };
+
     const updateExpense = (
         field: ProjectProposalField,
         parentIdx: number,
@@ -694,13 +800,13 @@ export default function ProposalForm({
                         general: errorData.error || "Failed to save proposal.",
                     });
                 }
-                window.scrollTo({ top: 0, behavior: "smooth" })
+                window.scrollTo({ top: 0, behavior: "smooth" });
             }
         } catch {
             // toast.error("An unexpected error occurred. Please try again.");
             setErrors({
                 general: "An unexpected error occurred. Please try again.",
-            })
+            });
         } finally {
             setIsLoading(false);
         }
@@ -709,7 +815,7 @@ export default function ProposalForm({
     const handleMatrixChange = (
         field: ProjectProposalField,
         parentIdx: number,
-        targetClass: "PS" | "MOOE" | "CO" | "FINEX",
+        targetClass: keyof typeof EXPENSE_CLASSES,
         value: number,
     ) => {
         // Treat the array specifically as ExpenseRow-based for this function
@@ -734,7 +840,7 @@ export default function ProposalForm({
 
     const handleMatrixChange203 = (
         componentIdx: number,
-        expenseClass: "PS" | "MOOE" | "CO" | "FINEX",
+        expenseClass: keyof typeof EXPENSE_CLASSES,
         category: "LP" | "Grant" | "GOP",
         value: number,
         field: MatrixField,
@@ -769,6 +875,9 @@ export default function ProposalForm({
             }
 
             currentComp.costs = currentCosts;
+            if ("proposed_amt" in currentComp) {
+                (currentComp as any).proposed_amt = value;
+            }
             updatedComponents[componentIdx] = currentComp;
 
             return { ...prev, [field]: updatedComponents };
@@ -829,166 +938,117 @@ export default function ProposalForm({
         });
     };
 
-    const [collapsedComponents, setCollapsedComponents] = useState<Set<number>>(
-        new Set(),
-    );
+    type ExpenseKey = "PS" | "MOOE" | "CO" | "FINEX";
 
-    const toggleComponentCollapse = (i: number) => {
-        setCollapsedComponents((prev) => {
-            const next = new Set(prev);
-            next.has(i) ? next.delete(i) : next.add(i);
-            return next;
-        });
-    };
+    const componentExpenseClassTotals = payload.cost_by_components.reduce(
+        (acc, comp) => {
+            const selectedItem = getSelectedItemCatalog(comp.item_catalog_id);
 
-    // Per-expense-class column totals across all cost_by_components rows
-    const componentExpenseClassTotals = (
-        ["PS", "MOOE", "CO", "FINEX"] as const
-    ).reduce(
-        (acc, ec) => {
-            acc[ec] = payload.cost_by_components.reduce((sum, comp) => {
-                const match = comp.costs.find((c) => c.expense_class === ec);
-                return sum + Number(match?.amount || comp.proposed_amt || 0);
-            }, 0);
+            const expenseClass = selectedItem?.expense_class as ExpenseKey;
+
+            const amount = Number(comp.proposed_amt || 0);
+
+            if (
+                expenseClass &&
+                Object.keys(EXPENSE_CLASSES).includes(expenseClass)
+            ) {
+                acc[expenseClass] += amount;
+            }
+
             return acc;
         },
-        {} as Record<"PS" | "MOOE" | "CO" | "FINEX", number>,
+        {
+            PS: 0,
+            MOOE: 0,
+            CO: 0,
+            FINEX: 0,
+        },
     );
 
-    const renderCostComponentAllocationTable = (showGroupHover = false) => (
-        <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left border-collapse">
-                <thead>
-                    <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
-                        <th className="py-3 px-4 border-r w-8" />
-                        <th className="py-3 px-4 border-r w-[260px] max-w-[260px]">
-                            Item Catalog
-                        </th>
-                        <th className="py-3 px-4 border-r min-w-[180px]">
-                            Fund Source
-                        </th>
-                        <th className="py-3 px-4 border-r min-w-[180px]">
-                            Description
-                        </th>
-                        <th className="py-3 px-2 border-r text-center w-20">
-                            Currency
-                        </th>
-                        <th className="py-3 px-2 border-r text-right w-36">
-                            Proposed Amount
-                        </th>
-                        <th className="w-10" />
-                    </tr>
-                </thead>
-                <tbody className="divide-y divide-muted-50">
-                    {payload.cost_by_components.map((comp, i) => {
-                        const selectedItem = getSelectedItemCatalog(
-                            comp.item_catalog_id,
-                        );
-                        const isCollapsed = collapsedComponents.has(i);
-                        const displayName =
-                            selectedItem?.name ||
-                            comp.component_name ||
-                            "Unnamed Component";
-                        const displayAmount = Number(
-                            comp.proposed_amt || comp.costs[0]?.amount || 0,
-                        );
-                        const displayExpClass =
-                            selectedItem?.expense_class ||
-                            comp.costs[0]?.expense_class ||
-                            null;
+    const renderCostComponentAllocationTable = (showGroupHover = false) => {
+        const grandTotal = (
+            Object.values(componentExpenseClassTotals) as number[]
+        ).reduce((a, b) => a + b, 0);
 
-                        return (
-                            <tr
-                                key={i}
-                                className={`transition-colors ${
-                                    isCollapsed
-                                        ? "bg-muted-50/40 hover:bg-muted-50/60"
-                                        : "hover:bg-muted-50/30"
-                                } ${showGroupHover ? "group" : ""}`}
-                            >
-                                {/* Collapse toggle */}
-                                <td className="py-3 px-2 border-r text-center align-top">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            toggleComponentCollapse(i)
-                                        }
-                                        className="text-muted-400 hover:text-muted-700 transition-colors text-xs font-bold leading-none mt-1"
-                                        title={
-                                            isCollapsed
-                                                ? "Expand row"
-                                                : "Collapse row"
-                                        }
+        return (
+            <div className="bg-inherit">
+                {/* Scrollable Table */}
+                <div className="max-h-[520px] bg-inherit overflow-auto">
+                    <table className="w-full bg-inherit border-spacing-0">
+                        <thead className="sticky top-0 z-20 border-b bg-inherit border-secondary-foreground">
+                            <tr className="border-b border-secondary-foreground">
+                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[280px]">
+                                    Item Catalog
+                                </th>
+
+                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 min-w-[220px]">
+                                    Fund Source
+                                </th>
+
+                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 min-w-[120px]">
+                                    Description
+                                </th>
+
+                                <th className="bg-muted-50 px-3 py-4 text-center text-sm font-bold text-muted-600 w-24">
+                                    Currency
+                                </th>
+
+                                <th className="bg-muted-50 px-4 py-4 text-right text-sm font-bold text-muted-600 w-44">
+                                    Proposed Amount
+                                </th>
+
+                                <th className="bg-muted-50 w-12" />
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            {payload.cost_by_components.map((comp, i) => {
+                                const selectedItem = getSelectedItemCatalog(
+                                    comp.item_catalog_id,
+                                );
+
+                                return (
+                                    <tr
+                                        key={i}
+                                        className={`
+                                        border-b border-muted-100
+                                        transition-colors
+                                        hover:bg-muted-50/60
+                                        ${showGroupHover ? "group" : ""}
+                                    `}
                                     >
-                                        {isCollapsed ? "▶" : "▼"}
-                                    </button>
-                                </td>
+                                        {/* Item Catalog */}
+                                        <td className="px-4 py-4 align-top">
+                                            <div className="space-y-2">
+                                                <SearchableComboboxField
+                                                    items={itemCatalogOptions}
+                                                    value={
+                                                        comp.item_catalog_id ??
+                                                        ""
+                                                    }
+                                                    placeholder="Select item catalog"
+                                                    searchPlaceholder="Search line items"
+                                                    emptyText="No line items found."
+                                                    onValueChange={(value) =>
+                                                        updateCostComponentItem(
+                                                            i,
+                                                            value,
+                                                        )
+                                                    }
+                                                />
 
-                                {isCollapsed ? (
-                                    // Collapsed summary view
-                                    <>
-                                        <td
-                                            className="py-3 px-4 border-r align-middle"
-                                            colSpan={4}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <span
-                                                    className="font-semibold text-sm text-muted-800 truncate max-w-[200px]"
-                                                    title={displayName}
-                                                >
-                                                    {displayName}
-                                                </span>
-                                                {displayExpClass && (
-                                                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-400 bg-muted-100 rounded px-1.5 py-0.5">
-                                                        {displayExpClass}
-                                                    </span>
-                                                )}
-                                                {comp.fund_code && (
-                                                    <span className="text-xs text-muted-500 truncate">
-                                                        {comp.fund_code}
-                                                    </span>
+                                                {selectedItem && (
+                                                    <div className="inline-flex items-center rounded-md bg-muted-100 px-2 py-1 text-sm font-medium text-muted-600">
+                                                        {
+                                                            selectedItem.expense_class
+                                                        }
+                                                    </div>
                                                 )}
                                             </div>
                                         </td>
-                                        <td className="py-3 px-2 border-r align-middle text-right">
-                                            <span className="text-sm font-mono font-bold text-secondary-foreground">
-                                                {comp.currency ?? "PHP"}{" "}
-                                                {displayAmount.toLocaleString(
-                                                    undefined,
-                                                    {
-                                                        minimumFractionDigits: 2,
-                                                    },
-                                                )}
-                                            </span>
-                                        </td>
-                                    </>
-                                ) : (
-                                    // Expanded edit view
-                                    <>
-                                        <td className="py-3 px-4 border-r align-top w-[260px] max-w-[260px]">
-                                            <SearchableComboboxField
-                                                items={itemCatalogOptions}
-                                                value={
-                                                    comp.item_catalog_id ?? ""
-                                                }
-                                                placeholder="Select item catalog"
-                                                searchPlaceholder="Search line items"
-                                                emptyText="No line items found."
-                                                onValueChange={(value) =>
-                                                    updateCostComponentItem(
-                                                        i,
-                                                        value,
-                                                    )
-                                                }
-                                            />
-                                            {selectedItem && (
-                                                <p className="mt-1 text-xs text-muted-400">
-                                                    {selectedItem.expense_class}{" "}
-                                                    expense class
-                                                </p>
-                                            )}
-                                        </td>
-                                        <td className="py-3 px-4 border-r align-top">
+
+                                        {/* Fund Source */}
+                                        <td className="px-4 py-4 align-top">
                                             <SearchableComboboxField
                                                 items={fundingSourceOptions}
                                                 value={comp.fund_code ?? ""}
@@ -1006,9 +1066,27 @@ export default function ProposalForm({
                                                 }
                                             />
                                         </td>
-                                        <td className="py-3 px-4 border-r align-top">
+
+                                        {/* Description */}
+                                        <td className="px-4 py-4 align-top">
                                             <textarea
-                                                className="min-h-12 w-full rounded border border-muted-200 bg-background px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                className="
+                                                min-h-[88px]
+                                                w-full
+                                                resize-none
+                                                rounded-lg
+                                                border
+                                                border-muted-200
+                                                bg-background
+                                                px-3
+                                                py-2
+                                                text-sm
+                                                outline-none
+                                                transition
+                                                focus:border-secondary-foreground/40
+                                                focus:ring-2
+                                                focus:ring-secondary-foreground/10
+                                            "
                                                 placeholder="Optional description"
                                                 value={
                                                     comp.specific_description ??
@@ -1026,9 +1104,28 @@ export default function ProposalForm({
                                                 }
                                             />
                                         </td>
-                                        <td className="py-3 px-2 border-r align-top">
+
+                                        {/* Currency */}
+                                        <td className="px-3 py-4 align-top">
                                             <input
-                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-sm uppercase outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                className="
+                                                w-full
+                                                rounded-lg
+                                                border
+                                                border-muted-200
+                                                bg-background
+                                                px-2
+                                                py-2
+                                                text-center
+                                                text-sm
+                                                font-medium
+                                                uppercase
+                                                outline-none
+                                                transition
+                                                focus:border-secondary-foreground/40
+                                                focus:ring-2
+                                                focus:ring-secondary-foreground/10
+                                            "
                                                 value={comp.currency ?? "PHP"}
                                                 onChange={(e) =>
                                                     updateRow(
@@ -1042,12 +1139,30 @@ export default function ProposalForm({
                                                 }
                                             />
                                         </td>
-                                        <td className="py-3 px-2 border-r align-top">
+
+                                        {/* Amount */}
+                                        <td className="px-4 py-4 align-top">
                                             <input
                                                 type="number"
                                                 min="0"
                                                 step="0.01"
-                                                className="w-full rounded border border-muted-200 bg-background px-2 py-2 text-right text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                className="
+                                                w-full
+                                                rounded-lg
+                                                border
+                                                border-muted-200
+                                                bg-background
+                                                px-3
+                                                py-2
+                                                text-right
+                                                text-sm
+                                                font-semibold
+                                                outline-none
+                                                transition
+                                                focus:border-secondary-foreground/40
+                                                focus:ring-2
+                                                focus:ring-secondary-foreground/10
+                                            "
                                                 value={comp.proposed_amt ?? ""}
                                                 onChange={(e) =>
                                                     updateRow(
@@ -1061,84 +1176,123 @@ export default function ProposalForm({
                                                 }
                                             />
                                         </td>
-                                    </>
-                                )}
 
-                                <td className="py-3 px-2 text-center align-top">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            removeRow("cost_by_components", i)
-                                        }
-                                        className={`text-red-400 hover:text-red-600 transition-colors ${
-                                            showGroupHover
-                                                ? "opacity-0 group-hover:opacity-100"
-                                                : ""
-                                        }`}
-                                        title="Remove allocation"
-                                    >
-                                        ✕
-                                    </button>
-                                </td>
-                            </tr>
-                        );
-                    })}
-                </tbody>
+                                        {/* Remove */}
+                                        <td className="px-2 py-4 text-center align-top">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    removeRow(
+                                                        "cost_by_components",
+                                                        i,
+                                                    )
+                                                }
+                                                className={`
+                                                rounded-md
+                                                p-2
+                                                text-muted-400
+                                                transition
+                                                hover:bg-red-50
+                                                hover:text-red-500
+                                                ${
+                                                    showGroupHover
+                                                        ? "opacity-0 group-hover:opacity-100"
+                                                        : ""
+                                                }
+                                            `}
+                                            >
+                                                ✕
+                                            </button>
+                                        </td>
+                                    </tr>
+                                );
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Totals Section */}
                 {payload.cost_by_components.length > 0 && (
-                    <tfoot>
-                        <tr className="border-t-2 border-muted-300 bg-muted-50/70 text-sm font-black text-muted-600 uppercase">
-                            <td className="py-3 px-4" />
-                            <td className="py-3 px-4 border-r" colSpan={4}>
-                                <span className="text-[10px] tracking-widest">
-                                    TOTALS BY EXPENSE CLASS
-                                </span>
-                            </td>
-                            {(["PS", "MOOE", "CO", "FINEX"] as const).map(
-                                (ec) => (
-                                    <td
-                                        key={ec}
-                                        className="py-3 px-2 border-r text-right"
-                                    >
-                                        <div className="flex flex-col items-end">
-                                            <span className="text-[9px] text-muted-400 font-bold tracking-wider">
+                    <div className="border-t border-muted-200 bg-muted-50/70 px-5 py-4">
+                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            {/* Label */}
+                            <div>
+                                <h4 className="text-sm font-bold text-muted-700">
+                                    Totals by Expense Class
+                                </h4>
+
+                                <p className="text-sm text-muted-500 mt-1">
+                                    Automatically calculated from all component
+                                    allocations
+                                </p>
+                            </div>
+
+                            {/* Totals Cards */}
+                            <div className="flex flex-wrap gap-3">
+                                {(["PS", "MOOE", "CO", "FINEX"] as const).map(
+                                    (ec) => (
+                                        <div
+                                            key={ec}
+                                            className="
+                                        min-w-[130px]
+                                        rounded-lg
+                                        border
+                                        border-muted-200
+                                        bg-background
+                                        px-4
+                                        py-3
+                                    "
+                                        >
+                                            <div className="text-sm font-semibold text-muted-500">
                                                 {ec}
-                                            </span>
-                                            <span className="text-sm font-mono font-bold text-secondary-foreground">
+                                            </div>
+
+                                            <div className="mt-1 text-sm font-bold text-secondary-foreground">
                                                 {componentExpenseClassTotals[
                                                     ec
                                                 ].toLocaleString(undefined, {
                                                     minimumFractionDigits: 2,
                                                 })}
-                                            </span>
+                                            </div>
                                         </div>
-                                    </td>
-                                ),
-                            )}
-                            <td className="py-3 px-2">
-                                <div className="flex flex-col items-end">
-                                    <span className="text-[9px] text-muted-400 font-bold tracking-wider">
-                                        TOTAL
-                                    </span>
-                                    <span className="text-sm font-mono font-bold text-secondary-foreground">
-                                        {(
-                                            Object.values(
-                                                componentExpenseClassTotals,
-                                            ) as number[]
-                                        )
-                                            .reduce((a, b) => a + b, 0)
-                                            .toLocaleString(undefined, {
-                                                minimumFractionDigits: 2,
-                                            })}
-                                    </span>
+                                    ),
+                                )}
+
+                                {/* Grand Total */}
+                                <div
+                                    className="
+                                    min-w-[160px]
+                                    rounded-lg
+                                    border
+                                    border-secondary-foreground/20
+                                    bg-secondary-foreground/5
+                                    px-4
+                                    py-3
+                                "
+                                >
+                                    <div className="text-sm font-semibold text-muted-600">
+                                        GRAND TOTAL
+                                    </div>
+
+                                    <div className="mt-1 text-sm font-bold text-secondary-foreground">
+                                        {grandTotal.toLocaleString(undefined, {
+                                            minimumFractionDigits: 2,
+                                        })}
+                                    </div>
                                 </div>
-                            </td>
-                            <td />
-                        </tr>
-                    </tfoot>
+                            </div>
+                        </div>
+                    </div>
                 )}
-            </table>
-        </div>
-    );
+                {payload.cost_by_components.length === 0 && (
+                    <div className="p-8 text-center text-muted-400 text-sm italic">
+                        No component allocations added. Click &quot;+ ADD
+                        ALLOCATION&quot; to begin.
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <form
@@ -1454,491 +1608,355 @@ export default function ProposalForm({
 
             <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                 <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                    <h3 className="text-[11px] font-black text-muted-500 uppercase tracking-widest">
+                    <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                         PAP Prerequisites
                     </h3>
                 </div>
 
                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse border-spacing-0">
-                        <thead>
-                            <tr className="bg-background border-b">
-                                <th
-                                    rowSpan={2}
-                                    className="py-4 px-4 text-sm font-bold text-muted-700 uppercase border-r w-1/3 text-center"
-                                >
-                                    Approving Authorities / Supporting Documents
-                                </th>
-                                <th
-                                    colSpan={3}
-                                    className="py-2 text-sm font-bold text-muted-700 uppercase border-b text-center"
-                                >
-                                    Reviewed/Approved
-                                </th>
-                                <th
-                                    rowSpan={2}
-                                    className="py-4 px-4 text-sm font-bold text-muted-700 uppercase border-l text-center"
-                                >
-                                    Remarks
-                                </th>
-                                <th rowSpan={2}></th>
-                            </tr>
-                            <tr className="bg-background border-b">
-                                <th className="py-2 text-[9px] font-bold text-muted-500 uppercase text-center border-r w-20">
-                                    Yes
-                                </th>
-                                <th className="py-2 text-[9px] font-bold text-muted-500 uppercase text-center border-r w-20">
-                                    No
-                                </th>
-                                <th className="py-2 text-[9px] font-bold text-muted-500 uppercase text-center w-28">
-                                    Not Applicable
-                                </th>
-                            </tr>
-                        </thead>
-
-                        {/* Section 1: Approving Authorities */}
-                        <tbody>
-                            <tr className="bg-muted-50/50 border-b">
-                                <td
-                                    colSpan={4}
-                                    className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic"
-                                >
-                                    Approving Authorities
-                                </td>
-                                <td
-                                    className="flex flex-row-reverse"
-                                    colSpan={2}
-                                >
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            addRow("pap_prerequisites", {
-                                                name: "",
-                                                type: "authority",
-                                                status: "True",
-                                                remarks: "",
-                                            })
-                                        }
-                                        className="text-secondary-foreground text-sm font-bold hover:underline py-2 px-4"
+                    <div className="max-h-[520px] overflow-auto">
+                        <table className="w-full text-left border-spacing-0 divide-y">
+                            <thead className="sticky top-0 bg-muted z-20 shadow-sm">
+                                <tr className="bg-background border-b">
+                                    <th
+                                        rowSpan={2}
+                                        className="py-4 px-4 text-sm font-bold text-muted-700 uppercase border-r w-1/3 text-center"
                                     >
-                                        + ADD APPROVING AUTHORITY
-                                    </button>
-                                </td>
-                            </tr>
-                            {payload.pap_prerequisites.map(
-                                (pre, i) =>
-                                    pre.type === "authority" && (
-                                        <PrerequisiteRow
-                                            key={`auth-${i}`}
-                                            pre={pre}
-                                            placeholder="Approver"
-                                            index={i}
-                                            updateRow={updateRow}
-                                            removeRow={removeRow}
-                                        />
-                                    ),
-                            )}
-                        </tbody>
-
-                        {/* Section 2: Supporting Documents */}
-                        <tbody>
-                            <tr className="bg-muted-50/50 border-b border-t">
-                                <td
-                                    colSpan={4}
-                                    className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic border-b border-t"
-                                >
-                                    Supporting Documents
-                                </td>
-                                <td className="flex flex-row-reverse">
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            addRow("pap_prerequisites", {
-                                                name: "",
-                                                type: "document",
-                                                status: "True",
-                                                remarks: "",
-                                            })
-                                        }
-                                        className="text-secondary-foreground text-sm font-bold hover:underline py-2 px-4"
+                                        Approving Authorities / Supporting
+                                        Documents
+                                    </th>
+                                    <th
+                                        colSpan={3}
+                                        className="py-2 text-sm font-bold text-muted-700 uppercase border-b text-center"
                                     >
-                                        + ADD SUPPORTING DOCUMENT
-                                    </button>
-                                </td>
-                            </tr>
-                            {payload.pap_prerequisites.map(
-                                (pre, i) =>
-                                    pre.type === "document" && (
-                                        <PrerequisiteRow
-                                            key={`doc-${i}`}
-                                            pre={pre}
-                                            placeholder="Document"
-                                            index={i}
-                                            updateRow={updateRow}
-                                            removeRow={removeRow}
-                                        />
-                                    ),
-                            )}
-                        </tbody>
-                    </table>
+                                        Reviewed/Approved
+                                    </th>
+                                    <th
+                                        rowSpan={2}
+                                        className="py-4 px-4 text-sm font-bold text-muted-700 uppercase border-l text-center"
+                                    >
+                                        Remarks
+                                    </th>
+                                    <th rowSpan={2}></th>
+                                </tr>
+                                <tr className="bg-background border-b">
+                                    <th className="py-2 text-sm font-bold text-muted-500 uppercase text-center border-r w-20">
+                                        Yes
+                                    </th>
+                                    <th className="py-2 text-sm font-bold text-muted-500 uppercase text-center border-r w-20">
+                                        No
+                                    </th>
+                                    <th className="py-2 text-sm font-bold text-muted-500 uppercase text-center w-28">
+                                        Not Applicable
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            {/* Section 1: Approving Authorities */}
+                            <tbody>
+                                <tr className="border border-b">
+                                    <td
+                                        colSpan={4}
+                                        className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic"
+                                    >
+                                        Approving Authorities
+                                    </td>
+                                    <td
+                                        className="flex flex-row-reverse"
+                                        colSpan={2}
+                                    >
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                addRow("pap_prerequisites", {
+                                                    name: "",
+                                                    type: "authority",
+                                                    status: "True",
+                                                    remarks: "",
+                                                })
+                                            }
+                                            className="text-secondary-foreground text-sm font-bold hover:underline py-2 px-4"
+                                        >
+                                            + ADD APPROVING AUTHORITY
+                                        </button>
+                                    </td>
+                                </tr>
+                                {payload.pap_prerequisites.map(
+                                    (pre, i) =>
+                                        pre.type === "authority" && (
+                                            <PrerequisiteRow
+                                                key={`auth-${i}`}
+                                                pre={pre}
+                                                placeholder="Approver"
+                                                index={i}
+                                                updateRow={updateRow}
+                                                removeRow={removeRow}
+                                            />
+                                        ),
+                                )}
+                            </tbody>
+
+                            {/* Section 2: Supporting Documents */}
+                            <tbody>
+                                <tr className="bg-muted-50/50 border-b border-t">
+                                    <td
+                                        colSpan={4}
+                                        className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic border-b border-t"
+                                    >
+                                        Supporting Documents
+                                    </td>
+                                    <td className="flex flex-row-reverse">
+                                        <button
+                                            type="button"
+                                            onClick={() =>
+                                                addRow("pap_prerequisites", {
+                                                    name: "",
+                                                    type: "document",
+                                                    status: "True",
+                                                    remarks: "",
+                                                })
+                                            }
+                                            className="text-secondary-foreground text-sm font-bold hover:underline py-2 px-4"
+                                        >
+                                            + ADD SUPPORTING DOCUMENT
+                                        </button>
+                                    </td>
+                                </tr>
+                                {payload.pap_prerequisites.map(
+                                    (pre, i) =>
+                                        pre.type === "document" && (
+                                            <PrerequisiteRow
+                                                key={`doc-${i}`}
+                                                pre={pre}
+                                                placeholder="Document"
+                                                index={i}
+                                                updateRow={updateRow}
+                                                removeRow={removeRow}
+                                            />
+                                        ),
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
+            <div className="space-y-2">
+                <div
+                    className={`shadow-sm overflow-hidden bg-background ${
+                        errors.cost_by_components
+                            ? "border-red-500 bg-red-50"
+                            : "border-muted-200"
+                    }`}
+                >
+                    <CollapsibleTableSection
+                        section="cost_by_components"
+                        title={
+                            payload.type === "202"
+                                ? "Cost by Components (BP 202)"
+                                : "Cost by Components (BP 203)"
+                        }
+                        subtitle="Define allocation details across components"
+                        collapsed={collapsedSections.cost_by_components}
+                        onToggle={() => toggleSection("cost_by_components")}
+                        actions={
+                            <button
+                                type="button"
+                                onClick={addCostComponent}
+                                className="rounded-lg
+                bg-secondary-foreground
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-background
+                transition
+                hover:opacity-90  "
+                            >
+                                + Add Component
+                            </button>
+                        }
+                        summary={
+                            <div className="text-sm text-muted-500 italic">
+                                {payload.cost_by_components.length} components
+                                configured.
+                            </div>
+                        }
+                    >
+                        {payload.type === "202" ? (
+                            renderCostComponentAllocationTable(true)
+                        ) : (
+                            <div className="max-h-[520px] overflow-auto p-0">
+                                {/* Added table-fixed to make column width definitions strict and predictable */}
+                                <table className="w-full border-spacing-0 table-fixed">
+                                    <thead className="sticky top-0 z-20 bg-background border-b border-muted-200">
+                                        <tr>
+                                            <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
+                                                Item Catalog
+                                            </th>
 
-            {type === "202" && (
-                <div className="space-y-8">
-                    <div className="space-y-2">
-                        <div
-                            className={`rounded-xl border shadow-sm overflow-hidden ${
-                                errors.cost_by_components
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
-                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    COSTING BY COMPONENT(S)
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={addCostComponent}
-                                    className="text-secondary-foreground text-sm font-bold hover:underline"
-                                >
-                                    + ADD ALLOCATION
-                                </button>
-                            </div>
+                                            <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
+                                                Fund Source
+                                            </th>
 
-                            {renderCostComponentAllocationTable(false)}
-                            {payload.cost_by_components.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No component allocations added. Click
-                                    &quot;+ ADD ALLOCATION&quot; to begin.
-                                </div>
-                            )}
-                        </div>
-                        {getErrorsForPath("cost_by_components").length > 0 && (
-                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
-                                {getErrorsForPath("cost_by_components").map(
-                                    (msg, i) => (
-                                        <p
-                                            key={i}
-                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
-                                        >
-                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
-                                            {msg}
-                                        </p>
-                                    ),
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <div
-                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
-                                errors.local_locations
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
-                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    LOCATION OF IMPLEMENTATION
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        addRow("local_locations", {
-                                            location: "",
-                                            costs: [],
-                                        })
-                                    }
-                                    className="text-secondary-foreground text-sm font-bold hover:underline"
-                                >
-                                    + ADD LOCATION
-                                </button>
-                            </div>
-                            <div className="p-0">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-muted-50/50 border-b border-muted-100">
-                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                                Location
+                                            <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[140px]">
+                                                Description
                                             </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 text-secondary-foreground-500 bg-secondary-foreground-50/30">
-                                                PS
+
+                                            <th className="bg-muted-50 px-3 py-4 text-right text-sm font-bold text-muted-600 w-[140px]">
+                                                Fund Method
                                             </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
-                                                MOOE
+
+                                            <th className="bg-muted-50 px-3 py-4 text-right text-sm font-bold text-muted-600 w-[160px]">
+                                                Total
                                             </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
-                                                CO
-                                            </th>
-                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
-                                                FINEX
-                                            </th>
+
+                                            <th className="bg-muted-50 w-12" />
                                         </tr>
                                     </thead>
-                                    <tbody className="divide-y divide-muted-50">
-                                        {payload.local_locations.map(
-                                            (item, i) => (
-                                                <tr key={i}>
-                                                    <td className="py-3 px-4">
-                                                        <input
-                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                            placeholder="Region/Province"
-                                                            value={
-                                                                item.location
-                                                            }
-                                                            onChange={(e) =>
-                                                                updateRow(
-                                                                    "local_locations",
-                                                                    i,
-                                                                    {
-                                                                        location:
-                                                                            e
-                                                                                .target
-                                                                                .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                        />
-                                                    </td>
-                                                    {(
-                                                        [
-                                                            "PS",
-                                                            "MOOE",
-                                                            "CO",
-                                                            "FINEX",
-                                                        ] as const
-                                                    ).map((itemClass) => (
-                                                        <td
-                                                            key={itemClass}
-                                                            className="py-2 px-2"
-                                                        >
-                                                            <input
-                                                                type="number"
-                                                                className="w-full bg-transparent text-right outline-none text-sm"
-                                                                placeholder="0"
+
+                                    <tbody>
+                                        {payload.cost_by_components.map(
+                                            (comp, i) => {
+                                                const selectedItem =
+                                                    getSelectedItemCatalog(
+                                                        comp.item_catalog_id,
+                                                    );
+                                                const expenseClass =
+                                                    selectedItem?.expense_class;
+
+                                                // 1. Extract values safely from the structure
+                                                const lpCash = Number(
+                                                    comp.costs.find(
+                                                        (c) =>
+                                                            c.fund_category ===
+                                                                "LP" &&
+                                                            c.fund_method ===
+                                                                "cash",
+                                                    )?.amount || 0,
+                                                );
+
+                                                const lpNonCash = Number(
+                                                    comp.costs.find(
+                                                        (c) =>
+                                                            c.fund_category ===
+                                                                "LP" &&
+                                                            (c.fund_method ===
+                                                                "non_cash" ||
+                                                                c.fund_method ===
+                                                                    "non-cash"),
+                                                    )?.amount || 0,
+                                                );
+
+                                                const gop = Number(
+                                                    comp.costs.find(
+                                                        (c) =>
+                                                            c.fund_category ===
+                                                            "GOP",
+                                                    )?.amount || 0,
+                                                );
+
+                                                // 2. Derive the active state directly from active amounts
+                                                // Default to "LP" if both are empty so the select options render properly
+                                                const activeCategory =
+                                                    gop > 0 &&
+                                                    lpCash === 0 &&
+                                                    lpNonCash === 0
+                                                        ? "GOP"
+                                                        : "LP";
+                                                const activeMethod =
+                                                    lpNonCash > 0 &&
+                                                    lpCash === 0
+                                                        ? "non_cash"
+                                                        : "cash";
+
+                                                // 3. Calculate dynamic total matching the user configuration
+                                                const rowTotal =
+                                                    activeCategory === "GOP"
+                                                        ? gop
+                                                        : activeMethod ===
+                                                            "cash"
+                                                          ? lpCash
+                                                          : lpNonCash;
+                                                const activeValue =
+                                                    activeCategory === "GOP"
+                                                        ? gop
+                                                        : activeMethod ===
+                                                            "cash"
+                                                          ? lpCash
+                                                          : lpNonCash;
+
+                                                return (
+                                                    <tr
+                                                        key={i}
+                                                        className="border-b border-muted-100 hover:bg-muted-50/50 transition-colors group"
+                                                    >
+                                                        {/* Item Catalog Column */}
+                                                        <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
+                                                            <SearchableComboboxField
+                                                                items={
+                                                                    itemCatalogOptions
+                                                                }
                                                                 value={
-                                                                    item.costs.find(
-                                                                        (c) =>
-                                                                            c.expense_class ===
-                                                                            itemClass,
-                                                                    )?.amount ??
+                                                                    comp.item_catalog_id ??
                                                                     ""
                                                                 }
-                                                                onChange={(e) =>
-                                                                    handleMatrixChange(
-                                                                        "local_locations",
+                                                                placeholder="Select item catalog"
+                                                                searchPlaceholder="Search line items"
+                                                                emptyText="No line items found."
+                                                                onValueChange={(
+                                                                    value,
+                                                                ) =>
+                                                                    updateCostComponentItem(
                                                                         i,
-                                                                        itemClass,
-                                                                        e.target
-                                                                            .valueAsNumber ||
-                                                                            0,
+                                                                        value,
                                                                     )
                                                                 }
                                                             />
                                                         </td>
-                                                    ))}
-                                                    <td className="py-3 px-2 text-center">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                removeRow(
-                                                                    "local_locations",
-                                                                    i,
-                                                                )
-                                                            }
-                                                            className="text-red-400 hover:text-red-600"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ),
-                                        )}
-                                    </tbody>
-                                </table>
 
-                                {payload.local_locations.length === 0 && (
-                                    <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No components added. Click &quot;+ ADD
-                                        LOCATION&quot; to begin.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        {getErrorsForPath("local_locations").length > 0 && (
-                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
-                                {getErrorsForPath("local_locations").map(
-                                    (msg, i) => (
-                                        <p
-                                            key={i}
-                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
-                                        >
-                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
-                                            {msg}
-                                        </p>
-                                    ),
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <div
-                            className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
-                                errors.local_financial_attributions
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
-                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    PAP Attribution by Expense Class
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        addRow("local_financial_attributions", {
-                                            description: "",
-                                            attribution_costs: [
-                                                {
-                                                    year:
-                                                        activeFiscalYear ??
-                                                        project?.proposal_year ??
-                                                        new Date().getFullYear() +
-                                                            1,
-                                                    tier: 1,
-                                                    costs: [],
-                                                },
-                                                {
-                                                    year:
-                                                        (activeFiscalYear ??
-                                                            project?.proposal_year ??
-                                                            new Date().getFullYear() +
-                                                                1) + 1,
-                                                    tier: 2,
-                                                    costs: [],
-                                                },
-                                                {
-                                                    year:
-                                                        (activeFiscalYear ??
-                                                            project?.proposal_year ??
-                                                            new Date().getFullYear() +
-                                                                1) + 2,
-                                                    tier: 1,
-                                                    costs: [],
-                                                },
-                                                {
-                                                    year:
-                                                        (activeFiscalYear ??
-                                                            project?.proposal_year ??
-                                                            new Date().getFullYear() +
-                                                                1) + 3,
-                                                    tier: 1,
-                                                    costs: [],
-                                                },
-                                            ],
-                                        })
-                                    }
-                                    className="text-secondary-foreground text-sm font-bold hover:underline"
-                                >
-                                    + ADD PAP DESCRIPTION
-                                </button>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="border-b">
-                                            <th
-                                                rowSpan={2}
-                                                className="py-4 px-4 text-sm font-bold text-slate-700 uppercase border-r w-1/4 text-center"
-                                            >
-                                                PAP (A)
-                                            </th>
-                                            <th
-                                                colSpan={3}
-                                                className="py-2 text-sm font-bold text-slate-700 uppercase border-b border-r text-center"
-                                            >
-                                                FY {payload.proposal_year} (B)
-                                            </th>
-                                            <th
-                                                rowSpan={2}
-                                                className="py-4 px-2 text-sm font-bold text-slate-700 uppercase border-r text-center"
-                                            >
-                                                FY {payload.proposal_year + 1}{" "}
-                                                Tier 1 (C)
-                                            </th>
-                                            <th
-                                                rowSpan={2}
-                                                className="py-4 px-2 text-sm font-bold text-slate-700 uppercase text-center"
-                                            >
-                                                FY {payload.proposal_year + 2}{" "}
-                                                Tier 1 (D)
-                                            </th>
-                                        </tr>
-                                        <tr className="border-b">
-                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
-                                                Tier 1
-                                            </th>
-                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
-                                                Tier 2
-                                            </th>
-                                            <th className="py-2 text-[9px] font-bold text-slate-500 uppercase text-center border-r w-24">
-                                                Total
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    {payload.local_financial_attributions.map(
-                                        (attr, attrIdx) => {
-                                            // Column configuration for total calculations
-                                            const cols = [
-                                                {
-                                                    year: payload.proposal_year,
-                                                    tier: 1,
-                                                },
-                                                {
-                                                    year: payload.proposal_year,
-                                                    tier: 2,
-                                                },
-                                                {
-                                                    isTotal: true,
-                                                    year: payload.proposal_year,
-                                                }, // Visual Total Column
-                                                {
-                                                    year:
-                                                        payload.proposal_year +
-                                                        1,
-                                                    tier: 1,
-                                                },
-                                                {
-                                                    year:
-                                                        payload.proposal_year +
-                                                        2,
-                                                    tier: 1,
-                                                },
-                                            ];
-
-                                            return (
-                                                <tbody
-                                                    key={attrIdx}
-                                                    className="border-b-2 border-chart-5/50"
-                                                >
-                                                    <tr className="border-chart-5/20 font-bold border-b divide-x">
-                                                        <td className="py-3 px-4 flex flex-row gap-4">
-                                                            <input
-                                                                className="w-full font-bold text-sm text-slate-800 outline-none bg-transparent placeholder:font-normal"
-                                                                placeholder="Enter PAP Description..."
+                                                        {/* Funding Source Column */}
+                                                        <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
+                                                            <SearchableComboboxField
+                                                                items={
+                                                                    fundingSourceOptions
+                                                                }
                                                                 value={
-                                                                    attr.description
+                                                                    comp.fund_code ??
+                                                                    ""
+                                                                }
+                                                                placeholder="Select fund source"
+                                                                searchPlaceholder="Search fund sources"
+                                                                emptyText="No fund sources found."
+                                                                onValueChange={(
+                                                                    value,
+                                                                ) =>
+                                                                    updateRow(
+                                                                        "cost_by_components",
+                                                                        i,
+                                                                        {
+                                                                            fund_code:
+                                                                                value,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            />
+                                                        </td>
+
+                                                        {/* Description Column */}
+                                                        <td className="px-4 py-4 align-top">
+                                                            <textarea
+                                                                className="min-h-[88px] w-full resize-none rounded-lg border border-muted-200 bg-background px-3 py-2 text-sm outline-none transition focus:border-secondary-foreground/40 focus:ring-2 focus:ring-secondary-foreground/10"
+                                                                placeholder="Optional description"
+                                                                value={
+                                                                    comp.specific_description ??
+                                                                    ""
                                                                 }
                                                                 onChange={(e) =>
                                                                     updateRow(
-                                                                        "local_financial_attributions",
-                                                                        attrIdx,
+                                                                        "cost_by_components",
+                                                                        i,
                                                                         {
-                                                                            description:
+                                                                            specific_description:
                                                                                 e
                                                                                     .target
                                                                                     .value,
@@ -1946,357 +1964,1074 @@ export default function ProposalForm({
                                                                     )
                                                                 }
                                                             />
+                                                        </td>
+
+                                                        {/* Dynamic Funding Type Select Dropdowns Column */}
+                                                        <td className="px-3 py-4 align-top w-[160px]">
+                                                            <div className="flex flex-col gap-2">
+                                                                {/* Main Category Select */}
+                                                                <select
+                                                                    className="w-full rounded-lg border border-muted-200 bg-background px-2 py-1.5 text-sm outline-none transition focus:border-secondary-foreground/40"
+                                                                    value={
+                                                                        activeCategory
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) => {
+                                                                        if (
+                                                                            !expenseClass
+                                                                        )
+                                                                            return;
+                                                                        const nextCat =
+                                                                            e
+                                                                                .target
+                                                                                .value;
+
+                                                                        if (
+                                                                            nextCat ===
+                                                                            "GOP"
+                                                                        ) {
+                                                                            // Zero out old LP targets, preserve current amount over to GOP
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                expenseClass,
+                                                                                "LP",
+                                                                                0,
+                                                                                "cost_by_components",
+                                                                                "cash",
+                                                                            );
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                expenseClass,
+                                                                                "LP",
+                                                                                0,
+                                                                                "cost_by_components",
+                                                                                "non_cash",
+                                                                            );
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                expenseClass,
+                                                                                "GOP",
+                                                                                activeValue ||
+                                                                                    0,
+                                                                                "cost_by_components",
+                                                                            );
+                                                                        } else {
+                                                                            // Zero out GOP, shift value into current fallback LP target split
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                expenseClass,
+                                                                                "GOP",
+                                                                                0,
+                                                                                "cost_by_components",
+                                                                            );
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                expenseClass,
+                                                                                "LP",
+                                                                                activeValue ||
+                                                                                    0,
+                                                                                "cost_by_components",
+                                                                                activeMethod,
+                                                                            );
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <option value="LP">
+                                                                        LP
+                                                                    </option>
+                                                                    <option value="GOP">
+                                                                        GOP
+                                                                    </option>
+                                                                </select>
+
+                                                                {/* Secondary Method Select (Only rendered if Category is LP) */}
+                                                                {activeCategory ===
+                                                                    "LP" && (
+                                                                    <select
+                                                                        className="w-full rounded-lg border border-muted-200 bg-background px-2 py-1.5 text-xs font-medium text-muted-600 outline-none transition focus:border-secondary-foreground/40 state-anim"
+                                                                        value={
+                                                                            activeMethod
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) => {
+                                                                            if (
+                                                                                !expenseClass
+                                                                            )
+                                                                                return;
+                                                                            const nextMethod =
+                                                                                e
+                                                                                    .target
+                                                                                    .value as
+                                                                                    | "cash"
+                                                                                    | "non_cash";
+                                                                            // Swap amounts between cash and non_cash variables safely
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                expenseClass,
+                                                                                "LP",
+                                                                                0,
+                                                                                "cost_by_components",
+                                                                                activeMethod,
+                                                                            );
+                                                                            handleMatrixChange203(
+                                                                                i,
+                                                                                expenseClass,
+                                                                                "LP",
+                                                                                activeValue ||
+                                                                                    0,
+                                                                                "cost_by_components",
+                                                                                nextMethod,
+                                                                            );
+                                                                        }}
+                                                                    >
+                                                                        <option value="cash">
+                                                                            Cash
+                                                                        </option>
+                                                                        <option value="non_cash">
+                                                                            Non-Cash
+                                                                        </option>
+                                                                    </select>
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Amount Numeric Input Box */}
+                                                        <td className="px-3 py-4 align-top w-[150px]">
+                                                            <input
+                                                                type="number"
+                                                                className="w-full rounded-lg border border-muted-200 px-3 py-2 text-right text-sm outline-none focus:border-secondary-foreground/40"
+                                                                value={
+                                                                    activeValue ||
+                                                                    ""
+                                                                }
+                                                                placeholder="0.00"
+                                                                onChange={(
+                                                                    e,
+                                                                ) => {
+                                                                    if (
+                                                                        !expenseClass
+                                                                    )
+                                                                        return;
+                                                                    const val =
+                                                                        e.target
+                                                                            .valueAsNumber ||
+                                                                        0;
+
+                                                                    handleMatrixChange203(
+                                                                        i,
+                                                                        expenseClass,
+                                                                        activeCategory,
+                                                                        val,
+                                                                        "cost_by_components",
+                                                                        activeCategory ===
+                                                                            "LP"
+                                                                            ? activeMethod
+                                                                            : undefined,
+                                                                    );
+                                                                }}
+                                                            />
+                                                        </td>
+
+                                                        {/* Row Total Display */}
+                                                        <td className="px-3 py-4 align-top text-right min-w-[120px]">
+                                                            <div className="text-sm font-bold text-secondary-foreground pt-2">
+                                                                {rowTotal.toLocaleString(
+                                                                    undefined,
+                                                                    {
+                                                                        minimumFractionDigits: 2,
+                                                                        maximumFractionDigits: 2,
+                                                                    },
+                                                                )}
+                                                            </div>
+                                                        </td>
+
+                                                        {/* Action Delete Button */}
+                                                        <td className="px-2 py-4 text-center align-top w-[50px]">
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
                                                                     removeRow(
-                                                                        "local_financial_attributions",
-                                                                        attrIdx,
+                                                                        "cost_by_components",
+                                                                        i,
                                                                     )
                                                                 }
-                                                                className="text-red-400 hover:text-red-600"
+                                                                className="rounded-md p-2 text-muted-400 transition hover:bg-red-50 hover:text-red-500"
                                                             >
                                                                 ✕
                                                             </button>
                                                         </td>
-                                                        {cols.map(
-                                                            (col, colIdx) => {
-                                                                // Calculate total for this specific column (Year/Tier) across all expense classes
-                                                                const colTotal =
-                                                                    (
-                                                                        [
-                                                                            "PS",
-                                                                            "MOOE",
-                                                                            "CO",
-                                                                            "FINEX",
-                                                                        ] as const
-                                                                    ).reduce(
-                                                                        (
-                                                                            sum,
-                                                                            ec,
-                                                                        ) => {
-                                                                            if (
-                                                                                col.isTotal
-                                                                            ) {
-                                                                                const t1 =
-                                                                                    Number(
-                                                                                        attr.attribution_costs
-                                                                                            .find(
-                                                                                                (
-                                                                                                    c,
-                                                                                                ) =>
-                                                                                                    c.year ===
-                                                                                                        col.year &&
-                                                                                                    c.tier ===
-                                                                                                        1,
-                                                                                            )
-                                                                                            ?.costs?.find(
-                                                                                                (
-                                                                                                    e,
-                                                                                                ) =>
-                                                                                                    e.expense_class ===
-                                                                                                    ec,
-                                                                                            )
-                                                                                            ?.amount ||
-                                                                                            0,
-                                                                                    );
-                                                                                const t2 =
-                                                                                    Number(
-                                                                                        attr.attribution_costs
-                                                                                            .find(
-                                                                                                (
-                                                                                                    c,
-                                                                                                ) =>
-                                                                                                    c.year ===
-                                                                                                        col.year &&
-                                                                                                    c.tier ===
-                                                                                                        2,
-                                                                                            )
-                                                                                            ?.costs?.find(
-                                                                                                (
-                                                                                                    e,
-                                                                                                ) =>
-                                                                                                    e.expense_class ===
-                                                                                                    ec,
-                                                                                            ) // Added ?. here
-                                                                                            ?.amount ||
-                                                                                            0,
-                                                                                    );
-                                                                                return (
-                                                                                    sum +
-                                                                                    (t1 +
-                                                                                        t2)
-                                                                                );
-                                                                            }
-                                                                            return (
-                                                                                sum +
-                                                                                Number(
-                                                                                    attr.attribution_costs
-                                                                                        .find(
-                                                                                            (
-                                                                                                c,
-                                                                                            ) =>
-                                                                                                c.year ===
-                                                                                                    col.year &&
-                                                                                                c.tier ===
-                                                                                                    col.tier,
-                                                                                        )
-                                                                                        ?.costs.find(
-                                                                                            (
-                                                                                                e,
-                                                                                            ) =>
-                                                                                                e.expense_class ===
-                                                                                                ec,
-                                                                                        )
-                                                                                        ?.amount ||
-                                                                                        0,
-                                                                                )
-                                                                            );
-                                                                        },
-                                                                        0,
-                                                                    );
+                                                    </tr>
+                                                );
+                                            },
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </CollapsibleTableSection>
+                </div>
 
-                                                                return (
+                {getErrorsForPath("cost_by_components").length > 0 && (
+                    <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                        {getErrorsForPath("cost_by_components").map(
+                            (msg, i) => (
+                                <p
+                                    key={i}
+                                    className="text-sm text-red-600 font-semibold flex items-center gap-1"
+                                >
+                                    <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                    {msg}
+                                </p>
+                            ),
+                        )}
+                    </div>
+                )}
+            </div>
+
+            {type === "202" && (
+                <div className="space-y-8">
+                    {/*  <div className="space-y-2">
+                        <div
+                            className={`rounded-xl border shadow-sm overflow-hidden ${
+                                errors.cost_by_components
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <CollapsibleTableSection
+                                section="cost_by_components"
+                                title="Costing by Component(s)"
+                                subtitle="Allocate funding per catalog item"
+                                collapsed={collapsedSections.cost_by_components}
+                                onToggle={() =>
+                                    toggleSection("cost_by_components")
+                                }
+                                actions={
+                                    <button
+                                        type="button"
+                                        onClick={addCostComponent}
+                                        className={`
+                rounded-lg
+                bg-secondary-foreground
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-background
+                transition
+                hover:opacity-90  
+            `}
+                                    >
+                                        + Add Allocation
+                                    </button>
+                                }
+                                summary={
+                                    <div className="flex flex-wrap gap-3">
+                                        {payload.cost_by_components
+                                            .slice(0, 3)
+                                            .map((comp, i) => {
+                                                const selectedItem =
+                                                    getSelectedItemCatalog(
+                                                        comp.item_catalog_id,
+                                                    );
+
+                                                return (
+                                                    <div
+                                                        key={i}
+                                                        className="
+                            rounded-lg
+                            border
+                            border-muted-200
+                            bg-muted-50
+                            px-4
+                            py-3
+                            min-w-[220px]
+                        "
+                                                    >
+                                                        <div className="text-sm font-semibold truncate">
+                                                            {selectedItem?.name ||
+                                                                "Unnamed Item"}
+                                                        </div>
+
+                                                        <div className="mt-1 text-sm text-muted-500">
+                                                            {
+                                                                selectedItem?.expense_class
+                                                            }
+                                                        </div>
+
+                                                        <div className="mt-2 text-sm font-bold text-secondary-foreground">
+                                                            {Number(
+                                                                comp.proposed_amt ||
+                                                                    0,
+                                                            ).toLocaleString()}
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                    </div>
+                                }
+                            >
+                                {renderCostComponentAllocationTable()}
+                            </CollapsibleTableSection>
+                        </div>
+                        {getErrorsForPath("cost_by_components").length > 0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath("cost_by_components").map(
+                                    (msg, i) => (
+                                        <p
+                                            key={i}
+                                            className="text-sm text-red-600 font-semibold flex items-center gap-1"
+                                        >
+                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                            {msg}
+                                        </p>
+                                    ),
+                                )}
+                            </div>
+                        )}
+                    </div> */}
+                    <div className="space-y-2">
+                        <div
+                            className={`bg-background shadow-sm overflow-hidden ${
+                                errors.local_locations
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <CollapsibleTableSection
+                                section="local_locations"
+                                title="Local Locations"
+                                subtitle="Add geographical target locations and assign cost breakdowns"
+                                collapsed={collapsedSections.local_locations}
+                                onToggle={() =>
+                                    toggleSection("local_locations")
+                                }
+                                actions={
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            addRow("local_locations", {
+                                                location: "",
+                                                costs: [],
+                                            })
+                                        }
+                                        className="rounded-lg
+                bg-secondary-foreground
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-background
+                transition
+                hover:opacity-90  "
+                                    >
+                                        + Add Location
+                                    </button>
+                                }
+                                summary={
+                                    <div className="text-sm text-muted-500 italic">
+                                        {payload.local_locations.length}{" "}
+                                        locations added.
+                                    </div>
+                                }
+                            >
+                                {/* Wrap your original locations table / mapping layout here */}
+                                <div
+                                    className={` shadow-sm overflow-hidden ${
+                                        errors.local_locations
+                                            ? "border-red-500 bg-red-50"
+                                            : "border-muted-200 bg-background"
+                                    }`}
+                                >
+                                    <div className="max-h-[520px] overflow-auto p-0">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="border-b border-muted-100">
+                                                    <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                                        Location
+                                                    </th>
+                                                    <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 text-secondary-foreground-500 bg-secondary-foreground-50/30">
+                                                        PS
+                                                    </th>
+                                                    <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                                        MOOE
+                                                    </th>
+                                                    <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                                        CO
+                                                    </th>
+                                                    <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center w-1/6 bg-muted-50/30">
+                                                        FINEX
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-muted-50">
+                                                {payload.local_locations.map(
+                                                    (item, i) => (
+                                                        <tr key={i}>
+                                                            <td className="py-3 px-4">
+                                                                <input
+                                                                    className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                    placeholder="Region/Province"
+                                                                    value={
+                                                                        item.location
+                                                                    }
+                                                                    onChange={(
+                                                                        e,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            "local_locations",
+                                                                            i,
+                                                                            {
+                                                                                location:
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </td>
+                                                            {(
+                                                                [
+                                                                    "PS",
+                                                                    "MOOE",
+                                                                    "CO",
+                                                                    "FINEX",
+                                                                ] as const
+                                                            ).map(
+                                                                (itemClass) => (
                                                                     <td
                                                                         key={
-                                                                            colIdx
+                                                                            itemClass
                                                                         }
-                                                                        className={`px-2 text-right text-sm ${col.isTotal ? "bg-slate-100/50" : ""}`}
+                                                                        className="py-2 px-2"
                                                                     >
-                                                                        {colTotal >
-                                                                        0
-                                                                            ? colTotal.toLocaleString()
-                                                                            : "-"}
+                                                                        <input
+                                                                            type="number"
+                                                                            className="w-full bg-transparent text-right outline-none text-sm"
+                                                                            placeholder="0"
+                                                                            value={
+                                                                                item.costs.find(
+                                                                                    (
+                                                                                        c,
+                                                                                    ) =>
+                                                                                        c.expense_class ===
+                                                                                        itemClass,
+                                                                                )
+                                                                                    ?.amount ??
+                                                                                ""
+                                                                            }
+                                                                            onChange={(
+                                                                                e,
+                                                                            ) =>
+                                                                                handleMatrixChange(
+                                                                                    "local_locations",
+                                                                                    i,
+                                                                                    itemClass,
+                                                                                    e
+                                                                                        .target
+                                                                                        .valueAsNumber ||
+                                                                                        0,
+                                                                                )
+                                                                            }
+                                                                        />
                                                                     </td>
-                                                                );
-                                                            },
-                                                        )}
-                                                    </tr>
-
-                                                    {/* 2. THE EXPENSE CLASS ROWS (Detailed Entry) */}
-                                                    {(
-                                                        [
-                                                            "PS",
-                                                            "MOOE",
-                                                            "CO",
-                                                            "FINEX",
-                                                        ] as const
-                                                    ).map((expClass) => (
-                                                        <tr
-                                                            key={expClass}
-                                                            className="hover:bg-slate-50/30 divide-x"
-                                                        >
-                                                            <td className="py-2 px-8 text-sm text-slate-500 font-medium">
-                                                                {expClass}
+                                                                ),
+                                                            )}
+                                                            <td className="py-3 px-2 text-center">
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() =>
+                                                                        removeRow(
+                                                                            "local_locations",
+                                                                            i,
+                                                                        )
+                                                                    }
+                                                                    className="text-red-400 hover:text-red-600"
+                                                                >
+                                                                    ✕
+                                                                </button>
                                                             </td>
-                                                            {cols.map(
-                                                                (
-                                                                    col,
-                                                                    colIdx,
-                                                                ) => {
-                                                                    if (
-                                                                        col.isTotal
-                                                                    ) {
-                                                                        const t1 =
-                                                                            Number(
-                                                                                attr.attribution_costs
-                                                                                    .find(
-                                                                                        (
-                                                                                            c,
-                                                                                        ) =>
-                                                                                            c.year ===
-                                                                                                col.year &&
-                                                                                            c.tier ===
-                                                                                                1,
-                                                                                    )
-                                                                                    ?.costs?.find(
-                                                                                        (
-                                                                                            e,
-                                                                                        ) =>
-                                                                                            e.expense_class ===
-                                                                                            expClass,
-                                                                                    ) // Added ?. here
-                                                                                    ?.amount ||
-                                                                                    0,
+                                                        </tr>
+                                                    ),
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {payload.local_locations.length === 0 && (
+                                        <div className="p-8 text-center text-muted-400 text-sm italic">
+                                            No components added. Click &quot;+
+                                            ADD LOCATION&quot; to begin.
+                                        </div>
+                                    )}
+                                </div>
+                            </CollapsibleTableSection>
+                        </div>
+                        {getErrorsForPath("local_locations").length > 0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath("local_locations").map(
+                                    (msg, i) => (
+                                        <p
+                                            key={i}
+                                            className="text-sm text-red-600 font-semibold flex items-center gap-1"
+                                        >
+                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                            {msg}
+                                        </p>
+                                    ),
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    <div className="space-y-2">
+                        <div
+                            className={`bg-background shadow-sm overflow-hidden ${
+                                errors.local_financial_attributions
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <CollapsibleTableSection
+                                section="local_financial_attributions"
+                                title="Local Financial Attributions"
+                                subtitle="Identify climate change or specific statutory program attributions"
+                                collapsed={
+                                    collapsedSections.local_financial_attributions
+                                }
+                                onToggle={() =>
+                                    toggleSection(
+                                        "local_financial_attributions",
+                                    )
+                                }
+                                actions={
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            addRow(
+                                                "local_financial_attributions",
+                                                {
+                                                    description: "",
+                                                    attribution_costs: [],
+                                                },
+                                            )
+                                        }
+                                        className="rounded-lg
+                bg-secondary-foreground
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-background
+                transition
+                hover:opacity-90  "
+                                    >
+                                        + Add Attribution
+                                    </button>
+                                }
+                                summary={
+                                    <div className="text-sm text-muted-500 italic">
+                                        {
+                                            payload.local_financial_attributions
+                                                .length
+                                        }{" "}
+                                        attributions added.
+                                    </div>
+                                }
+                            >
+                                {/* Wrap your original local financial attributions table implementation here */}
+                                <div
+                                    className={`bg-background shadow-sm overflow-hidden ${
+                                        errors.local_financial_attributions
+                                            ? "border-red-500 bg-red-50"
+                                            : "border-muted-200"
+                                    }`}
+                                >
+                                    <div className="max-h-[520px] overflow-auto">
+                                        <table className="w-full text-left border-collapse">
+                                            <thead>
+                                                <tr className="border-b">
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="py-4 px-4 text-sm font-bold text-slate-700 uppercase border-r w-1/4 text-center"
+                                                    >
+                                                        PAP (A)
+                                                    </th>
+                                                    <th
+                                                        colSpan={3}
+                                                        className="py-2 text-sm font-bold text-slate-700 uppercase border-b border-r text-center"
+                                                    >
+                                                        FY{" "}
+                                                        {payload.proposal_year}{" "}
+                                                        (B)
+                                                    </th>
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="py-4 px-2 text-sm font-bold text-slate-700 uppercase border-r text-center"
+                                                    >
+                                                        FY{" "}
+                                                        {payload.proposal_year +
+                                                            1}{" "}
+                                                        Tier 1 (C)
+                                                    </th>
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="py-4 px-2 text-sm font-bold text-slate-700 uppercase text-center"
+                                                    >
+                                                        FY{" "}
+                                                        {payload.proposal_year +
+                                                            2}{" "}
+                                                        Tier 1 (D)
+                                                    </th>
+                                                </tr>
+                                                <tr className="border-b">
+                                                    <th className="py-2 text-sm font-bold text-slate-500 uppercase text-center border-r w-24">
+                                                        Tier 1
+                                                    </th>
+                                                    <th className="py-2 text-sm font-bold text-slate-500 uppercase text-center border-r w-24">
+                                                        Tier 2
+                                                    </th>
+                                                    <th className="py-2 text-sm font-bold text-slate-500 uppercase text-center border-r w-24">
+                                                        Total
+                                                    </th>
+                                                </tr>
+                                            </thead>
+
+                                            {payload.local_financial_attributions.map(
+                                                (attr, attrIdx) => {
+                                                    // Column configuration for total calculations
+                                                    const cols = [
+                                                        {
+                                                            year: payload.proposal_year,
+                                                            tier: 1,
+                                                        },
+                                                        {
+                                                            year: payload.proposal_year,
+                                                            tier: 2,
+                                                        },
+                                                        {
+                                                            isTotal: true,
+                                                            year: payload.proposal_year,
+                                                        }, // Visual Total Column
+                                                        {
+                                                            year:
+                                                                payload.proposal_year +
+                                                                1,
+                                                            tier: 1,
+                                                        },
+                                                        {
+                                                            year:
+                                                                payload.proposal_year +
+                                                                2,
+                                                            tier: 1,
+                                                        },
+                                                    ];
+
+                                                    return (
+                                                        <tbody
+                                                            key={attrIdx}
+                                                            className="border-b-2 border-chart-5/50"
+                                                        >
+                                                            <tr className="border-chart-5/20 font-bold border-b divide-x">
+                                                                <td className="py-3 px-4 flex flex-row gap-4">
+                                                                    <input
+                                                                        className="w-full font-bold text-sm text-slate-800 outline-none bg-transparent placeholder:font-normal"
+                                                                        placeholder="Enter PAP Description..."
+                                                                        value={
+                                                                            attr.description
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                "local_financial_attributions",
+                                                                                attrIdx,
+                                                                                {
+                                                                                    description:
+                                                                                        e
+                                                                                            .target
+                                                                                            .value,
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            removeRow(
+                                                                                "local_financial_attributions",
+                                                                                attrIdx,
+                                                                            )
+                                                                        }
+                                                                        className="text-red-400 hover:text-red-600"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </td>
+                                                                {cols.map(
+                                                                    (
+                                                                        col,
+                                                                        colIdx,
+                                                                    ) => {
+                                                                        // Calculate total for this specific column (Year/Tier) across all expense classes
+                                                                        const colTotal =
+                                                                            (
+                                                                                [
+                                                                                    "PS",
+                                                                                    "MOOE",
+                                                                                    "CO",
+                                                                                    "FINEX",
+                                                                                ] as const
+                                                                            ).reduce(
+                                                                                (
+                                                                                    sum,
+                                                                                    ec,
+                                                                                ) => {
+                                                                                    if (
+                                                                                        col.isTotal
+                                                                                    ) {
+                                                                                        const t1 =
+                                                                                            Number(
+                                                                                                attr.attribution_costs
+                                                                                                    .find(
+                                                                                                        (
+                                                                                                            c,
+                                                                                                        ) =>
+                                                                                                            c.year ===
+                                                                                                                col.year &&
+                                                                                                            c.tier ===
+                                                                                                                1,
+                                                                                                    )
+                                                                                                    ?.costs?.find(
+                                                                                                        (
+                                                                                                            e,
+                                                                                                        ) =>
+                                                                                                            e.expense_class ===
+                                                                                                            ec,
+                                                                                                    )
+                                                                                                    ?.amount ||
+                                                                                                    0,
+                                                                                            );
+                                                                                        const t2 =
+                                                                                            Number(
+                                                                                                attr.attribution_costs
+                                                                                                    .find(
+                                                                                                        (
+                                                                                                            c,
+                                                                                                        ) =>
+                                                                                                            c.year ===
+                                                                                                                col.year &&
+                                                                                                            c.tier ===
+                                                                                                                2,
+                                                                                                    )
+                                                                                                    ?.costs?.find(
+                                                                                                        (
+                                                                                                            e,
+                                                                                                        ) =>
+                                                                                                            e.expense_class ===
+                                                                                                            ec,
+                                                                                                    ) // Added ?. here
+                                                                                                    ?.amount ||
+                                                                                                    0,
+                                                                                            );
+                                                                                        return (
+                                                                                            sum +
+                                                                                            (t1 +
+                                                                                                t2)
+                                                                                        );
+                                                                                    }
+                                                                                    return (
+                                                                                        sum +
+                                                                                        Number(
+                                                                                            attr.attribution_costs
+                                                                                                .find(
+                                                                                                    (
+                                                                                                        c,
+                                                                                                    ) =>
+                                                                                                        c.year ===
+                                                                                                            col.year &&
+                                                                                                        c.tier ===
+                                                                                                            col.tier,
+                                                                                                )
+                                                                                                ?.costs.find(
+                                                                                                    (
+                                                                                                        e,
+                                                                                                    ) =>
+                                                                                                        e.expense_class ===
+                                                                                                        ec,
+                                                                                                )
+                                                                                                ?.amount ||
+                                                                                                0,
+                                                                                        )
+                                                                                    );
+                                                                                },
+                                                                                0,
                                                                             );
-                                                                        const t2 =
-                                                                            Number(
-                                                                                attr.attribution_costs
-                                                                                    .find(
-                                                                                        (
-                                                                                            c,
-                                                                                        ) =>
-                                                                                            c.year ===
-                                                                                                col.year &&
-                                                                                            c.tier ===
-                                                                                                2,
-                                                                                    )
-                                                                                    ?.costs?.find(
-                                                                                        (
-                                                                                            e,
-                                                                                        ) =>
-                                                                                            e.expense_class ===
-                                                                                            expClass,
-                                                                                    ) // Added ?. here
-                                                                                    ?.amount ||
-                                                                                    0,
-                                                                            );
+
                                                                         return (
                                                                             <td
                                                                                 key={
                                                                                     colIdx
                                                                                 }
-                                                                                className="bg-slate-50/50 text-right px-2 text-sm font-bold text-slate-400"
+                                                                                className={`px-2 text-right text-sm ${col.isTotal ? "bg-slate-100/50" : ""}`}
                                                                             >
-                                                                                {(
-                                                                                    t1 +
-                                                                                    t2
-                                                                                ).toLocaleString()}
+                                                                                {colTotal >
+                                                                                0
+                                                                                    ? colTotal.toLocaleString()
+                                                                                    : "-"}
                                                                             </td>
                                                                         );
-                                                                    }
+                                                                    },
+                                                                )}
+                                                            </tr>
 
-                                                                    return (
-                                                                        <td
-                                                                            key={
-                                                                                colIdx
+                                                            {/* 2. THE EXPENSE CLASS ROWS (Detailed Entry) */}
+                                                            {(
+                                                                [
+                                                                    "PS",
+                                                                    "MOOE",
+                                                                    "CO",
+                                                                    "FINEX",
+                                                                ] as const
+                                                            ).map(
+                                                                (expClass) => (
+                                                                    <tr
+                                                                        key={
+                                                                            expClass
+                                                                        }
+                                                                        className="hover:bg-slate-50/30 divide-x"
+                                                                    >
+                                                                        <td className="py-2 px-8 text-sm text-slate-500 font-medium">
+                                                                            {
+                                                                                expClass
                                                                             }
-                                                                            className="px-2 "
-                                                                        >
-                                                                            <input
-                                                                                type="number"
-                                                                                className="w-full text-right bg-transparent outline-none text-[11px] py-1"
-                                                                                placeholder="0"
-
-                                                                                // disable tier 1 input of current year for new proposal
-                                                                                disabled={(() => {
-                                                                                    // find matching attribute cost
-                                                                                    const match = attr.attribution_costs.find(
-                                                                                        c => c.year === col.year && c.tier === col.tier
-                                                                                    )
-
-                                                                                    // disable if current year and tier 1
-                                                                                    return match?.tier === 1 && match?.year === payload.proposal_year && payload.is_new
-                                                                                })()}
-                                                                                value={
-                                                                                    attr.attribution_costs
-                                                                                        .find(
-                                                                                            (
-                                                                                                c,
-                                                                                            ) =>
-                                                                                                c.year ===
-                                                                                                    col.year &&
-                                                                                                c.tier ===
-                                                                                                    col.tier,
-                                                                                        )
-                                                                                        ?.costs?.find(
-                                                                                            (
-                                                                                                e,
-                                                                                            ) =>
-                                                                                                e.expense_class ===
-                                                                                                expClass,
-                                                                                        ) // Added ?. here
-                                                                                        ?.amount ?? ""
-                                                                                }
-                                                                                onChange={(
-                                                                                    e,
-                                                                                ) => {
-                                                                                    const newAttrCosts =
-                                                                                        [
-                                                                                            ...attr.attribution_costs,
-                                                                                        ];
-                                                                                    let yearTierEntry =
-                                                                                        newAttrCosts.find(
-                                                                                            (
-                                                                                                c,
-                                                                                            ) =>
-                                                                                                c.year ===
-                                                                                                    col.year &&
-                                                                                                c.tier ===
-                                                                                                    col.tier,
-                                                                                        );
-                                                                                    if (
-                                                                                        !yearTierEntry
-                                                                                    ) {
-                                                                                        yearTierEntry =
-                                                                                            {
-                                                                                                year: col.year!,
-                                                                                                tier: col.tier!,
-                                                                                                costs: [],
-                                                                                            };
-                                                                                        newAttrCosts.push(
-                                                                                            yearTierEntry,
-                                                                                        );
-                                                                                    }
-                                                                                    const currentCosts =
-                                                                                        [
-                                                                                            ...yearTierEntry.costs,
-                                                                                        ];
-                                                                                    const costIdx =
-                                                                                        currentCosts.findIndex(
-                                                                                            (
-                                                                                                c,
-                                                                                            ) =>
-                                                                                                c.expense_class ===
-                                                                                                expClass,
-                                                                                        );
-                                                                                    if (
-                                                                                        costIdx >
-                                                                                        -1
-                                                                                    )
-                                                                                        currentCosts[
-                                                                                            costIdx
-                                                                                        ].amount =
-                                                                                            e
-                                                                                                .target
-                                                                                                .valueAsNumber ||
-                                                                                            0;
-                                                                                    else
-                                                                                        currentCosts.push(
-                                                                                            {
-                                                                                                expense_class:
-                                                                                                    expClass,
-                                                                                                amount:
-                                                                                                    e
-                                                                                                        .target
-                                                                                                        .valueAsNumber ||
-                                                                                                    0,
-                                                                                                currency:
-                                                                                                    "PHP",
-                                                                                            },
-                                                                                        );
-                                                                                    yearTierEntry.costs =
-                                                                                        currentCosts;
-                                                                                    updateRow(
-                                                                                        "local_financial_attributions",
-                                                                                        attrIdx,
-                                                                                        {
-                                                                                            attribution_costs:
-                                                                                                newAttrCosts,
-                                                                                        },
-                                                                                    );
-                                                                                }}
-                                                                            />
                                                                         </td>
-                                                                    );
-                                                                },
+                                                                        {cols.map(
+                                                                            (
+                                                                                col,
+                                                                                colIdx,
+                                                                            ) => {
+                                                                                if (
+                                                                                    col.isTotal
+                                                                                ) {
+                                                                                    const t1 =
+                                                                                        Number(
+                                                                                            attr.attribution_costs
+                                                                                                .find(
+                                                                                                    (
+                                                                                                        c,
+                                                                                                    ) =>
+                                                                                                        c.year ===
+                                                                                                            col.year &&
+                                                                                                        c.tier ===
+                                                                                                            1,
+                                                                                                )
+                                                                                                ?.costs?.find(
+                                                                                                    (
+                                                                                                        e,
+                                                                                                    ) =>
+                                                                                                        e.expense_class ===
+                                                                                                        expClass,
+                                                                                                ) // Added ?. here
+                                                                                                ?.amount ||
+                                                                                                0,
+                                                                                        );
+                                                                                    const t2 =
+                                                                                        Number(
+                                                                                            attr.attribution_costs
+                                                                                                .find(
+                                                                                                    (
+                                                                                                        c,
+                                                                                                    ) =>
+                                                                                                        c.year ===
+                                                                                                            col.year &&
+                                                                                                        c.tier ===
+                                                                                                            2,
+                                                                                                )
+                                                                                                ?.costs?.find(
+                                                                                                    (
+                                                                                                        e,
+                                                                                                    ) =>
+                                                                                                        e.expense_class ===
+                                                                                                        expClass,
+                                                                                                ) // Added ?. here
+                                                                                                ?.amount ||
+                                                                                                0,
+                                                                                        );
+                                                                                    return (
+                                                                                        <td
+                                                                                            key={
+                                                                                                colIdx
+                                                                                            }
+                                                                                            className="bg-slate-50/50 text-right px-2 text-sm font-bold text-slate-400"
+                                                                                        >
+                                                                                            {(
+                                                                                                t1 +
+                                                                                                t2
+                                                                                            ).toLocaleString()}
+                                                                                        </td>
+                                                                                    );
+                                                                                }
+
+                                                                                return (
+                                                                                    <td
+                                                                                        key={
+                                                                                            colIdx
+                                                                                        }
+                                                                                        className="px-2 "
+                                                                                    >
+                                                                                        <input
+                                                                                            type="number"
+                                                                                            className="w-full text-right bg-transparent outline-none text-sm py-1"
+                                                                                            placeholder="0"
+                                                                                            // disable tier 1 input of current year for new proposal
+                                                                                            disabled={(() => {
+                                                                                                // find matching attribute cost
+                                                                                                const match =
+                                                                                                    attr.attribution_costs.find(
+                                                                                                        (
+                                                                                                            c,
+                                                                                                        ) =>
+                                                                                                            c.year ===
+                                                                                                                col.year &&
+                                                                                                            c.tier ===
+                                                                                                                col.tier,
+                                                                                                    );
+
+                                                                                                // disable if current year and tier 1
+                                                                                                return (
+                                                                                                    match?.tier ===
+                                                                                                        1 &&
+                                                                                                    match?.year ===
+                                                                                                        payload.proposal_year &&
+                                                                                                    payload.is_new
+                                                                                                );
+                                                                                            })()}
+                                                                                            value={
+                                                                                                attr.attribution_costs
+                                                                                                    .find(
+                                                                                                        (
+                                                                                                            c,
+                                                                                                        ) =>
+                                                                                                            c.year ===
+                                                                                                                col.year &&
+                                                                                                            c.tier ===
+                                                                                                                col.tier,
+                                                                                                    )
+                                                                                                    ?.costs?.find(
+                                                                                                        (
+                                                                                                            e,
+                                                                                                        ) =>
+                                                                                                            e.expense_class ===
+                                                                                                            expClass,
+                                                                                                    ) // Added ?. here
+                                                                                                    ?.amount ??
+                                                                                                ""
+                                                                                            }
+                                                                                            onChange={(
+                                                                                                e,
+                                                                                            ) => {
+                                                                                                const newAttrCosts =
+                                                                                                    [
+                                                                                                        ...attr.attribution_costs,
+                                                                                                    ];
+                                                                                                let yearTierEntry =
+                                                                                                    newAttrCosts.find(
+                                                                                                        (
+                                                                                                            c,
+                                                                                                        ) =>
+                                                                                                            c.year ===
+                                                                                                                col.year &&
+                                                                                                            c.tier ===
+                                                                                                                col.tier,
+                                                                                                    );
+                                                                                                if (
+                                                                                                    !yearTierEntry
+                                                                                                ) {
+                                                                                                    yearTierEntry =
+                                                                                                        {
+                                                                                                            year: col.year!,
+                                                                                                            tier: col.tier!,
+                                                                                                            costs: [],
+                                                                                                        };
+                                                                                                    newAttrCosts.push(
+                                                                                                        yearTierEntry,
+                                                                                                    );
+                                                                                                }
+                                                                                                const currentCosts =
+                                                                                                    [
+                                                                                                        ...yearTierEntry.costs,
+                                                                                                    ];
+                                                                                                const costIdx =
+                                                                                                    currentCosts.findIndex(
+                                                                                                        (
+                                                                                                            c,
+                                                                                                        ) =>
+                                                                                                            c.expense_class ===
+                                                                                                            expClass,
+                                                                                                    );
+                                                                                                if (
+                                                                                                    costIdx >
+                                                                                                    -1
+                                                                                                )
+                                                                                                    currentCosts[
+                                                                                                        costIdx
+                                                                                                    ].amount =
+                                                                                                        e
+                                                                                                            .target
+                                                                                                            .valueAsNumber ||
+                                                                                                        0;
+                                                                                                else
+                                                                                                    currentCosts.push(
+                                                                                                        {
+                                                                                                            expense_class:
+                                                                                                                expClass,
+                                                                                                            amount:
+                                                                                                                e
+                                                                                                                    .target
+                                                                                                                    .valueAsNumber ||
+                                                                                                                0,
+                                                                                                            currency:
+                                                                                                                "PHP",
+                                                                                                        },
+                                                                                                    );
+                                                                                                yearTierEntry.costs =
+                                                                                                    currentCosts;
+                                                                                                updateRow(
+                                                                                                    "local_financial_attributions",
+                                                                                                    attrIdx,
+                                                                                                    {
+                                                                                                        attribution_costs:
+                                                                                                            newAttrCosts,
+                                                                                                    },
+                                                                                                );
+                                                                                            }}
+                                                                                        />
+                                                                                    </td>
+                                                                                );
+                                                                            },
+                                                                        )}
+                                                                    </tr>
+                                                                ),
                                                             )}
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            );
-                                        },
-                                    )}
-                                </table>
-                                {payload.local_financial_attributions.length ===
-                                    0 && (
-                                    <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No Local Financial Attributions added.
-                                        Click &quot;+ ADD ATTRIBUTION&quot; to
-                                        begin.
+                                                        </tbody>
+                                                    );
+                                                },
+                                            )}
+                                        </table>
+
+                                        {payload.local_financial_attributions
+                                            .length === 0 && (
+                                            <div className="p-8 text-center text-muted-400 text-sm italic">
+                                                No Local Financial Attributions
+                                                added. Click &quot;+ ADD
+                                                ATTRIBUTION&quot; to begin.
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </div>
+                                </div>
+                            </CollapsibleTableSection>
                         </div>
                         {getErrorsForPath("local_financial_attributions")
                             .length > 0 && (
@@ -2306,7 +3041,7 @@ export default function ProposalForm({
                                 ).map((msg, i) => (
                                     <p
                                         key={i}
-                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                        className="text-sm text-red-600 font-semibold flex items-center gap-1"
                                     >
                                         <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
                                         {msg}
@@ -2319,153 +3054,189 @@ export default function ProposalForm({
                     {payload.is_infrastructure && (
                         <div className="space-y-2">
                             <div
-                                className={`bg-background rounded-xl border shadow-sm overflow-hidden ${
+                                className={`bg-background shadow-sm overflow-hidden ${
                                     errors.local_infrastructure_requirements
                                         ? "border-red-500 bg-red-50"
                                         : "border-muted-200"
                                 }`}
                             >
-                                <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                    <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                        Requirements for Operating Cost of
-                                        Infrastructure Project
-                                    </h3>
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            addRow(
+                                {payload.is_infrastructure && (
+                                    <CollapsibleTableSection
+                                        section="local_infrastructure_requirements"
+                                        title="Requirements for Operating Cost of Infrastructure Project"
+                                        subtitle="Specify direct rights-of-way, structural components, and matching allocations"
+                                        collapsed={
+                                            collapsedSections.local_infrastructure_requirements
+                                        }
+                                        onToggle={() =>
+                                            toggleSection(
                                                 "local_infrastructure_requirements",
-                                                {
-                                                    description: "",
-                                                    year: payload.proposal_year,
-                                                    total_amt: 0,
-                                                    costs: [],
-                                                },
                                             )
                                         }
-                                        className="text-secondary-foreground text-sm font-bold hover:underline"
+                                        actions={
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    addRow(
+                                                        "local_infrastructure_requirements",
+                                                        {
+                                                            description: "",
+                                                            year: payload.proposal_year,
+                                                            total_amt: 0,
+                                                            costs: [],
+                                                        },
+                                                    )
+                                                }
+                                                className="flex items-center gap-2 rounded-lg bg-secondary-foreground-600 px-4 py-2 text-sm font-bold text-primary-foreground shadow-md hover:bg-secondary-foreground-700 transition"
+                                            >
+                                                + Add Requirement
+                                            </button>
+                                        }
+                                        summary={
+                                            <div className="text-sm text-muted-500 italic">
+                                                {
+                                                    payload
+                                                        .local_infrastructure_requirements
+                                                        .length
+                                                }{" "}
+                                                requirements added.
+                                            </div>
+                                        }
                                     >
-                                        + ADD REQUIREMENT
-                                    </button>
-                                </div>
-                                <div className="p-0">
-                                    <table className="w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="bg-muted-50/50 border-b border-muted-100">
-                                                <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
-                                                    Description
-                                                </th>
-                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                    PS
-                                                </th>
-                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                    MOOE
-                                                </th>
-                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                    CO
-                                                </th>
-                                                <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
-                                                    FINEX
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-muted-50">
-                                            {payload.local_infrastructure_requirements.map(
-                                                (item, i) => (
-                                                    <tr key={i}>
-                                                        <td className="py-3 px-4">
-                                                            <input
-                                                                className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                                placeholder="Infrastructure Requirement"
-                                                                value={
-                                                                    item.description
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRow(
-                                                                        "local_infrastructure_requirements",
-                                                                        i,
-                                                                        {
-                                                                            description:
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-                                                        {(
-                                                            [
-                                                                "PS",
-                                                                "MOOE",
-                                                                "CO",
-                                                                "FINEX",
-                                                            ] as const
-                                                        ).map((itemClass) => (
-                                                            <td
-                                                                key={itemClass}
-                                                                className="py-2 px-2"
-                                                            >
-                                                                <input
-                                                                    type="number"
-                                                                    className="w-full bg-transparent text-right outline-none text-sm"
-                                                                    placeholder="0"
-                                                                    value={
-                                                                        item.costs.find(
-                                                                            (
-                                                                                c,
+                                        {/* Wrap your original infrastructure requirements table implementation here */}
+                                        <div className="">
+                                            <div className="max-h-[520px] overflow-auto">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-muted-50/50 border-b border-muted-100">
+                                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                                                Description
+                                                            </th>
+                                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                                PS
+                                                            </th>
+                                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                                MOOE
+                                                            </th>
+                                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                                CO
+                                                            </th>
+                                                            <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
+                                                                FINEX
+                                                            </th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-muted-50">
+                                                        {payload.local_infrastructure_requirements.map(
+                                                            (item, i) => (
+                                                                <tr key={i}>
+                                                                    <td className="py-3 px-4">
+                                                                        <input
+                                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                            placeholder="Infrastructure Requirement"
+                                                                            value={
+                                                                                item.description
+                                                                            }
+                                                                            onChange={(
+                                                                                e,
                                                                             ) =>
-                                                                                c.expense_class ===
-                                                                                itemClass,
-                                                                        )
-                                                                            ?.amount ??
-                                                                        ""
-                                                                    }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) =>
-                                                                        handleMatrixChange(
-                                                                            "local_infrastructure_requirements",
-                                                                            i,
+                                                                                updateRow(
+                                                                                    "local_infrastructure_requirements",
+                                                                                    i,
+                                                                                    {
+                                                                                        description:
+                                                                                            e
+                                                                                                .target
+                                                                                                .value,
+                                                                                    },
+                                                                                )
+                                                                            }
+                                                                        />
+                                                                    </td>
+                                                                    {(
+                                                                        [
+                                                                            "PS",
+                                                                            "MOOE",
+                                                                            "CO",
+                                                                            "FINEX",
+                                                                        ] as const
+                                                                    ).map(
+                                                                        (
                                                                             itemClass,
-                                                                            e
-                                                                                .target
-                                                                                .valueAsNumber ||
-                                                                                0,
-                                                                        )
-                                                                    }
-                                                                />
-                                                            </td>
-                                                        ))}
-                                                        <td className="py-3 px-4">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    removeRow(
-                                                                        "local_infrastructure_requirements",
-                                                                        i,
-                                                                    )
-                                                                }
-                                                                className="text-red-400 hover:text-red-600 transition-colors"
-                                                                title="Remove Component"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                ),
-                                            )}
-                                        </tbody>
-                                    </table>
+                                                                        ) => (
+                                                                            <td
+                                                                                key={
+                                                                                    itemClass
+                                                                                }
+                                                                                className="py-2 px-2"
+                                                                            >
+                                                                                <input
+                                                                                    type="number"
+                                                                                    className="w-full bg-transparent text-right outline-none text-sm"
+                                                                                    placeholder="0"
+                                                                                    value={
+                                                                                        item.costs.find(
+                                                                                            (
+                                                                                                c,
+                                                                                            ) =>
+                                                                                                c.expense_class ===
+                                                                                                itemClass,
+                                                                                        )
+                                                                                            ?.amount ??
+                                                                                        ""
+                                                                                    }
+                                                                                    onChange={(
+                                                                                        e,
+                                                                                    ) =>
+                                                                                        handleMatrixChange(
+                                                                                            "local_infrastructure_requirements",
+                                                                                            i,
+                                                                                            itemClass,
+                                                                                            e
+                                                                                                .target
+                                                                                                .valueAsNumber ||
+                                                                                                0,
+                                                                                        )
+                                                                                    }
+                                                                                />
+                                                                            </td>
+                                                                        ),
+                                                                    )}
+                                                                    <td className="py-3 px-4">
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() =>
+                                                                                removeRow(
+                                                                                    "local_infrastructure_requirements",
+                                                                                    i,
+                                                                                )
+                                                                            }
+                                                                            className="text-red-400 hover:text-red-600 transition-colors"
+                                                                            title="Remove Component"
+                                                                        >
+                                                                            ✕
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            ),
+                                                        )}
+                                                    </tbody>
+                                                </table>
 
-                                    {payload.local_infrastructure_requirements
-                                        .length === 0 && (
-                                        <div className="p-8 text-center text-muted-400 text-sm italic">
-                                            No locations added. Click &quot;+
-                                            ADD REQUIREMENT&quot; to begin.
+                                                {payload
+                                                    .local_infrastructure_requirements
+                                                    .length === 0 && (
+                                                    <div className="p-8 text-center text-muted-400 text-sm italic">
+                                                        No locations added.
+                                                        Click &quot;+ ADD
+                                                        REQUIREMENT&quot; to
+                                                        begin.
+                                                    </div>
+                                                )}
+                                            </div>
                                         </div>
-                                    )}
-                                </div>
+                                    </CollapsibleTableSection>
+                                )}
                             </div>
                             {getErrorsForPath(
                                 "local_infrastructure_requirements",
@@ -2476,7 +3247,7 @@ export default function ProposalForm({
                                     ).map((msg, i) => (
                                         <p
                                             key={i}
-                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                            className="text-sm text-red-600 font-semibold flex items-center gap-1"
                                         >
                                             <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
                                             {msg}
@@ -2489,85 +3260,120 @@ export default function ProposalForm({
 
                     <div className="space-y-2">
                         <div
-                            className={`bg-background rounded-xl border shadow-sm overflow-hidden pb-2 ${
+                            className={`bg-background shadow-sm overflow-hidden ${
                                 errors.local_physical_targets
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
                         >
-                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    Local Physical Targets
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        addRow("local_physical_targets", {
-                                            year: payload.proposal_year,
-                                            target_description: "",
-                                        })
-                                    }
-                                    className="text-sm text-secondary-foreground font-bold"
-                                >
-                                    + ADD TARGET
-                                </button>
-                            </div>
-                            {payload.local_physical_targets.map((target, i) => (
-                                <div key={i} className="flex gap-4 p-4">
-                                    <input
-                                        className="flex-1 border-b text-sm"
-                                        placeholder="Target Description"
-                                        value={target.target_description}
-                                        onChange={(e) =>
-                                            updateRow(
-                                                "local_physical_targets",
-                                                i,
-                                                {
-                                                    target_description:
-                                                        e.target.value,
-                                                },
-                                            )
-                                        }
-                                    />
-                                    <input
-                                        type="number"
-                                        className="w-24 border-b text-sm"
-                                        placeholder="Year"
-                                        value={target.year}
-                                        min={payload.proposal_year}
-                                        onChange={(e) =>
-                                            updateRow(
-                                                "local_physical_targets",
-                                                i,
-                                                {
-                                                    year: parseInt(
-                                                        e.target.value,
-                                                    ),
-                                                },
-                                            )
-                                        }
-                                    />
+                            <CollapsibleTableSection
+                                section="local_physical_targets"
+                                title="Local Physical Targets"
+                                subtitle="Specify targets for the proposal, such as length of roads, number of classrooms, etc."
+                                collapsed={
+                                    collapsedSections.local_physical_targets
+                                }
+                                onToggle={() =>
+                                    toggleSection("local_physical_targets")
+                                }
+                                actions={
                                     <button
                                         type="button"
                                         onClick={() =>
-                                            removeRow(
-                                                "local_physical_targets",
-                                                i,
-                                            )
+                                            addRow("local_physical_targets", {
+                                                year: payload.proposal_year,
+                                                target_description: "",
+                                            })
                                         }
-                                        className="text-red-400 hover:text-red-600 transition-colors"
-                                        title="Remove Component"
+                                        className="rounded-lg
+                bg-secondary-foreground
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-background
+                transition
+                hover:opacity-90  "
                                     >
-                                        ✕
+                                        + Add Target
                                     </button>
+                                }
+                                summary={
+                                    <div className="text-sm text-muted-500 italic">
+                                        {payload.local_physical_targets.length}{" "}
+                                        targets added.
+                                    </div>
+                                }
+                            >
+                                <div className="max-h-[520px] overflow-auto">
+                                    {payload.local_physical_targets.map(
+                                        (target, i) => (
+                                            <div
+                                                key={i}
+                                                className="flex gap-4 p-4"
+                                            >
+                                                <input
+                                                    className="flex-1 border-b text-sm"
+                                                    placeholder="Target Description"
+                                                    value={
+                                                        target.target_description
+                                                    }
+                                                    onChange={(e) =>
+                                                        updateRow(
+                                                            "local_physical_targets",
+                                                            i,
+                                                            {
+                                                                target_description:
+                                                                    e.target
+                                                                        .value,
+                                                            },
+                                                        )
+                                                    }
+                                                />
+                                                <input
+                                                    type="number"
+                                                    className="w-24 border-b text-sm"
+                                                    placeholder="Year"
+                                                    value={target.year}
+                                                    min={payload.proposal_year}
+                                                    onChange={(e) =>
+                                                        updateRow(
+                                                            "local_physical_targets",
+                                                            i,
+                                                            {
+                                                                year: parseInt(
+                                                                    e.target
+                                                                        .value,
+                                                                ),
+                                                            },
+                                                        )
+                                                    }
+                                                />
+                                                <button
+                                                    type="button"
+                                                    onClick={() =>
+                                                        removeRow(
+                                                            "local_physical_targets",
+                                                            i,
+                                                        )
+                                                    }
+                                                    className="text-red-400 hover:text-red-600 transition-colors"
+                                                    title="Remove Component"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        ),
+                                    )}
                                 </div>
-                            ))}
-                            {payload.local_physical_targets.length === 0 && (
-                                <div className="p-8 text-center text-muted-400 text-sm italic">
-                                    No Local Physical Targets added. Click
-                                    &quot;+ ADD TARGET&quot; to begin.
-                                </div>
-                            )}
+                                {payload.local_physical_targets.length ===
+                                    0 && (
+                                    <div className="p-8 text-center text-muted-400 text-sm italic">
+                                        No Local Physical Targets added. Click
+                                        &quot;+ ADD TARGET&quot; to begin.
+                                    </div>
+                                )}
+                            </CollapsibleTableSection>
                         </div>
                         {getErrorsForPath("local_physical_targets").length >
                             0 && (
@@ -2576,7 +3382,7 @@ export default function ProposalForm({
                                     (msg, i) => (
                                         <p
                                             key={i}
-                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                            className="text-sm text-red-600 font-semibold flex items-center gap-1"
                                         >
                                             <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
                                             {msg}
@@ -2594,227 +3400,429 @@ export default function ProposalForm({
                 <div className="space-y-6">
                     <div className="space-y-2">
                         <div
-                            className={`rounded-xl border shadow-sm overflow-hidden  ${
-                                errors.cost_by_components
+                            className={`shadow-sm overflow-hidden  ${
+                                errors.foreign_financial_targets
                                     ? "border-red-500 bg-red-50"
                                     : "border-muted-200"
                             }`}
                         >
-                            <div className=" px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    12.2 Costing by Components (BP 203)
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={addCostComponent}
-                                    className="text-secondary-foreground text-sm font-bold hover:underline"
-                                >
-                                    + ADD ALLOCATION
-                                </button>
-                            </div>
-
-                            {/* BP 203 Collapsible matrix table */}
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="border-b text-sm font-black text-muted-400 uppercase">
-                                            <th className="py-3 px-2 border-r w-8" />
-                                            <th className="py-4 px-4 border-r w-[200px] max-w-[200px]">
-                                                Components
-                                            </th>
-                                            {(
-                                                [
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ] as const
-                                            ).map((ec) => (
-                                                <th
-                                                    key={ec}
-                                                    className="px-2 text-center border-r min-w-[180px]"
-                                                >
-                                                    {ec}
-                                                </th>
-                                            ))}
-                                            <th className="w-10" />
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-muted-50">
-                                        {payload.cost_by_components.map(
-                                            (comp, i) => {
-                                                const isCollapsed =
-                                                    collapsedComponents.has(i);
-                                                const displayName =
-                                                    getSelectedItemCatalog(
-                                                        comp.item_catalog_id,
-                                                    )?.name ||
-                                                    comp.component_name ||
-                                                    "Unnamed Component";
-
-                                                // Compute per-cell totals for collapsed summary
-                                                const cellTotals203 = (
-                                                    [
-                                                        "PS",
-                                                        "MOOE",
-                                                        "CO",
-                                                        "FINEX",
-                                                    ] as const
-                                                ).reduce(
-                                                    (acc, ec) => {
-                                                        const lpCash = Number(
-                                                            comp.costs.find(
-                                                                (c) =>
-                                                                    c.expense_class ===
-                                                                        ec &&
-                                                                    c.fund_category ===
-                                                                        "LP" &&
-                                                                    c.fund_method ===
-                                                                        "cash",
-                                                            )?.amount || 0,
-                                                        );
-                                                        const lpNonCash =
-                                                            Number(
-                                                                comp.costs.find(
-                                                                    (c) =>
-                                                                        c.expense_class ===
-                                                                            ec &&
-                                                                        c.fund_category ===
-                                                                            "LP" &&
-                                                                        (c.fund_method ===
-                                                                            "non_cash" ||
-                                                                            c.fund_method ===
-                                                                                "non-cash"),
-                                                                )?.amount || 0,
-                                                            );
-                                                        const gop = Number(
-                                                            comp.costs.find(
-                                                                (c) =>
-                                                                    c.expense_class ===
-                                                                        ec &&
-                                                                    c.fund_category ===
-                                                                        "GOP",
-                                                            )?.amount || 0,
-                                                        );
-                                                        acc[ec] =
-                                                            lpCash +
-                                                            lpNonCash +
-                                                            gop;
-                                                        return acc;
-                                                    },
-                                                    {} as Record<
-                                                        | "PS"
-                                                        | "MOOE"
-                                                        | "CO"
-                                                        | "FINEX",
-                                                        number
-                                                    >,
-                                                );
-                                                const rowTotal203 =
-                                                    Object.values(
-                                                        cellTotals203,
-                                                    ).reduce(
-                                                        (a, b) => a + b,
-                                                        0,
-                                                    );
-
-                                                return (
-                                                    <tr
-                                                        key={i}
-                                                        className={`transition-colors group ${isCollapsed ? "bg-muted-50/40 hover:bg-muted-50/60" : "hover:bg-muted-50/30"}`}
+                            <CollapsibleTableSection
+                                section="foreign_financial_targets"
+                                title="Foreign Financial Targets"
+                                subtitle="Manage loan proceeds, grants, and GOP counterpart financing schedules"
+                                collapsed={
+                                    collapsedSections.foreign_financial_targets
+                                }
+                                onToggle={() =>
+                                    toggleSection("foreign_financial_targets")
+                                }
+                                actions={
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            addRow(
+                                                "foreign_financial_targets",
+                                                {
+                                                    year: payload.proposal_year,
+                                                    lp_imprest: 0,
+                                                    lp_direct: 0,
+                                                    grant: 0,
+                                                    gop: 0,
+                                                },
+                                            )
+                                        }
+                                        className="rounded-lg
+                bg-secondary-foreground
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-background
+                transition
+                hover:opacity-90  "
+                                    >
+                                        + Add Financial Target
+                                    </button>
+                                }
+                                summary={
+                                    <div className="text-sm text-muted-500 italic">
+                                        {
+                                            payload.foreign_financial_targets
+                                                .length
+                                        }{" "}
+                                        fiscal year rows configured.
+                                    </div>
+                                }
+                            >
+                                <div className="">
+                                    <div className="max-h-[520px] overflow-auto">
+                                        <table className="w-full table-fixed text-left border-collapse">
+                                            <thead>
+                                                <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="py-4 px-4 border-r w-24"
                                                     >
-                                                        {/* Collapse toggle */}
-                                                        <td className="py-3 px-2 border-r text-center align-top">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    toggleComponentCollapse(
-                                                                        i,
-                                                                    )
-                                                                }
-                                                                className="text-muted-400 hover:text-muted-700 transition-colors text-xs font-bold leading-none mt-1"
-                                                                title={
-                                                                    isCollapsed
-                                                                        ? "Expand row"
-                                                                        : "Collapse row"
-                                                                }
-                                                            >
-                                                                {isCollapsed
-                                                                    ? "▶"
-                                                                    : "▼"}
-                                                            </button>
-                                                        </td>
+                                                        Year
+                                                    </th>
+                                                    <th
+                                                        colSpan={2}
+                                                        className="py-2 text-center border-b border-r"
+                                                    >
+                                                        LP (Loan Proceeds)
+                                                    </th>
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="py-4 px-2 text-center border-r"
+                                                    >
+                                                        Grant
+                                                    </th>
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="py-4 px-2 text-center border-r"
+                                                    >
+                                                        GOP
+                                                    </th>
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="py-4 px-2 text-center bg-muted-100/50"
+                                                    >
+                                                        Total
+                                                    </th>
+                                                    <th
+                                                        rowSpan={2}
+                                                        className="w-10"
+                                                    ></th>
+                                                </tr>
+                                                <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
+                                                    <th className="py-2 px-2 text-center border-r">
+                                                        Imprest/Special
+                                                    </th>
+                                                    <th className="py-2 px-2 text-center border-r">
+                                                        Direct Payment
+                                                    </th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-muted-50">
+                                                {payload.foreign_financial_targets.map(
+                                                    (target, i) => {
+                                                        const rowTotal =
+                                                            Number(
+                                                                target.lp_imprest ||
+                                                                    0,
+                                                            ) +
+                                                            Number(
+                                                                target.lp_direct ||
+                                                                    0,
+                                                            ) +
+                                                            Number(
+                                                                target.grant ||
+                                                                    0,
+                                                            ) +
+                                                            Number(
+                                                                target.gop || 0,
+                                                            );
 
-                                                        {isCollapsed ? (
-                                                            // Collapsed: show name + per-EC totals inline
-                                                            <>
-                                                                <td className="py-3 px-4 border-r align-middle">
-                                                                    <span
-                                                                        className="font-semibold text-sm text-muted-800 truncate block max-w-[180px]"
-                                                                        title={
-                                                                            displayName
-                                                                        }
-                                                                    >
-                                                                        {
-                                                                            displayName
-                                                                        }
-                                                                    </span>
-                                                                    <span className="text-xs font-mono text-muted-500">
-                                                                        Total:{" "}
-                                                                        {rowTotal203.toLocaleString(
-                                                                            undefined,
-                                                                            {
-                                                                                minimumFractionDigits: 2,
-                                                                            },
-                                                                        )}
-                                                                    </span>
-                                                                </td>
-                                                                {(
-                                                                    [
-                                                                        "PS",
-                                                                        "MOOE",
-                                                                        "CO",
-                                                                        "FINEX",
-                                                                    ] as const
-                                                                ).map((ec) => (
-                                                                    <td
-                                                                        key={ec}
-                                                                        className="py-3 px-4 border-r align-middle text-right"
-                                                                    >
-                                                                        <span className="text-sm font-mono font-bold text-secondary-foreground">
-                                                                            {cellTotals203[
-                                                                                ec
-                                                                            ].toLocaleString(
-                                                                                undefined,
-                                                                                {
-                                                                                    minimumFractionDigits: 2,
-                                                                                },
-                                                                            )}
-                                                                        </span>
-                                                                    </td>
-                                                                ))}
-                                                            </>
-                                                        ) : (
-                                                            // Expanded: full edit matrix
-                                                            <>
-                                                                <td className="py-3 px-4 border-r align-top w-[200px] max-w-[200px]">
+                                                        return (
+                                                            <tr
+                                                                key={i}
+                                                                className="hover:bg-muted-50/30 transition-colors group"
+                                                            >
+                                                                <td className="py-3 px-4 border-r">
                                                                     <input
-                                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none border-b border-transparent focus:border-secondary-foreground-200"
-                                                                        placeholder="Enter Component Name..."
+                                                                        type="number"
+                                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                        min={
+                                                                            payload.proposal_year
+                                                                        }
                                                                         value={
-                                                                            comp.component_name
+                                                                            target.year
                                                                         }
                                                                         onChange={(
                                                                             e,
                                                                         ) =>
                                                                             updateRow(
-                                                                                "cost_by_components",
+                                                                                "foreign_financial_targets",
                                                                                 i,
                                                                                 {
-                                                                                    component_name:
+                                                                                    year: parseInt(
                                                                                         e
                                                                                             .target
                                                                                             .value,
+                                                                                    ),
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="py-3 px-2 border-r">
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        placeholder="0"
+                                                                        min={0}
+                                                                        value={
+                                                                            target.lp_imprest ||
+                                                                            ""
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                "foreign_financial_targets",
+                                                                                i,
+                                                                                {
+                                                                                    lp_imprest:
+                                                                                        Number(
+                                                                                            e
+                                                                                                .target
+                                                                                                .value ||
+                                                                                                0,
+                                                                                        ),
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="py-3 px-2 border-r">
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        placeholder="0"
+                                                                        min={0}
+                                                                        value={
+                                                                            target.lp_direct ||
+                                                                            ""
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                "foreign_financial_targets",
+                                                                                i,
+                                                                                {
+                                                                                    lp_direct:
+                                                                                        Number(
+                                                                                            e
+                                                                                                .target
+                                                                                                .value ||
+                                                                                                0,
+                                                                                        ),
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="py-3 px-2 border-r">
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        placeholder="0"
+                                                                        min={0}
+                                                                        value={
+                                                                            target.grant ||
+                                                                            ""
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                "foreign_financial_targets",
+                                                                                i,
+                                                                                {
+                                                                                    grant: Number(
+                                                                                        e
+                                                                                            .target
+                                                                                            .value ||
+                                                                                            0,
+                                                                                    ),
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="py-3 px-2 border-r">
+                                                                    <input
+                                                                        type="number"
+                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        placeholder="0"
+                                                                        min={0}
+                                                                        value={
+                                                                            target.gop ||
+                                                                            ""
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                "foreign_financial_targets",
+                                                                                i,
+                                                                                {
+                                                                                    gop: Number(
+                                                                                        e
+                                                                                            .target
+                                                                                            .value ||
+                                                                                            0,
+                                                                                    ),
+                                                                                },
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                </td>
+                                                                <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                                    {rowTotal.toLocaleString()}
+                                                                </td>
+                                                                <td className="py-3 px-2 text-center">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            removeRow(
+                                                                                "foreign_financial_targets",
+                                                                                i,
+                                                                            )
+                                                                        }
+                                                                        className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    },
+                                                )}
+                                            </tbody>
+                                        </table>
+                                        {payload.foreign_financial_targets
+                                            .length === 0 && (
+                                            <div className="p-8 text-center text-muted-400 text-sm italic">
+                                                No foreign financial targets
+                                                added. Click &quot;+ ADD
+                                                FINANCIAL TARGET&quot; to begin.
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </CollapsibleTableSection>
+                        </div>
+                        {getErrorsForPath("foreign_financial_targets").length >
+                            0 && (
+                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
+                                {getErrorsForPath(
+                                    "foreign_financial_targets",
+                                ).map((msg, i) => (
+                                    <p
+                                        key={i}
+                                        className="text-sm text-red-600 font-semibold flex items-center gap-1"
+                                    >
+                                        <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
+                                        {msg}
+                                    </p>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-2">
+                        <div
+                            className={`shadow-sm overflow-hidden  ${
+                                errors.foreign_physical_targets
+                                    ? "border-red-500 bg-red-50"
+                                    : "border-muted-200"
+                            }`}
+                        >
+                            <CollapsibleTableSection
+                                section="foreign_physical_targets"
+                                title="Foreign Physical Targets"
+                                subtitle="Identify physical delivery requirements tied to foreign-assisted components"
+                                collapsed={
+                                    collapsedSections.foreign_physical_targets
+                                }
+                                onToggle={() =>
+                                    toggleSection("foreign_physical_targets")
+                                }
+                                actions={
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            addRow("foreign_physical_targets", {
+                                                name: "",
+                                                costs: [],
+                                            })
+                                        }
+                                        className="rounded-lg
+                bg-secondary-foreground
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-background
+                transition
+                hover:opacity-90  "
+                                    >
+                                        + Add Physical Target
+                                    </button>
+                                }
+                                summary={
+                                    <div className="text-sm text-muted-500 italic">
+                                        {
+                                            payload.foreign_physical_targets
+                                                .length
+                                        }{" "}
+                                        target profiles defined.
+                                    </div>
+                                }
+                            >
+                                <div className="">
+                                    <div className="overflow-x-auto">
+                                        <div className="max-h-[520px] overflow-auto">
+                                            <table className="w-full text-left border-collapse">
+                                                <thead>
+                                                    <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
+                                                        <th className="py-4 px-4 border-r w-64">
+                                                            Components
+                                                        </th>
+                                                        {(
+                                                            [
+                                                                "PS",
+                                                                "MOOE",
+                                                                "CO",
+                                                                "FINEX",
+                                                            ] as const
+                                                        ).map((ec) => (
+                                                            <th
+                                                                key={ec}
+                                                                className="px-2 text-center border-r last:border-r-0 min-w-[180px]"
+                                                            >
+                                                                {ec}
+                                                            </th>
+                                                        ))}
+                                                        <th className="w-10"></th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-muted-50">
+                                                    {payload.foreign_physical_targets.map(
+                                                        (phys, i) => (
+                                                            <tr
+                                                                key={i}
+                                                                className="hover:bg-muted-50/30 transition-colors group"
+                                                            >
+                                                                <td className="py-3 px-4 border-r align-top">
+                                                                    <input
+                                                                        className="w-full bg-transparent font-medium text-muted-700 outline-none"
+                                                                        placeholder="Enter Component Name..."
+                                                                        value={
+                                                                            phys.name
+                                                                        }
+                                                                        onChange={(
+                                                                            e,
+                                                                        ) =>
+                                                                            updateRow(
+                                                                                "foreign_physical_targets",
+                                                                                i,
+                                                                                {
+                                                                                    name: e
+                                                                                        .target
+                                                                                        .value,
                                                                                 },
                                                                             )
                                                                         }
@@ -2828,6 +3836,7 @@ export default function ProposalForm({
                                                                         "FINEX",
                                                                     ] as const
                                                                 ).map((ec) => {
+                                                                    // HELPER: Find specific cost objects by class, category, and method
                                                                     const getCost =
                                                                         (
                                                                             cat:
@@ -2837,7 +3846,7 @@ export default function ProposalForm({
                                                                                 | "cash"
                                                                                 | "non_cash",
                                                                         ) =>
-                                                                            comp.costs.find(
+                                                                            phys.costs.find(
                                                                                 (
                                                                                     c,
                                                                                 ) =>
@@ -2890,17 +3899,21 @@ export default function ProposalForm({
                                                                             key={
                                                                                 ec
                                                                             }
-                                                                            className="p-3 border-r align-top min-w-[160px]"
+                                                                            className="p-3 border-r last:border-r-0 align-top min-w-[160px]"
                                                                         >
                                                                             <div className="flex flex-col gap-2">
+                                                                                {/* LP Cash Input */}
                                                                                 <div className="flex items-center justify-between gap-2">
-                                                                                    <span className="text-sm font-bold text-muted-500 w-16">
+                                                                                    <span className="text-sm font-bold text-muted-500 w-12">
                                                                                         LP
                                                                                         CASH
                                                                                     </span>
                                                                                     <input
                                                                                         type="number"
-                                                                                        className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                                        className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
+                                                                                        min={
+                                                                                            0
+                                                                                        }
                                                                                         value={getCost(
                                                                                             "LP",
                                                                                             "cash",
@@ -2916,20 +3929,25 @@ export default function ProposalForm({
                                                                                                     .target
                                                                                                     .valueAsNumber ||
                                                                                                     0,
-                                                                                                "cost_by_components",
+                                                                                                "foreign_physical_targets",
                                                                                                 "cash",
                                                                                             )
                                                                                         }
                                                                                     />
                                                                                 </div>
+
+                                                                                {/* LP Non-Cash Input */}
                                                                                 <div className="flex items-center justify-between gap-2">
-                                                                                    <span className="text-sm font-bold text-muted-500 w-16">
+                                                                                    <span className="text-sm font-bold text-muted-500 w-12">
                                                                                         LP
                                                                                         NON-CASH
                                                                                     </span>
                                                                                     <input
                                                                                         type="number"
-                                                                                        className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                                        className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
+                                                                                        min={
+                                                                                            0
+                                                                                        }
                                                                                         value={getCost(
                                                                                             "LP",
                                                                                             "non_cash",
@@ -2945,19 +3963,24 @@ export default function ProposalForm({
                                                                                                     .target
                                                                                                     .valueAsNumber ||
                                                                                                     0,
-                                                                                                "cost_by_components",
+                                                                                                "foreign_physical_targets",
                                                                                                 "non_cash",
                                                                                             )
                                                                                         }
                                                                                     />
                                                                                 </div>
+
+                                                                                {/* GOP Input */}
                                                                                 <div className="flex items-center justify-between gap-2">
-                                                                                    <span className="text-sm font-bold text-muted-500 w-16">
+                                                                                    <span className="text-sm font-bold text-muted-500 w-12">
                                                                                         GOP
                                                                                     </span>
                                                                                     <input
                                                                                         type="number"
-                                                                                        className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground-500"
+                                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                                        min={
+                                                                                            0
+                                                                                        }
                                                                                         value={getCost(
                                                                                             "GOP",
                                                                                         )}
@@ -2972,13 +3995,15 @@ export default function ProposalForm({
                                                                                                     .target
                                                                                                     .valueAsNumber ||
                                                                                                     0,
-                                                                                                "cost_by_components",
+                                                                                                "foreign_physical_targets",
                                                                                             )
                                                                                         }
                                                                                     />
                                                                                 </div>
+
+                                                                                {/* Sub-total for this Expense Class */}
                                                                                 <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
-                                                                                    <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
+                                                                                    <span className="text-sm uppercase tracking-wider font-semibold text-muted-400">
                                                                                         Total
                                                                                     </span>
                                                                                     <span className="text-sm font-mono font-bold text-secondary-foreground">
@@ -2994,742 +4019,29 @@ export default function ProposalForm({
                                                                         </td>
                                                                     );
                                                                 })}
-                                                            </>
-                                                        )}
-
-                                                        <td className="py-3 px-2 text-center align-top">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    removeRow(
-                                                                        "cost_by_components",
-                                                                        i,
-                                                                    )
-                                                                }
-                                                                className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            },
-                                        )}
-                                    </tbody>
-                                    {payload.cost_by_components.length > 0 &&
-                                        (() => {
-                                            const ecTotals203 = (
-                                                [
-                                                    "PS",
-                                                    "MOOE",
-                                                    "CO",
-                                                    "FINEX",
-                                                ] as const
-                                            ).reduce(
-                                                (acc, ec) => {
-                                                    acc[ec] =
-                                                        payload.cost_by_components.reduce(
-                                                            (sum, comp) => {
-                                                                const lpCash =
-                                                                    Number(
-                                                                        comp.costs.find(
-                                                                            (
-                                                                                c,
-                                                                            ) =>
-                                                                                c.expense_class ===
-                                                                                    ec &&
-                                                                                c.fund_category ===
-                                                                                    "LP" &&
-                                                                                c.fund_method ===
-                                                                                    "cash",
-                                                                        )
-                                                                            ?.amount ||
-                                                                            0,
-                                                                    );
-                                                                const lpNonCash =
-                                                                    Number(
-                                                                        comp.costs.find(
-                                                                            (
-                                                                                c,
-                                                                            ) =>
-                                                                                c.expense_class ===
-                                                                                    ec &&
-                                                                                c.fund_category ===
-                                                                                    "LP" &&
-                                                                                (c.fund_method ===
-                                                                                    "non_cash" ||
-                                                                                    c.fund_method ===
-                                                                                        "non-cash"),
-                                                                        )
-                                                                            ?.amount ||
-                                                                            0,
-                                                                    );
-                                                                const gop =
-                                                                    Number(
-                                                                        comp.costs.find(
-                                                                            (
-                                                                                c,
-                                                                            ) =>
-                                                                                c.expense_class ===
-                                                                                    ec &&
-                                                                                c.fund_category ===
-                                                                                    "GOP",
-                                                                        )
-                                                                            ?.amount ||
-                                                                            0,
-                                                                    );
-                                                                return (
-                                                                    sum +
-                                                                    lpCash +
-                                                                    lpNonCash +
-                                                                    gop
-                                                                );
-                                                            },
-                                                            0,
-                                                        );
-                                                    return acc;
-                                                },
-                                                {} as Record<
-                                                    | "PS"
-                                                    | "MOOE"
-                                                    | "CO"
-                                                    | "FINEX",
-                                                    number
-                                                >,
-                                            );
-                                            const grandTotal203 = Object.values(
-                                                ecTotals203,
-                                            ).reduce((a, b) => a + b, 0);
-                                            return (
-                                                <tfoot>
-                                                    <tr className="border-t-2 border-muted-300 bg-muted-50/70 text-sm font-black text-muted-600 uppercase">
-                                                        <td className="py-3 px-2" />
-                                                        <td className="py-3 px-4 border-r">
-                                                            <span className="text-[10px] tracking-widest">
-                                                                TOTALS BY
-                                                                EXPENSE CLASS
-                                                            </span>
-                                                        </td>
-                                                        {(
-                                                            [
-                                                                "PS",
-                                                                "MOOE",
-                                                                "CO",
-                                                                "FINEX",
-                                                            ] as const
-                                                        ).map((ec) => (
-                                                            <td
-                                                                key={ec}
-                                                                className="py-3 px-3 border-r text-right"
-                                                            >
-                                                                <div className="flex flex-col items-end">
-                                                                    <span className="text-[9px] text-muted-400 font-bold tracking-wider">
-                                                                        {ec}
-                                                                    </span>
-                                                                    <span className="text-sm font-mono font-bold text-secondary-foreground">
-                                                                        {ecTotals203[
-                                                                            ec
-                                                                        ].toLocaleString(
-                                                                            undefined,
-                                                                            {
-                                                                                minimumFractionDigits: 2,
-                                                                            },
-                                                                        )}
-                                                                    </span>
-                                                                </div>
-                                                            </td>
-                                                        ))}
-                                                        <td className="py-3 px-2">
-                                                            <div className="flex flex-col items-end">
-                                                                <span className="text-[9px] text-muted-400 font-bold tracking-wider">
-                                                                    GRAND TOTAL
-                                                                </span>
-                                                                <span className="text-sm font-mono font-bold text-secondary-foreground">
-                                                                    {grandTotal203.toLocaleString(
-                                                                        undefined,
-                                                                        {
-                                                                            minimumFractionDigits: 2,
-                                                                        },
-                                                                    )}
-                                                                </span>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                </tfoot>
-                                            );
-                                        })()}
-                                </table>
-                                {payload.cost_by_components.length === 0 && (
-                                    <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No component allocations added. Click
-                                        &quot;+ ADD ALLOCATION&quot; to begin.
+                                                                <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() =>
+                                                                            removeRow(
+                                                                                "foreign_physical_targets",
+                                                                                i,
+                                                                            )
+                                                                        }
+                                                                        className="text-red-400 hover:text-red-600 transition-opacity"
+                                                                    >
+                                                                        ✕
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        ),
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
-                                )}
-                            </div>
-                        </div>
-                        {getErrorsForPath("cost_by_components").length > 0 && (
-                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
-                                {getErrorsForPath("cost_by_components").map(
-                                    (msg, i) => (
-                                        <p
-                                            key={i}
-                                            className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
-                                        >
-                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
-                                            {msg}
-                                        </p>
-                                    ),
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    <div className="space-y-2">
-                        <div
-                            className={`rounded-xl border shadow-sm overflow-hidden  ${
-                                errors.foreign_financial_targets
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
-                            {/* Header with Add Button */}
-                            <div className=" px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    Foreign Financial Targets (Loan/Grant)
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        // Find the highest year currently in the targets,
-                                        // default to proposal_year - 1 so the first entry becomes proposal_year
-                                        const lastYear =
-                                            payload.foreign_financial_targets.reduce(
-                                                (max, item) =>
-                                                    item.year > max
-                                                        ? item.year
-                                                        : max,
-                                                payload.proposal_year - 1,
-                                            );
-
-                                        addRow("foreign_financial_targets", {
-                                            year: lastYear + 1, // Auto-increment the year
-                                            lp_imprest: 0,
-                                            lp_direct: 0,
-                                            grant: 0,
-                                            gop: 0,
-                                        });
-                                    }}
-                                    className="text-secondary-foreground text-sm font-bold hover:underline"
-                                >
-                                    + ADD FINANCIAL TARGET
-                                </button>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
-                                            <th
-                                                rowSpan={2}
-                                                className="py-4 px-4 border-r w-24"
-                                            >
-                                                Year
-                                            </th>
-                                            <th
-                                                colSpan={2}
-                                                className="py-2 text-center border-b border-r"
-                                            >
-                                                LP (Loan Proceeds)
-                                            </th>
-                                            <th
-                                                rowSpan={2}
-                                                className="py-4 px-2 text-center border-r"
-                                            >
-                                                Grant
-                                            </th>
-                                            <th
-                                                rowSpan={2}
-                                                className="py-4 px-2 text-center border-r"
-                                            >
-                                                GOP
-                                            </th>
-                                            <th
-                                                rowSpan={2}
-                                                className="py-4 px-2 text-center bg-muted-100/50"
-                                            >
-                                                Total
-                                            </th>
-                                            <th
-                                                rowSpan={2}
-                                                className="w-10"
-                                            ></th>
-                                        </tr>
-                                        <tr className="bg-muted-50/50 border-b border-muted-100 text-[9px] font-black text-muted-400 uppercase">
-                                            <th className="py-2 px-2 text-center border-r">
-                                                Imprest/Special
-                                            </th>
-                                            <th className="py-2 px-2 text-center border-r">
-                                                Direct Payment
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-muted-50">
-                                        {payload.foreign_financial_targets.map(
-                                            (target, i) => {
-                                                const rowTotal =
-                                                    Number(
-                                                        target.lp_imprest || 0,
-                                                    ) +
-                                                    Number(
-                                                        target.lp_direct || 0,
-                                                    ) +
-                                                    Number(target.grant || 0) +
-                                                    Number(target.gop || 0);
-
-                                                return (
-                                                    <tr
-                                                        key={i}
-                                                        className="hover:bg-muted-50/30 transition-colors group"
-                                                    >
-                                                        <td className="py-3 px-4 border-r">
-                                                            <input
-                                                                type="number"
-                                                                className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                                min={payload.proposal_year}
-                                                                value={
-                                                                    target.year
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRow(
-                                                                        "foreign_financial_targets",
-                                                                        i,
-                                                                        {
-                                                                            year: parseInt(
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                            ),
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-                                                        <td className="py-3 px-2 border-r">
-                                                            <input
-                                                                type="number"
-                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
-                                                                placeholder="0"
-                                                                min={0}
-                                                                value={
-                                                                    target.lp_imprest ||
-                                                                    ""
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRow(
-                                                                        "foreign_financial_targets",
-                                                                        i,
-                                                                        {
-                                                                            lp_imprest:
-                                                                                Number(
-                                                                                    e
-                                                                                        .target
-                                                                                        .value ||
-                                                                                        0,
-                                                                                ),
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-                                                        <td className="py-3 px-2 border-r">
-                                                            <input
-                                                                type="number"
-                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
-                                                                placeholder="0"
-                                                                min={0}
-                                                                value={
-                                                                    target.lp_direct ||
-                                                                    ""
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRow(
-                                                                        "foreign_financial_targets",
-                                                                        i,
-                                                                        {
-                                                                            lp_direct:
-                                                                                Number(
-                                                                                    e
-                                                                                        .target
-                                                                                        .value ||
-                                                                                        0,
-                                                                                ),
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-                                                        <td className="py-3 px-2 border-r">
-                                                            <input
-                                                                type="number"
-                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
-                                                                placeholder="0"
-                                                                min={0}
-                                                                value={
-                                                                    target.grant ||
-                                                                    ""
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRow(
-                                                                        "foreign_financial_targets",
-                                                                        i,
-                                                                        {
-                                                                            grant: Number(
-                                                                                e
-                                                                                    .target
-                                                                                    .value ||
-                                                                                    0,
-                                                                            ),
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-                                                        <td className="py-3 px-2 border-r">
-                                                            <input
-                                                                type="number"
-                                                                className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
-                                                                placeholder="0"
-                                                                min={0}
-                                                                value={
-                                                                    target.gop ||
-                                                                    ""
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRow(
-                                                                        "foreign_financial_targets",
-                                                                        i,
-                                                                        {
-                                                                            gop: Number(
-                                                                                e
-                                                                                    .target
-                                                                                    .value ||
-                                                                                    0,
-                                                                            ),
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-                                                        <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
-                                                            {rowTotal.toLocaleString()}
-                                                        </td>
-                                                        <td className="py-3 px-2 text-center">
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    removeRow(
-                                                                        "foreign_financial_targets",
-                                                                        i,
-                                                                    )
-                                                                }
-                                                                className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                            >
-                                                                ✕
-                                                            </button>
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            },
-                                        )}
-                                    </tbody>
-                                </table>
-                                {payload.foreign_financial_targets.length ===
-                                    0 && (
-                                    <div className="p-8 text-center text-muted-400 text-sm italic">
-                                        No foreign financial targets added.
-                                        Click &quot;+ ADD FINANCIAL TARGET&quot;
-                                        to begin.
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                        {getErrorsForPath("foreign_financial_targets").length >
-                            0 && (
-                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
-                                {getErrorsForPath(
-                                    "foreign_financial_targets",
-                                ).map((msg, i) => (
-                                    <p
-                                        key={i}
-                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
-                                    >
-                                        <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
-                                        {msg}
-                                    </p>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
-                        <div
-                            className={`rounded-xl border shadow-sm overflow-hidden  ${
-                                errors.foreign_physical_targets
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
-                            <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                                <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                    Foreign Physical Targets
-                                </h3>
-                                <button
-                                    type="button"
-                                    onClick={() =>
-                                        addRow("foreign_physical_targets", {
-                                            name: "",
-                                            costs: [],
-                                        })
-                                    }
-                                    className="text-secondary-foreground text-sm font-bold hover:underline"
-                                >
-                                    + ADD PHYSICAL TARGET
-                                </button>
-                            </div>
-
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead>
-                                        <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
-                                            <th className="py-4 px-4 border-r w-64">
-                                                Components
-                                            </th>
-                                            {(["PS", "MOOE", "CO", "FINEX"] as const).map(
-                                                (ec) => (
-                                                    <th
-                                                        key={ec}
-                                                        className="px-2 text-center border-r min-w-[180px]"
-                                                    >
-                                                        {ec}
-                                                    </th>
-                                                ),
-                                            )}
-                                            <th className="w-10"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-muted-50">
-                                        {payload.foreign_physical_targets.map(
-                                            (phys, i) => (
-                                                <tr
-                                                    key={i}
-                                                    className="hover:bg-muted-50/30 transition-colors group"
-                                                >
-                                                    <td className="py-3 px-4 border-r align-top">
-                                                        <input
-                                                            className="w-full bg-transparent font-medium text-muted-700 outline-none"
-                                                            placeholder="Enter Component Name..."
-                                                            value={phys.name}
-                                                            onChange={(e) =>
-                                                                updateRow(
-                                                                    "foreign_physical_targets",
-                                                                    i,
-                                                                    {
-                                                                        name: e
-                                                                            .target
-                                                                            .value,
-                                                                    },
-                                                                )
-                                                            }
-                                                        />
-                                                    </td>
-                                                    {([
-                                                        "PS",
-                                                        "MOOE",
-                                                        "CO",
-                                                        "FINEX",
-                                                    ] as const).map((ec) => {
-                                                        // HELPER: Find specific cost objects by class, category, and method
-                                                        const getCost = (
-                                                            cat: "LP" | "GOP",
-                                                            method?:
-                                                                | "cash"
-                                                                | "non_cash",
-                                                        ) =>
-                                                            phys.costs.find(
-                                                                (c) =>
-                                                                    c.expense_class ===
-                                                                        ec &&
-                                                                    c.fund_category ===
-                                                                        cat &&
-                                                                    (cat !==
-                                                                        "LP" ||
-                                                                        c.fund_method ===
-                                                                            method ||
-                                                                        (method ===
-                                                                            "non_cash" &&
-                                                                            c.fund_method ===
-                                                                                "non-cash")),
-                                                            )?.amount || "";
-
-                                                        const lpCash = Number(
-                                                            getCost(
-                                                                "LP",
-                                                                "cash",
-                                                            ) || 0,
-                                                        );
-                                                        const lpNonCash =
-                                                            Number(
-                                                                getCost(
-                                                                    "LP",
-                                                                    "non_cash",
-                                                                ) || 0,
-                                                            );
-                                                        const gop = Number(
-                                                            getCost("GOP") || 0,
-                                                        );
-                                                        const cellTotal =
-                                                            lpCash +
-                                                            lpNonCash +
-                                                            gop;
-
-                                                        return (
-                                                            <td
-                                                                key={ec}
-                                                                className="p-3 border-r align-top min-w-[160px]"
-                                                            >
-                                                                <div className="flex flex-col gap-2">
-                                                                    {/* LP Cash Input */}
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <span className="text-sm font-bold text-muted-500 w-12">
-                                                                            LP
-                                                                            CASH
-                                                                        </span>
-                                                                        <input
-                                                                            type="number"
-                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
-                                                                            min={0}
-                                                                            value={getCost(
-                                                                                "LP",
-                                                                                "cash",
-                                                                            )}
-                                                                            onChange={(
-                                                                                e,
-                                                                            ) =>
-                                                                                handleMatrixChange203(
-                                                                                    i,
-                                                                                    ec,
-                                                                                    "LP",
-                                                                                    e
-                                                                                        .target
-                                                                                        .valueAsNumber ||
-                                                                                        0,
-                                                                                    "foreign_physical_targets",
-                                                                                    "cash",
-                                                                                )
-                                                                            }
-                                                                        />
-                                                                    </div>
-
-                                                                    {/* LP Non-Cash Input */}
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <span className="text-sm font-bold text-muted-500 w-12">
-                                                                            LP
-                                                                            NON-CASH
-                                                                        </span>
-                                                                        <input
-                                                                            type="number"
-                                                                            className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
-                                                                            min={
-                                                                                0
-                                                                            }
-                                                                            value={getCost(
-                                                                                "LP",
-                                                                                "non_cash",
-                                                                            )}
-                                                                            onChange={(
-                                                                                e,
-                                                                            ) =>
-                                                                                handleMatrixChange203(
-                                                                                    i,
-                                                                                    ec,
-                                                                                    "LP",
-                                                                                    e
-                                                                                        .target
-                                                                                        .valueAsNumber ||
-                                                                                        0,
-                                                                                    "foreign_physical_targets",
-                                                                                    "non_cash",
-                                                                                )
-                                                                            }
-                                                                        />
-                                                                    </div>
-
-                                                                    {/* GOP Input */}
-                                                                    <div className="flex items-center justify-between gap-2">
-                                                                        <span className="text-sm font-bold text-muted-500 w-12">
-                                                                            GOP
-                                                                        </span>
-                                                                        <input
-                                                                            type="number"
-                                                                            className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                                                                            min={0}
-                                                                            value={getCost(
-                                                                                "GOP",
-                                                                            )}
-                                                                            onChange={(
-                                                                                e,
-                                                                            ) =>
-                                                                                handleMatrixChange203(
-                                                                                    i,
-                                                                                    ec,
-                                                                                    "GOP",
-                                                                                    e
-                                                                                        .target
-                                                                                        .valueAsNumber ||
-                                                                                        0,
-                                                                                    "foreign_physical_targets",
-                                                                                )
-                                                                            }
-                                                                        />
-                                                                    </div>
-
-                                                                    {/* Sub-total for this Expense Class */}
-                                                                    <div className="mt-1 pt-1 border-t border-dashed border-muted-200 flex justify-between items-center">
-                                                                        <span className="text-[9px] uppercase tracking-wider font-semibold text-muted-400">
-                                                                            Total
-                                                                        </span>
-                                                                        <span className="text-sm font-mono font-bold text-secondary-foreground">
-                                                                            {cellTotal.toLocaleString(
-                                                                                undefined,
-                                                                                {
-                                                                                    minimumFractionDigits: 2,
-                                                                                },
-                                                                            )}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                        );
-                                                    })}
-                                                    <td className="py-3 px-2 text-center align-top">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() =>
-                                                                removeRow(
-                                                                    "foreign_physical_targets",
-                                                                    i,
-                                                                )
-                                                            }
-                                                            className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                        >
-                                                            ✕
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ),
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
+                                </div>
+                            </CollapsibleTableSection>
                         </div>
                         {getErrorsForPath("foreign_physical_targets").length >
                             0 && (
@@ -3739,7 +4051,7 @@ export default function ProposalForm({
                                 ).map((msg, i) => (
                                     <p
                                         key={i}
-                                        className="text-[11px] text-red-600 font-semibold flex items-center gap-1"
+                                        className="text-sm text-red-600 font-semibold flex items-center gap-1"
                                     >
                                         <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
                                         {msg}
@@ -3769,7 +4081,7 @@ export default function ProposalForm({
                         placeholder="State why this DBM overwrite or change is being made."
                         required
                     />
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                         Required for DBM overrides and recorded in the
                         administrative override history.
                     </p>
@@ -3787,13 +4099,16 @@ export default function ProposalForm({
                     <textarea
                         id="override-remarks"
                         value={overrideRemarks}
-                        onChange={(event) => setOverrideRemarks(event.target.value)}
+                        onChange={(event) =>
+                            setOverrideRemarks(event.target.value)
+                        }
                         className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
                         placeholder="State why this DBM overwrite or change is being made."
                         required
                     />
-                    <p className="text-xs text-muted-foreground">
-                        Required for DBM overrides and recorded in the administrative override history.
+                    <p className="text-sm text-muted-foreground">
+                        Required for DBM overrides and recorded in the
+                        administrative override history.
                     </p>
                 </div>
             )}
@@ -3809,13 +4124,16 @@ export default function ProposalForm({
                     <textarea
                         id="override-remarks"
                         value={overrideRemarks}
-                        onChange={(event) => setOverrideRemarks(event.target.value)}
+                        onChange={(event) =>
+                            setOverrideRemarks(event.target.value)
+                        }
                         className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
                         placeholder="State why this DBM overwrite or change is being made."
                         required
                     />
-                    <p className="text-xs text-muted-foreground">
-                        Required for DBM overrides and recorded in the administrative override history.
+                    <p className="text-sm text-muted-foreground">
+                        Required for DBM overrides and recorded in the
+                        administrative override history.
                     </p>
                 </div>
             )}
@@ -3825,9 +4143,7 @@ export default function ProposalForm({
                     <button
                         type="submit"
                         disabled={isLoading}
-                        onClick={() =>
-                            setSubmitAction("draft")
-                        }
+                        onClick={() => setSubmitAction("draft")}
                         className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
                     >
                         Save Draft
