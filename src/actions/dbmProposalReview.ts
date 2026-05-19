@@ -182,15 +182,25 @@ export async function loadDbmProposalReview(params: {
 
 export async function rejectProposalAction(formData: FormData) {
     await requireDbm();
+    const session = await sessionWithEntity();
+    if (!session) throw new Error("Unauthorized");
+
     const parsed = RejectProposalSchema.parse({
         proposal_id: formData.get("proposal_id"),
     });
-    await FormRepository.updateFormAuthStatus(parsed.proposal_id, "rejected");
-    await PapRepository.updatePapProjectStatusForFormWithExecutor(
-        db,
-        parsed.proposal_id,
-        "rejected",
-    );
+    await db.transaction().execute(async (trx) => {
+        await FormRepository.updateFormAuthStatusWithExecutor(parsed.proposal_id, "rejected", trx);
+        await PapRepository.updatePapProjectStatusForFormWithExecutor(
+            trx,
+            parsed.proposal_id,
+            "rejected",
+        );
+        await ProposalRepository.rejectProposalAllocationsWithExecutor(
+            trx,
+            parsed.proposal_id,
+            session.user.id,
+        );
+    });
     revalidatePath("/dbm/proposals");
 }
 
@@ -397,6 +407,11 @@ export async function submitSignedBulkProposalReject(input: {
 
             await FormRepository.updateFormAuthStatusWithExecutor(item.proposalId, rejectStatus, trx);
             await PapRepository.updatePapProjectStatusForFormWithExecutor(trx, item.proposalId, "rejected");
+            await ProposalRepository.rejectProposalAllocationsWithExecutor(
+                trx,
+                item.proposalId,
+                session.user.id,
+            );
 
             await AuditRepository.createLogWithExecutor(trx, {
                 entity_id: lockedForm.entity_id,

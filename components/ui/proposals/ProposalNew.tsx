@@ -77,7 +77,7 @@ export default function ProposalClientWrapper({
                 />
             </div>
 
-            <footer className="text-center text-xs text-muted-foreground pt-10">
+            <footer className="text-center text-sm text-muted-foreground/75 pb-2">
                 <p>
                     Ensure all required fields marked in the {type} manual are
                     filled before submission.

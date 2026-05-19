@@ -386,9 +386,87 @@ export async function updatePapProjectStatusForFormWithExecutor(
             updated_at: new Date(),
         })
         .where('id', 'in', linkedPaps.map((row) => row.pap_id))
+        .where('project_status', '=', 'proposed')
         .executeTakeFirst()
 
     return { updatedCount: Number(result.numUpdatedRows ?? 0) }
+}
+
+export async function updatePapProjectTypeForFormWithExecutor(
+    executor: DbExecutor,
+    formId: string,
+    projectType: string,
+) {
+    const linkedPaps = await executor
+        .selectFrom('form_paps')
+        .select('pap_id')
+        .where('form_id', '=', formId)
+        .execute()
+
+    if (linkedPaps.length === 0) return { updatedCount: 0 }
+
+    const result = await executor
+        .updateTable('paps')
+        .set({
+            project_type: projectType,
+            updated_at: new Date(),
+        })
+        .where('id', 'in', linkedPaps.map((row) => row.pap_id))
+        .executeTakeFirst()
+
+    return { updatedCount: Number(result.numUpdatedRows ?? 0) }
+}
+
+export async function finalizeProposedPapStatusesAfterGaaWithExecutor(
+    executor: DbExecutor,
+    fiscalYear: number,
+) {
+    const rows = await executor
+        .selectFrom('paps')
+        .leftJoin('budget_allocations', (join) =>
+            join
+                .onRef('budget_allocations.pap_code', '=', 'paps.id')
+                .on('budget_allocations.budget_cycle_year', '=', fiscalYear),
+        )
+        .select(({ fn }) => [
+            'paps.id',
+            fn.count<string>('budget_allocations.id').as('allocation_count'),
+            sql<string>`SUM(CASE WHEN budget_allocations.gaa_amt > 0 THEN 1 ELSE 0 END)`.as('active_line_item_count'),
+        ])
+        .where('paps.project_status', '=', 'proposed')
+        .groupBy('paps.id')
+        .execute()
+
+    const approvedPapIds = rows
+        .filter((row) => Number(row.active_line_item_count ?? 0) > 0)
+        .map((row) => row.id)
+    const rejectedPapIds = rows
+        .filter((row) =>
+            Number(row.allocation_count ?? 0) > 0 &&
+            Number(row.active_line_item_count ?? 0) === 0
+        )
+        .map((row) => row.id)
+
+    if (approvedPapIds.length > 0) {
+        await executor
+            .updateTable('paps')
+            .set({ project_status: 'approved', updated_at: new Date() })
+            .where('id', 'in', approvedPapIds)
+            .execute()
+    }
+
+    if (rejectedPapIds.length > 0) {
+        await executor
+            .updateTable('paps')
+            .set({ project_status: 'rejected', updated_at: new Date() })
+            .where('id', 'in', rejectedPapIds)
+            .execute()
+    }
+
+    return {
+        approvedCount: approvedPapIds.length,
+        rejectedCount: rejectedPapIds.length,
+    }
 }
 
 // CREATE

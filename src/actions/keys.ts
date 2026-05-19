@@ -170,6 +170,10 @@ async function advanceAllocationPhaseAfterApproval(formType: string, fiscalYear:
                 'gaa_approved',
                 trx
             )
+            await papRepository.finalizeProposedPapStatusesAfterGaaWithExecutor(
+                trx,
+                fiscalYear
+            )
             await budgetSettingsRepository.editBudgetCycleWithExecutor(
                 fiscalYear,
                 'locked',
@@ -514,14 +518,10 @@ export async function verifyAndSubmitSignature(
                 tableName === 'project_proposals' &&
                 nextStatus === 'approved'
             ) {
-                await papRepository.updatePapProjectStatusForFormWithExecutor(
-                    trx,
-                    formId,
-                    'approved'
-                )
                 await proposalRepository.createAllocationsForApprovedProposalWithExecutor(
                     trx,
-                    formId
+                    formId,
+                    session.user.id
                 )
             }
 
@@ -678,6 +678,11 @@ export async function verifyAndRejectSignature(
                     trx,
                     formId,
                     'rejected'
+                )
+                await proposalRepository.rejectProposalAllocationsWithExecutor(
+                    trx,
+                    formId,
+                    session.user.id
                 )
             }
 

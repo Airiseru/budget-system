@@ -1404,7 +1404,7 @@ export default function ProposalForm({
     return (
         <form
             onSubmit={handleSubmit}
-            className="max-w-5xl mx-auto mt-8 px-4 pb-24 space-y-8"
+            className="max-w-5xl mx-auto mt-8 px-4 space-y-8"
         >
             {Object.keys(errors).length > 0 && (
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">
@@ -4098,79 +4098,33 @@ export default function ProposalForm({
                 </div>
             )}
 
-            {isDbmOverwrite && (
-                <div className="rounded-lg border border-border bg-card p-4 space-y-2">
-                    <label
-                        htmlFor="override-remarks"
-                        className="text-sm font-bold text-secondary-foreground"
-                    >
-                        DBM Override Remarks
-                    </label>
-                    <textarea
-                        id="override-remarks"
-                        value={overrideRemarks}
-                        onChange={(event) =>
-                            setOverrideRemarks(event.target.value)
-                        }
-                        className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
-                        placeholder="State why this DBM overwrite or change is being made."
-                        required
-                    />
-                    <p className="text-sm text-muted-foreground">
-                        Required for DBM overrides and recorded in the
-                        administrative override history.
-                    </p>
-                </div>
-            )}
-
-            {isDbmOverwrite && (
-                <div className="rounded-lg border border-border bg-card p-4 space-y-2">
-                    <label
-                        htmlFor="override-remarks"
-                        className="text-sm font-bold text-secondary-foreground"
-                    >
-                        DBM Override Remarks
-                    </label>
-                    <textarea
-                        id="override-remarks"
-                        value={overrideRemarks}
-                        onChange={(event) =>
-                            setOverrideRemarks(event.target.value)
-                        }
-                        className="min-h-24 w-full rounded border border-border bg-background px-3 py-2 text-sm"
-                        placeholder="State why this DBM overwrite or change is being made."
-                        required
-                    />
-                    <p className="text-sm text-muted-foreground">
-                        Required for DBM overrides and recorded in the
-                        administrative override history.
-                    </p>
-                </div>
-            )}
-
-            <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 flex justify-end gap-3 z-50">
-                {!isDbmOverwrite && (
+            <div className="sticky bottom-0 z-40 -mx-[calc((100vw-100%)/2)] border-t bg-background/95 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
+                <div className="mx-auto flex max-w-5xl justify-end gap-3">
+                    {!isDbmOverwrite && (
+                        <button
+                            type="submit"
+                            disabled={isLoading}
+                            onClick={() => setSubmitAction("draft")}
+                            className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
+                        >
+                            Save Draft
+                        </button>
+                    )}
                     <button
                         type="submit"
                         disabled={isLoading}
-                        onClick={() => setSubmitAction("draft")}
-                        className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
+                        onClick={() =>
+                            setSubmitAction(
+                                isDbmOverwrite
+                                    ? "pending_dbm"
+                                    : "pending_budget",
+                            )
+                        }
+                        className="px-6 py-2 bg-secondary-foreground-600 text-primary-foreground font-bold rounded-lg shadow-md hover:bg-secondary-foreground-700"
                     >
-                        Save Draft
+                        {isDbmOverwrite ? "Overwrite Form" : "Submit Proposal"}
                     </button>
-                )}
-                <button
-                    type="submit"
-                    disabled={isLoading}
-                    onClick={() =>
-                        setSubmitAction(
-                            isDbmOverwrite ? "pending_dbm" : "pending_budget",
-                        )
-                    }
-                    className="px-6 py-2 bg-secondary-foreground-600 text-primary-foreground font-bold rounded-lg shadow-md hover:bg-secondary-foreground-700"
-                >
-                    {isDbmOverwrite ? "Overwrite Form" : "Submit Proposal"}
-                </button>
+                </div>
             </div>
         </form>
     );

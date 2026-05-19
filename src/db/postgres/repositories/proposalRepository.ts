@@ -505,9 +505,7 @@ export async function createProjectProposal(
                     purpose: payload.purpose || "No purpose provided.",
                     beneficiaries: payload.beneficiaries || "General Public",
 
-                    project_type: payload.is_infrastructure
-                        ? "infrastructure"
-                        : "non-infrastructure",
+                    project_type: getProjectTypeFromProposalFlags(payload),
                     project_status: "proposed",
                     category: payload.type === "202" ? "local" : "foreign",
                     identifier_code: payload.type === "202" ? "2" : "3",
@@ -885,9 +883,18 @@ function getComponentAllocationKey(component: {
     ].join("::");
 }
 
+function getProjectTypeFromProposalFlags(proposal: {
+    is_infrastructure: boolean;
+    for_ict?: boolean | null;
+}) {
+    if (proposal.for_ict) return "Information & Communications Technology project";
+    return proposal.is_infrastructure ? "infrastructure" : "non-infrastructure";
+}
+
 export async function createAllocationsForApprovedProposalWithExecutor(
     trx: Transaction<Database>,
     approvedFormId: string,
+    performedBy: string,
 ) {
     const approvedForm = await trx
         .selectFrom("forms")
@@ -896,7 +903,7 @@ export async function createAllocationsForApprovedProposalWithExecutor(
         .executeTakeFirstOrThrow();
     const proposal = await trx
         .selectFrom("project_proposals")
-        .select("proposal_year")
+        .select(["proposal_year", "is_infrastructure", "for_ict"])
         .where("id", "=", approvedFormId)
         .executeTakeFirstOrThrow();
     const originalFormId = approvedForm.parent_form_id ?? approvedForm.id;
@@ -948,6 +955,24 @@ export async function createAllocationsForApprovedProposalWithExecutor(
 
     let createdCount = 0;
 
+    const workflowLogs: Array<{
+        allocation_id: string;
+        workflow_stage: "dbm_review";
+        remarks: string;
+        amt_before: number | null;
+        amt_after: number | null;
+        performed_by: string;
+    }> = [];
+
+    await trx
+        .updateTable("paps")
+        .set({
+            project_type: getProjectTypeFromProposalFlags(proposal),
+            updated_at: new Date(),
+        })
+        .where("id", "=", approvedPap.pap_id)
+        .execute();
+
     for (const component of approvedComponents) {
         if (!component.item_catalog_id) continue;
         const itemCatalogId = component.item_catalog_id;
@@ -972,6 +997,12 @@ export async function createAllocationsForApprovedProposalWithExecutor(
             .executeTakeFirst();
 
         if (duplicate) {
+            const existingAllocation = await trx
+                .selectFrom("budget_allocations")
+                .select(["dbm_rec_amt"])
+                .where("id", "=", duplicate.id)
+                .executeTakeFirstOrThrow();
+
             await trx
                 .updateTable("budget_allocations")
                 .set({
@@ -985,8 +1016,17 @@ export async function createAllocationsForApprovedProposalWithExecutor(
                 })
                 .where("id", "=", duplicate.id)
                 .execute();
+
+            workflowLogs.push({
+                allocation_id: duplicate.id,
+                workflow_stage: "dbm_review",
+                remarks: "Updated tier 2 allocation from DBM-approved proposal.",
+                amt_before: Number(existingAllocation.dbm_rec_amt ?? 0),
+                amt_after: dbmRecommendedAmount,
+                performed_by: performedBy,
+            });
         } else {
-            await trx
+            const createdAllocation = await trx
                 .insertInto("budget_allocations")
                 .values({
                     entity_id: approvedForm.entity_id,
@@ -1007,10 +1047,30 @@ export async function createAllocationsForApprovedProposalWithExecutor(
                     origin_tag: "agency_proposed",
                     auth_status: "dbm_approved",
                 })
-                .execute();
+                .returning(["id"])
+                .executeTakeFirstOrThrow();
+
+            const allocationId = createdAllocation.id;
+            if (allocationId) {
+                workflowLogs.push({
+                    allocation_id: allocationId,
+                    workflow_stage: "dbm_review",
+                    remarks: "Created tier 2 allocation from DBM-approved proposal.",
+                    amt_before: null,
+                    amt_after: dbmRecommendedAmount,
+                    performed_by: performedBy,
+                });
+            }
         }
 
         createdCount += 1;
+    }
+
+    if (workflowLogs.length > 0) {
+        await trx
+            .insertInto("allocation_workflow_logs")
+            .values(workflowLogs)
+            .execute();
     }
 
     return { createdCount };
@@ -1753,6 +1813,99 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
     });
 
     return proposals.length;
+}
+
+export async function rejectProposalAllocationsWithExecutor(
+    executor: Transaction<Database>,
+    proposalId: string,
+    performedBy: string,
+) {
+    const form = await executor
+        .selectFrom("forms")
+        .select(["id", "entity_id", "parent_form_id"])
+        .where("id", "=", proposalId)
+        .executeTakeFirstOrThrow();
+    const originalFormId = form.parent_form_id ?? form.id;
+    const linkedPap = await executor
+        .selectFrom("form_paps")
+        .select("pap_id")
+        .where("form_id", "=", proposalId)
+        .executeTakeFirst();
+    const proposal = await executor
+        .selectFrom("project_proposals")
+        .select("proposal_year")
+        .where("id", "=", proposalId)
+        .executeTakeFirstOrThrow();
+
+    if (!linkedPap) return { updatedCount: 0 };
+
+    const components = await executor
+        .selectFrom("cost_by_components")
+        .select(["item_catalog_id", "fund_code", "specific_description"])
+        .where("proposal_id", "=", originalFormId)
+        .where("item_catalog_id", "is not", null)
+        .execute();
+
+    if (components.length === 0) return { updatedCount: 0 };
+
+    let updatedCount = 0;
+    const workflowLogs: Array<{
+        allocation_id: string;
+        workflow_stage: "dbm_review";
+        remarks: string;
+        amt_before: number | null;
+        amt_after: number | null;
+        performed_by: string;
+    }> = [];
+
+    for (const component of components) {
+        if (!component.item_catalog_id) continue;
+
+        const allocation = await executor
+            .selectFrom("budget_allocations")
+            .select(["id", "dbm_rec_amt"])
+            .where("budget_cycle_year", "=", proposal.proposal_year)
+            .where("entity_id", "=", form.entity_id)
+            .where("pap_code", "=", linkedPap.pap_id)
+            .where("item_catalog_id", "=", component.item_catalog_id)
+            .where((eb) =>
+                component.fund_code
+                    ? eb("fund_code", "=", component.fund_code)
+                    : eb("fund_code", "is", null),
+            )
+            .executeTakeFirst();
+
+        if (!allocation) continue;
+
+        await executor
+            .updateTable("budget_allocations")
+            .set({
+                dbm_rec_amt: 0,
+                auth_status: "rejected",
+                updated_at: sql`now()`,
+            })
+            .where("id", "=", allocation.id)
+            .execute();
+
+        workflowLogs.push({
+            allocation_id: allocation.id,
+            workflow_stage: "dbm_review",
+            remarks: "Rejected by DBM through proposal review.",
+            amt_before: Number(allocation.dbm_rec_amt ?? 0),
+            amt_after: 0,
+            performed_by: performedBy,
+        });
+        updatedCount += 1;
+    }
+
+    if (workflowLogs.length > 0) {
+        await executor
+            .insertInto("allocation_workflow_logs")
+            .values(workflowLogs)
+            .execute();
+    }
+
+    return { updatedCount };
 }
 
 export async function moveDeptProposalToRank(

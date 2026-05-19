@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { sessionWithEntity } from "@/src/actions/auth";
 import ProposalClientWrapper from "@/components/ui/proposals/ProposalNew";
 import {
+    createEntityRepository,
     createItemRepository,
     createProposalRepository,
     createUacsRepository,
@@ -14,6 +15,7 @@ import {
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
+const EntityRepo = createEntityRepository(process.env.DATABASE_TYPE || "postgres");
 const ItemRepo = createItemRepository(process.env.DATABASE_TYPE || "postgres");
 const UacsRepo = createUacsRepository(process.env.DATABASE_TYPE || "postgres");
 
@@ -62,9 +64,10 @@ export default async function EditProposalPage({
         redirect("/forms/proposals?error=unauthorized");
     }
 
-    const [itemCatalogs, fundingSources] = await Promise.all([
+    const [itemCatalogs, fundingSources, ownerEntityName] = await Promise.all([
         ItemRepo.listAllItemCatalog(),
         UacsRepo.listFundingSources(),
+        EntityRepo.getFullEntityNameById(project.entity_id),
     ]);
 
     return (
@@ -72,8 +75,8 @@ export default async function EditProposalPage({
             project={project} // Pass the fetched data here
             type={project.type} // "202" or "203"
             userId={session.user.id}
-            entityName={session.user_entity.entity_name || "Unknown Agency"}
-            entityId={session.user.entity_id}
+            entityName={ownerEntityName || "Unknown Agency"}
+            entityId={project.entity_id}
             itemCatalogs={itemCatalogs}
             fundingSources={fundingSources}
         />
