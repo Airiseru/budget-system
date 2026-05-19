@@ -57,6 +57,12 @@ export type AuditEventType =
     | "EDIT" // users, entities
     | "APPROVE_USER"
     | "REJECT_USER"
+    | "UPDATE_ALLOCATION_AMOUNT"
+    | "VETO_NEP_ALLOCATION"
+    | "UPDATE_ALLOCATION_VALIDITY"
+    | "INSERT_LEGISLATIVE_ALLOCATION"
+    | "REMOVE_GAA_ALLOCATION"
+    | "BULK_UPDATE_ALLOCATION_VALIDITY"
 
 export const REQUIRES_SIGNATURE: AuditEventType[] = [
     "SIGN",

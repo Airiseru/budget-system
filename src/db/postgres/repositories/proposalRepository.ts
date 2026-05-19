@@ -1582,7 +1582,17 @@ export async function listDbmProposalReviewRows(
         : [];
 
     const componentsByProposal = new Map<string, DbmProposalComponent[]>();
+    const seenComponentIdsByProposal = new Map<string, Set<string>>();
     for (const component of components) {
+        const seenComponentIds =
+            seenComponentIdsByProposal.get(component.proposal_id) ??
+            new Set<string>();
+
+        if (seenComponentIds.has(component.id)) continue;
+
+        seenComponentIds.add(component.id);
+        seenComponentIdsByProposal.set(component.proposal_id, seenComponentIds);
+
         const current = componentsByProposal.get(component.proposal_id) ?? [];
         current.push(component);
         componentsByProposal.set(component.proposal_id, current);

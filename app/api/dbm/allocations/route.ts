@@ -1,12 +1,18 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { auth } from '@/src/lib/auth'
-import { createBudgetAllocationRepository, createBudgetSettingsRepository } from '@/src/db/factory'
+import { createAuditRepository, createBudgetAllocationRepository, createBudgetSettingsRepository } from '@/src/db/factory'
 import { LegislativeInsertionSchema } from '@/src/lib/validations/budgetAllocations'
 import { parseDateOnlyToUtcNoon } from '@/src/lib/dateOnly'
+import {
+    getAllocationAuditRecordId,
+    normalizeAuditDate,
+    type AllocationAuditPayload,
+} from '@/src/lib/allocation-audit'
 
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
+const AuditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 
 export async function POST(request: Request) {
     const session = await auth.api.getSession({ headers: await headers() })
@@ -70,6 +76,35 @@ export async function POST(request: Request) {
             amt_after: created.gaa_amt,
             performed_by: session.user.id,
         })
+
+        const auditPayload: AllocationAuditPayload = {
+            allocation_id: created.id,
+            fiscal_year: activeCycle.fiscal_year,
+            workflow_stage: 'congressional_bicam',
+            inserted_allocation: {
+                entity_id: created.entity_id,
+                pap_code: created.pap_code,
+                fund_code: created.fund_code,
+                item_catalog_id: created.item_catalog_id,
+                tier: created.tier,
+                gaa_amt: Number(created.gaa_amt),
+                valid_from: normalizeAuditDate(created.valid_from),
+                valid_until: normalizeAuditDate(created.valid_until),
+            },
+            action: 'insert_legislative_allocation',
+        }
+
+        await AuditRepository.createLog({
+            entity_id: created.entity_id,
+            user_id: session.user.id,
+            event_type: 'INSERT_LEGISLATIVE_ALLOCATION',
+            table_name: 'budget_allocations',
+            record_id: getAllocationAuditRecordId('gaa', activeCycle.fiscal_year),
+            payload: auditPayload,
+            changed_at: new Date(),
+            public_key_snapshot: null,
+            signature: null,
+        }, null)
 
         return NextResponse.json({ success: true, allocation: created })
     } catch (error) {

@@ -1,11 +1,22 @@
 import { NextResponse } from 'next/server'
 import { headers } from 'next/headers'
 import { auth } from '@/src/lib/auth'
-import { createBudgetAllocationRepository, createBudgetSettingsRepository } from '@/src/db/factory'
+import { createAuditRepository, createBudgetAllocationRepository, createBudgetSettingsRepository } from '@/src/db/factory'
 import { parseDateOnlyToUtcNoon } from '@/src/lib/dateOnly'
+import {
+    getAllocationAmountAuditEventType,
+    getAllocationAuditRecordId,
+    getAllocationAuditRecordTypeForField,
+    hasFieldChanges,
+    normalizeAuditDate,
+    type AllocationAuditPayload,
+    type AllocationFieldChange,
+} from '@/src/lib/allocation-audit'
+import type { AuditEventType } from '@/src/types/audit'
 
 const BudgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
+const AuditRepository = createAuditRepository(process.env.DATABASE_TYPE || 'postgres')
 
 function clampNonNegativeNumber(rawValue: string) {
     const parsed = Number(rawValue || 0)
@@ -116,6 +127,66 @@ export async function PATCH(
         amt_after: amountAfter,
         performed_by: session.user.id,
     })
+
+    let auditEventType: AuditEventType | null = null
+    let auditRecordField = field
+    let fieldChanges: Record<string, AllocationFieldChange> = {}
+
+    if (action === 'remove_line_item') {
+        auditEventType = 'REMOVE_GAA_ALLOCATION'
+        auditRecordField = 'gaa_amt'
+        fieldChanges = {
+            gaa_amt: {
+                from: amountBefore,
+                to: amountAfter,
+            },
+        }
+    } else if (field === 'valid_from' || field === 'valid_until') {
+        auditEventType = 'UPDATE_ALLOCATION_VALIDITY'
+        fieldChanges = {
+            [field]: {
+                from: normalizeAuditDate(allocation[field]),
+                to: normalizeAuditDate(updated[field]),
+            },
+        }
+    } else if (field && amountBefore !== null && amountAfter !== null) {
+        auditEventType = getAllocationAmountAuditEventType({
+            field,
+            before: amountBefore,
+            after: amountAfter,
+        })
+        fieldChanges = {
+            [field]: {
+                from: amountBefore,
+                to: amountAfter,
+            },
+        }
+    }
+
+    if (auditEventType && auditRecordField && hasFieldChanges(fieldChanges)) {
+        const recordType = action === 'remove_line_item'
+            ? 'gaa'
+            : getAllocationAuditRecordTypeForField(auditRecordField)
+        const auditPayload: AllocationAuditPayload = {
+            allocation_id: id,
+            fiscal_year: allocation.budget_cycle_year,
+            workflow_stage: action === 'remove_line_item' ? 'congressional_bicam' : WORKFLOW_STAGE_BY_FIELD[auditRecordField],
+            field_changes: fieldChanges,
+            action: action === 'remove_line_item' ? 'remove_line_item' : 'update_field',
+        }
+
+        await AuditRepository.createLog({
+            entity_id: allocation.entity_id,
+            user_id: session.user.id,
+            event_type: auditEventType,
+            table_name: 'budget_allocations',
+            record_id: getAllocationAuditRecordId(recordType, allocation.budget_cycle_year),
+            payload: auditPayload,
+            changed_at: new Date(),
+            public_key_snapshot: null,
+            signature: null,
+        }, null)
+    }
 
     return NextResponse.json({ success: true, allocation: updated })
 }

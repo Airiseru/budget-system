@@ -156,6 +156,7 @@ export type BulkValidityUpdateOptions = {
 
 export type AllocationValidityTarget = {
     id: string;
+    entity_id: string;
     valid_from: Date | null;
     valid_until: Date | null;
 };
@@ -856,7 +857,7 @@ export async function listAllocationsForValidityUpdate(
 ) {
     let query = db
         .selectFrom("budget_allocations")
-        .select(["id", "valid_from", "valid_until"])
+        .select(["id", "entity_id", "valid_from", "valid_until"])
         .where("budget_cycle_year", "=", fiscalYear);
 
     if (expenseClass) {
