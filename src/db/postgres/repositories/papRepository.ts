@@ -3,6 +3,7 @@ import { Pap, NewPap, PapUpdate } from '../../../types/pap'
 import { Kysely, sql, Transaction } from 'kysely'
 import { PAP_PROJECT_STATUS_TYPES } from '@/src/lib/constants'
 import type { Database } from '@/src/types'
+import { getAccessibleEntityIds } from './entityRepository'
 
 type DbExecutor = Kysely<Database> | Transaction<Database>
 
@@ -237,6 +238,29 @@ export async function getPapOptions(): Promise<PapOption[]> {
             'paps.entity_id as entity_id',
             sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
         ])
+        .orderBy('paps.title', 'asc')
+        .execute()
+}
+
+export async function getPapOptionsForEntityHierarchy(entityId: string): Promise<PapOption[]> {
+    const accessibleEntityIds = await getAccessibleEntityIds(entityId)
+
+    let query = createPapBaseQuery()
+        .select([
+            'paps.id as id',
+            'paps.title as title',
+            'paps.entity_id as entity_id',
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+        ])
+
+    query = accessibleEntityIds.length > 0
+        ? query.where(({ eb, or }) => or([
+            eb('paps.entity_id', 'is', null),
+            eb('paps.entity_id', 'in', accessibleEntityIds),
+        ]))
+        : query.where('paps.entity_id', 'is', null)
+
+    return await query
         .orderBy('paps.title', 'asc')
         .execute()
 }

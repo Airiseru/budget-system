@@ -37,7 +37,7 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const summary = await StaffingRepo.getStaffingWithFormById(id)
     if (!summary) notFound()
 
-    const paps = await PapRepo.getPapByEntityId(summary.entity_id)
+    const paps = await PapRepo.getPapOptionsForEntityHierarchy(summary.entity_id)
     const workflow = STAFFING_WORKFLOW
     const currentSignatoryRole = getCurrentSignatoryRole(summary.auth_status ?? "", workflow)
     

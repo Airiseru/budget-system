@@ -73,7 +73,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
     }
 
     const papRepo = createPapRepository('postgres');
-    const paps = await papRepo.getAllPaps();
+    const paps = await papRepo.getPapOptionsForEntityHierarchy(formRecord.entity_id);
 
     const schedule = await SalaryRepository.getLatestSalarySchedule()
 
@@ -102,7 +102,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
                 highestSG={highestSG}
                 fiscalYear = {staff.fiscal_year}
                 staff={staff}
-                availablePaps={paps.map(p => ({ id: p.id, title: p.title }))} 
+                availablePaps={paps} 
                 userId={session.user.id}
                 entityId={formRecord.entity_id} 
                 entityName={ownerEntityName || "Unknown Agency"} 

@@ -29,7 +29,7 @@ export default async function NewStaffingPage() {
     }
 
     const PapRepository = createPapRepository('postgres');
-    const paps = await PapRepository.getAllPaps();
+    const paps = await PapRepository.getPapOptionsForEntityHierarchy(session.user.entity_id);
 
     const SalaryRepository = createSalaryRepository('postgres')
     const schedule = await SalaryRepository.getLatestSalarySchedule()
@@ -47,7 +47,7 @@ export default async function NewStaffingPage() {
                     compensationRules={compensationRules}
                     highestSG={highestSG}
                     fiscalYear={activeCycle.fiscal_year}
-                    availablePaps={paps.map(p => ({ id: p.id, title: p.title }))}
+                    availablePaps={paps}
                     userId={session.user.id}
                     entityId={session.user.entity_id} 
                     entityName={session.user_entity.entity_name || "Unknown Agency"} 

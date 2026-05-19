@@ -11,6 +11,9 @@ import {
     buildAutoCompensations,
 } from "@/src/lib/compensation-calc";
 import React from "react";
+import SearchableComboboxField, {
+    SearchableComboboxOption,
+} from "@/components/ui/dbm/SearchableComboboxField";
 
 interface StaffingSummaryProps {
     schedule: AllSalaryRates;
@@ -18,7 +21,7 @@ interface StaffingSummaryProps {
     highestSG: number;
     fiscalYear?: number;
     staff?: StaffingSummaryWithPositions;
-    availablePaps: { id: string; title: string }[];
+    availablePaps: { id: string; title: string; entity_name?: string | null }[];
     userId: string;
     entityId: string;
     entityName: string;
@@ -167,6 +170,12 @@ export default function StaffForm({
     const [submitAction, setSubmitAction] = useState<
         "draft" | "pending_personnel" | "pending_dbm"
     >("draft");
+    const papOptions: SearchableComboboxOption[] = availablePaps.map((pap) => ({
+        value: pap.id,
+        label: pap.entity_name
+            ? `${pap.title} (${pap.entity_name})`
+            : `${pap.title} (All entities)`,
+    }));
 
     // ---- styling ----
 
@@ -382,20 +391,20 @@ export default function StaffForm({
                 {/* main position row */}
                 <tr className="hover:bg-muted/50 border-y">
                     <td className="p-2 border-r align-top">
-                        <select
-                            className={`w-full p-1 border rounded bg-card text-sm ${getFieldStyle(`${path}.pap_id`)}`}
-                            value={pos.pap_id}
-                            onChange={(e) =>
-                                handlePapChange(index, e.target.value)
-                            }
+                        <div
+                            className={`rounded-md ${fieldErrors[`${path}.pap_id`] ? "ring-1 ring-destructive" : ""}`}
                         >
-                            <option value="">Select PAP...</option>
-                            {availablePaps.map((pap) => (
-                                <option key={pap.id} value={pap.id}>
-                                    {pap.title}
-                                </option>
-                            ))}
-                        </select>
+                            <SearchableComboboxField
+                                items={papOptions}
+                                value={pos.pap_id}
+                                placeholder="Select PAP..."
+                                searchPlaceholder="Search PAPs"
+                                emptyText="No PAPs found."
+                                onValueChange={(value) =>
+                                    handlePapChange(index, value)
+                                }
+                            />
+                        </div>
                         <select
                             className={`w-full mt-2 p-1 border rounded text-sm font-medium ${getFieldStyle(`${path}.staff_type`)}`}
                             value={pos.staff_type}
@@ -416,7 +425,7 @@ export default function StaffForm({
                     <td className="p-2 border-r align-top space-y-2">
                         <input
                             placeholder="Position Title"
-                            className={`w-full p-1 border rounded font-medium text-sm ${getFieldStyle(`${path}.position_title`)}`}
+                            className={`w-full px-1 py-3 border rounded font-medium text-md ${getFieldStyle(`${path}.position_title`)}`}
                             value={pos.position_title}
                             onChange={(e) =>
                                 handlePositionChange(
@@ -761,7 +770,8 @@ export default function StaffForm({
                     </label>
                     <input
                         type="number"
-                        value={formData.fiscal_year}
+                        value={formData.fiscal_year ?? ""}
+                        min={formData.fiscal_year ?? new Date().getFullYear()}
                         onChange={(e) =>
                             setFormData({
                                 ...formData,
