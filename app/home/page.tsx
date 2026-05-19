@@ -34,6 +34,12 @@ function formatDate(value: Date | string | null | undefined) {
     }).format(new Date(value))
 }
 
+function getProjectTypeLabel(type: string | null | undefined) {
+    if (type === "202") return "Local"
+    if (type === "203") return "Foreign"
+    return "Project"
+}
+
 export default async function HomePage() {
     const session = await sessionWithEntity()
 
@@ -153,7 +159,10 @@ export default async function HomePage() {
                                         <div>
                                             <p className="font-black text-secondary-foreground">{project.title}</p>
                                             <p className="mt-1 text-sm text-muted-foreground">
-                                                FY {project.proposal_year} • BP {project.type} • Rank #{project.priority_rank}
+                                                {project.entity_name ?? "Unknown entity"} • FY {project.proposal_year}
+                                            </p>
+                                            <p className="mt-1 text-sm text-muted-foreground">
+                                                {getProjectTypeLabel(project.type)} • Rank #{project.priority_rank}
                                             </p>
                                         </div>
                                         <Badge variant="outline">

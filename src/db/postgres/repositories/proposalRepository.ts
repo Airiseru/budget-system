@@ -905,6 +905,9 @@ export async function getAllProposalSummaries(
         .selectFrom("project_proposals as pp")
         .innerJoin("forms as f", "f.id", "pp.id")
         .innerJoin("entities", "entities.id", "f.entity_id")
+        .leftJoin("departments", "departments.id", "f.entity_id")
+        .leftJoin("agencies", "agencies.id", "f.entity_id")
+        .leftJoin("operating_units", "operating_units.id", "f.entity_id")
         .select([
             "pp.id",
             "f.entity_id",
@@ -922,6 +925,7 @@ export async function getAllProposalSummaries(
             "pp.is_infrastructure",
             "pp.title",
             "entities.type as entity_type",
+            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as("entity_name"),
         ])
         .orderBy("pp.submission_date", "desc")
         .orderBy("pp.priority_rank", "asc");
@@ -940,8 +944,6 @@ export async function getAllProposalSummaries(
 
     if (hierarchyScope === "department") {
         const rows = await query
-            .leftJoin("agencies", "agencies.id", "f.entity_id")
-            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
                 or([
                     eb("f.entity_id", "=", entityId),
@@ -962,7 +964,6 @@ export async function getAllProposalSummaries(
 
     if (hierarchyScope === "agency") {
         const rows = await query
-            .leftJoin("operating_units", "operating_units.id", "f.entity_id")
             .where(({ eb, or }) =>
                 or([
                     eb("f.entity_id", "=", entityId),
