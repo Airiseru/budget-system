@@ -1,11 +1,15 @@
 import { db } from '../database'
 import { Pap, NewPap, PapUpdate } from '../../../types/pap'
 import { Kysely, sql, Transaction } from 'kysely'
-import { PAP_PROJECT_STATUS_TYPES } from '@/src/lib/constants'
+import { PAP_PROJECT_STATUS_TYPES, PAP_UACS_SEGMENTS, type PapUacsFieldName } from '@/src/lib/constants'
 import type { Database } from '@/src/types'
 import { getAccessibleEntityIds } from './entityRepository'
 
 type DbExecutor = Kysely<Database> | Transaction<Database>
+type PapUacsValues = Record<PapUacsFieldName, string | null | undefined>
+export const UNASSIGNED_PAP_FULL_CODE = '0'.repeat(
+    Object.values(PAP_UACS_SEGMENTS).reduce((total, length) => total + length, 0)
+)
 
 export type PapListFilters = {
     entity_id?: string
@@ -61,16 +65,7 @@ export type PapWithEntityDetails = Pap & {
     full_pap_code: string
 }
 
-function buildPapFullCode(pap: Pick<
-    Pap,
-    | 'cost_structure_code'
-    | 'organizational_outcome_code'
-    | 'program_code'
-    | 'subprogram_code'
-    | 'identifier_code'
-    | 'project_title_code'
-    | 'reserved_codes'
->) {
+export function buildPapFullCode(pap: PapUacsValues) {
     return [
         pap.cost_structure_code ?? '',
         pap.organizational_outcome_code ?? '',
@@ -80,6 +75,12 @@ function buildPapFullCode(pap: Pick<
         pap.project_title_code ?? '',
         pap.reserved_codes ?? '',
     ].join('')
+}
+
+export function hasPapUacsUpdate(values: Partial<Record<PapUacsFieldName, unknown>>) {
+    return Object.keys(PAP_UACS_SEGMENTS)
+        .filter((field) => field !== 'identifier_code')
+        .some((field) => values[field as PapUacsFieldName] !== undefined)
 }
 
 function createPapBaseQuery() {
@@ -101,6 +102,29 @@ export async function getAllPaps(): Promise<Pap[]> {
 
 export async function getPapById(id: string): Promise<Pap | null> {
     return await db.selectFrom('paps').selectAll().where('id', '=', id).executeTakeFirstOrThrow()
+}
+
+export async function getPapByFullCode(fullPapCode: string, excludePapId?: string) {
+    let query = db
+        .selectFrom('paps')
+        .select(['id', 'title'])
+        .where(sql<string>`
+            CONCAT(
+                COALESCE(cost_structure_code, ''),
+                COALESCE(organizational_outcome_code, ''),
+                COALESCE(program_code, ''),
+                COALESCE(subprogram_code, ''),
+                COALESCE(identifier_code, ''),
+                COALESCE(project_title_code, ''),
+                COALESCE(reserved_codes, '')
+            )
+        `, '=', fullPapCode)
+
+    if (excludePapId) {
+        query = query.where('id', '!=', excludePapId)
+    }
+
+    return await query.executeTakeFirst()
 }
 
 export async function getPapWithEntityDetailsById(id: string): Promise<PapWithEntityDetails | null> {

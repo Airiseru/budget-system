@@ -33,6 +33,30 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     // Create B-tree index for entity_id
     await db.schema.createIndex('idx_pap_entity_id').on('paps').column('entity_id').execute()
 
+    await sql`
+        CREATE UNIQUE INDEX idx_paps_unique_assigned_full_prexc_uacs_code
+        ON paps (
+            (
+                COALESCE(cost_structure_code, '') ||
+                COALESCE(organizational_outcome_code, '') ||
+                COALESCE(program_code, '') ||
+                COALESCE(subprogram_code, '') ||
+                COALESCE(identifier_code, '') ||
+                COALESCE(project_title_code, '') ||
+                COALESCE(reserved_codes, '')
+            )
+        )
+        WHERE (
+            COALESCE(cost_structure_code, '') ||
+            COALESCE(organizational_outcome_code, '') ||
+            COALESCE(program_code, '') ||
+            COALESCE(subprogram_code, '') ||
+            COALESCE(identifier_code, '') ||
+            COALESCE(project_title_code, '') ||
+            COALESCE(reserved_codes, '')
+        ) <> '000000000000000';
+    `.execute(db)
+
     // Create GIN index for full text search on title, description, and purpose
     await sql`
         CREATE INDEX idx_pap_search ON paps USING GIN(
@@ -48,6 +72,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop indexes
     await sql`DROP INDEX IF EXISTS idx_pap_search`.execute(db)
+    await sql`DROP INDEX IF EXISTS idx_paps_unique_assigned_full_prexc_uacs_code`.execute(db)
     await db.schema.dropIndex('idx_pap_entity_id').execute()
 
     // Drop tables
