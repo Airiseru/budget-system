@@ -44,6 +44,7 @@ export default function AllocationDashboard({
     selectedPapId,
     selectedExpenseClass,
     search,
+    includeRejectedPaps,
     isFiltered,
     signoff,
 }: AllocationDashboardProps) {
@@ -57,6 +58,7 @@ export default function AllocationDashboard({
     const [papId, setPapId] = useState(selectedPapId || 'all')
     const [expenseClass, setExpenseClass] = useState(selectedExpenseClass || 'all')
     const [searchValue, setSearchValue] = useState(search)
+    const [showRejectedPaps, setShowRejectedPaps] = useState(includeRejectedPaps)
     const [rowsState, setRowsState] = useState(rows)
     const [inputValues, setInputValues] = useState<Record<string, string>>({})
     const [saveStates, setSaveStates] = useState<Record<string, 'idle' | 'saving' | 'saved' | 'error'>>({})
@@ -136,10 +138,11 @@ export default function AllocationDashboard({
         setPapId(selectedPapId || 'all')
         setExpenseClass(selectedExpenseClass || 'all')
         setSearchValue(search)
+        setShowRejectedPaps(includeRejectedPaps)
         setRowsState(rows)
         setInputValues({})
         setSaveStates({})
-    }, [rows, search, selectedDepartmentId, selectedExpenseClass, selectedPapId, viewingYear])
+    }, [includeRejectedPaps, rows, search, selectedDepartmentId, selectedExpenseClass, selectedPapId, viewingYear])
 
     useEffect(() => {
         const timers = timersRef.current
@@ -154,6 +157,7 @@ export default function AllocationDashboard({
         papId?: string
         expenseClass?: string
         search?: string
+        includeRejectedPaps?: string
         page?: string
     } = {}) => {
         const params = new URLSearchParams()
@@ -162,6 +166,7 @@ export default function AllocationDashboard({
         const nextPapId = overrides.papId ?? papId
         const nextExpenseClass = overrides.expenseClass ?? expenseClass
         const nextSearch = overrides.search ?? searchValue
+        const nextIncludeRejectedPaps = overrides.includeRejectedPaps ?? (showRejectedPaps ? 'true' : 'false')
         const nextPage = overrides.page ?? String(page)
 
         if (nextYear) params.set('year', nextYear)
@@ -169,6 +174,7 @@ export default function AllocationDashboard({
         if (nextPapId && nextPapId !== 'all') params.set('papId', nextPapId)
         if (nextExpenseClass && nextExpenseClass !== 'all') params.set('expenseClass', nextExpenseClass)
         if (nextSearch.trim()) params.set('search', nextSearch.trim())
+        if (nextIncludeRejectedPaps === 'true') params.set('includeRejectedPaps', 'true')
         if (nextPage !== '1') params.set('page', nextPage)
 
         return `/dbm/allocations?${params.toString()}`
@@ -190,7 +196,7 @@ export default function AllocationDashboard({
 
     const handleSave = (
         allocationId: string,
-        field: 'dbm_rec_amt' | 'nep_amt' | 'gaa_amt' | 'valid_from' | 'valid_until',
+        field: 'dbm_rec_amt' | 'nep_amt' | 'gaa_amt' | 'valid_from' | 'valid_until' | 'release_classification',
         rawValue: string,
         action: 'update_field' | 'remove_line_item' = 'update_field'
     ) => {
@@ -437,6 +443,8 @@ export default function AllocationDashboard({
                 onSearchValueChange={setSearchValue}
                 showUacs={showUacs}
                 onShowUacsChange={setShowUacs}
+                showRejectedPaps={showRejectedPaps}
+                onShowRejectedPapsChange={setShowRejectedPaps}
                 onSubmit={() => router.push(getFilterLink({ page: '1' }))}
                 clearHref={`/dbm/allocations${yearLockedToActivePreparation && selectedYear ? `?year=${selectedYear}` : ''}`}
             />

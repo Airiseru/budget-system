@@ -56,7 +56,7 @@ export async function POST(request: Request) {
             tier: parsed.data.tier,
             specific_description: parsed.data.specific_description,
             currency: parsed.data.currency,
-            release_classification: 'unclassified',
+            release_classification: parsed.data.release_classification,
             origin_tag: 'legislative_insertion',
             proposed_amt: 0,
             dbm_rec_amt: 0,
@@ -90,6 +90,7 @@ export async function POST(request: Request) {
                 gaa_amt: Number(created.gaa_amt),
                 valid_from: normalizeAuditDate(created.valid_from),
                 valid_until: normalizeAuditDate(created.valid_until),
+                release_classification: created.release_classification,
             },
             action: 'insert_legislative_allocation',
         }

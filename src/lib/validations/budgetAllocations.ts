@@ -54,6 +54,7 @@ export const LegislativeInsertionSchema = z.object({
     specific_description: optionalEmptyString.nullable().transform((value) => value ?? null),
     currency: z.string().min(1, 'Currency is required.'),
     gaa_amt: numberField('GAA amount'),
+    release_classification: z.enum(['FLR', 'FCR']).default('FLR'),
     valid_from: optionalEmptyString.nullable().transform((value) => value ?? null),
     valid_until: optionalEmptyString.nullable().transform((value) => value ?? null),
 })

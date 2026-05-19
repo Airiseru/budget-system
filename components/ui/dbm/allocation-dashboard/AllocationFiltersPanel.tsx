@@ -27,6 +27,8 @@ type Props = {
     onSearchValueChange: (value: string) => void
     showUacs: boolean
     onShowUacsChange: (value: boolean) => void
+    showRejectedPaps: boolean
+    onShowRejectedPapsChange: (value: boolean) => void
     onSubmit: () => void
     clearHref: string
 }
@@ -50,6 +52,8 @@ export default function AllocationFiltersPanel({
     onSearchValueChange,
     showUacs,
     onShowUacsChange,
+    showRejectedPaps,
+    onShowRejectedPapsChange,
     onSubmit,
     clearHref,
 }: Props) {
@@ -190,6 +194,14 @@ export default function AllocationFiltersPanel({
                                 onChange={(event) => onShowUacsChange(event.target.checked)}
                             />
                             Show UACS
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <input
+                                type="checkbox"
+                                checked={showRejectedPaps}
+                                onChange={(event) => onShowRejectedPapsChange(event.target.checked)}
+                            />
+                            Include rejected PAPs
                         </label>
                     </div>
                 </form>

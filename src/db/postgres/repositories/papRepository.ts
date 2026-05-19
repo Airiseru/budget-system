@@ -40,6 +40,12 @@ export type PapOption = {
     title: string
     entity_id: string | null
     entity_name: string | null
+    project_status: PAP_PROJECT_STATUS_TYPES
+}
+
+type PapOptionFilters = {
+    projectStatuses?: PAP_PROJECT_STATUS_TYPES[]
+    excludeProjectStatuses?: PAP_PROJECT_STATUS_TYPES[]
 }
 
 export type PapRelatedForm = {
@@ -254,16 +260,25 @@ export async function getPapEntityOptions(): Promise<PapEntityOption[]> {
         }))
 }
 
-export async function getPapOptions(): Promise<PapOption[]> {
-    return await createPapBaseQuery()
+export async function getPapOptions(filters: PapOptionFilters = {}): Promise<PapOption[]> {
+    let query = createPapBaseQuery()
         .select([
             'paps.id as id',
             'paps.title as title',
             'paps.entity_id as entity_id',
+            'paps.project_status as project_status',
             sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
         ])
-        .orderBy('paps.title', 'asc')
-        .execute()
+
+    if (filters.projectStatuses?.length) {
+        query = query.where('paps.project_status', 'in', filters.projectStatuses)
+    }
+
+    if (filters.excludeProjectStatuses?.length) {
+        query = query.where('paps.project_status', 'not in', filters.excludeProjectStatuses)
+    }
+
+    return await query.orderBy('paps.title', 'asc').execute()
 }
 
 export async function getPapOptionsForEntityHierarchy(entityId: string): Promise<PapOption[]> {
@@ -274,6 +289,7 @@ export async function getPapOptionsForEntityHierarchy(entityId: string): Promise
             'paps.id as id',
             'paps.title as title',
             'paps.entity_id as entity_id',
+            'paps.project_status as project_status',
             sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
         ])
 

@@ -38,6 +38,7 @@ type PapOption = {
     title: string
     entity_id: string | null
     entity_name: string | null
+    project_status: string
 }
 
 type ItemOption = {

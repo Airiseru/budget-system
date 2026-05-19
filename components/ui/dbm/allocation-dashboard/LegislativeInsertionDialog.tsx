@@ -51,6 +51,7 @@ export default function LegislativeInsertionDialog({
     const orderedEntities = buildOrderedEntities(entities)
     const sortedPaps = [...paps]
         .filter((pap) => {
+            if (!['proposed', 'approved', 'for_release', 'on_going'].includes(pap.project_status)) return false
             if (!value.entity_id) return true
             return pap.entity_id === null || pap.entity_id === value.entity_id
         })
@@ -186,6 +187,22 @@ export default function LegislativeInsertionDialog({
                                 onChange={(event) => onChange({ ...value, gaa_amt: event.target.value })}
                                 className={FIELD_CLASSNAME}
                             />
+                        </div>
+
+                        <div className="space-y-2">
+                            <p className="font-medium">Release Classification</p>
+                            <Select
+                                value={value.release_classification}
+                                onValueChange={(next) => onChange({ ...value, release_classification: (next ?? 'FLR') as 'FLR' | 'FCR' })}
+                            >
+                                <SelectTrigger className={SELECT_TRIGGER_CLASSNAME}>
+                                    <SelectValue>{value.release_classification === 'FLR' ? 'FLR - For Later Release' : 'FCR - Comprehensive Release'}</SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="FLR">FLR - For Later Release</SelectItem>
+                                    <SelectItem value="FCR">FCR - Comprehensive Release</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
                         <div className="space-y-2">

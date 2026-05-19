@@ -35,6 +35,7 @@ const UacsRepository = createUacsRepository(process.env.DATABASE_TYPE || 'postgr
 const VIEW_PAGE_SIZE = 15
 const ALLOCATION_DASHBOARD_PAGE_SIZE = 25
 type EntityFilterMode = 'exact' | 'hierarchical'
+const ACTIVE_ALLOCATION_PAP_STATUSES = ['proposed', 'approved', 'for_release', 'on_going'] as const
 
 const emptyToUndefined = (value: FormDataEntryValue | null) => {
     if (typeof value !== 'string') return undefined
@@ -242,6 +243,7 @@ export async function loadDbmAllocationDashboard({
     selectedExpenseClass,
     search = '',
     page = 1,
+    includeRejectedPaps = false,
 }: {
     selectedYear?: number | null
     selectedDepartmentId?: string
@@ -249,6 +251,7 @@ export async function loadDbmAllocationDashboard({
     selectedExpenseClass?: ExpenseClass | ''
     search?: string
     page?: number
+    includeRejectedPaps?: boolean
 }) {
     const session = await sessionWithEntity()
     if (!session || session.user.role !== 'dbm') {
@@ -270,7 +273,11 @@ export async function loadDbmAllocationDashboard({
 
     const [departments, paps, entitySegments, items, fundingSources, filteredAggregates, overallAggregates, signoffSummary] = await Promise.all([
         EntityRepository.getAllDepartments(),
-        PapRepository.getPapOptions(),
+        PapRepository.getPapOptions(
+            includeRejectedPaps
+                ? {}
+                : { excludeProjectStatuses: ['rejected'] }
+        ),
         EntityRepository.getAllEntitySegments(true),
         ItemRepository.listAllItemCatalog(),
         UacsRepository.listFundingSources(),
@@ -281,6 +288,7 @@ export async function loadDbmAllocationDashboard({
                 papId: selectedPapId,
                 expenseClass: selectedExpenseClass,
                 search: search.trim() || undefined,
+                includeRejectedPaps,
             })
             : Promise.resolve({
                 count: 0,
@@ -291,8 +299,9 @@ export async function loadDbmAllocationDashboard({
             }),
         viewingYear
             ? BudgetAllocationRepository.getAllocationDashboardAggregates({
-                fiscalYear: viewingYear,
-            })
+            fiscalYear: viewingYear,
+            includeRejectedPaps,
+        })
             : Promise.resolve({
                 count: 0,
                 proposed_total: 0,
@@ -337,6 +346,7 @@ export async function loadDbmAllocationDashboard({
             papId: selectedPapId,
             expenseClass: selectedExpenseClass,
             search: search.trim() || undefined,
+            includeRejectedPaps,
             limit: ALLOCATION_DASHBOARD_PAGE_SIZE,
             offset,
         })
@@ -404,11 +414,13 @@ export async function loadDbmAllocationDashboard({
         selectedPapId: selectedPapId ?? '',
         selectedExpenseClass: selectedExpenseClass ?? '',
         search,
+        includeRejectedPaps,
         isFiltered: Boolean(
             selectedDepartmentId ||
             selectedPapId ||
             selectedExpenseClass ||
-            search.trim()
+            search.trim() ||
+            includeRejectedPaps
         ),
         yearLockedToActivePreparation: !!activeCycle &&
             ['dbm_review', 'presidential_approval', 'legislative_deliberation'].includes(activeCycle.current_phase),
@@ -443,7 +455,7 @@ export async function loadTierOneDashboardForYear({
     const entityIds = await getTierOneEntityFilterIds(selectedEntityId, selectedEntityMode)
     const [entitySegments, paps, items, fundingSources] = await Promise.all([
         EntityRepository.getAllEntitySegments(true),
-        PapRepository.getPapOptions(),
+        PapRepository.getPapOptions({ projectStatuses: [...ACTIVE_ALLOCATION_PAP_STATUSES] }),
         ItemRepository.listAllItemCatalog(),
         UacsRepository.listFundingSources(),
     ])

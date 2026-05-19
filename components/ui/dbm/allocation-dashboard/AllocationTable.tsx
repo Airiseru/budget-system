@@ -40,7 +40,7 @@ type Props = {
     onInputChange: (allocationId: string, field: string, value: string) => void
     onSave: (
         allocationId: string,
-        field: 'dbm_rec_amt' | 'nep_amt' | 'gaa_amt' | 'valid_from' | 'valid_until',
+        field: 'dbm_rec_amt' | 'nep_amt' | 'gaa_amt' | 'valid_from' | 'valid_until' | 'release_classification',
         rawValue: string,
         action?: 'update_field' | 'remove_line_item'
     ) => void
@@ -105,6 +105,7 @@ export default function AllocationTable({
                                 <>
                                     <th className="px-4 py-3 text-right">NEP</th>
                                     <th className="px-4 py-3 text-right">GAA</th>
+                                    <th className="px-4 py-3">Release</th>
                                     <th className="px-4 py-3">Validity</th>
                                 </>
                             ) : null}
@@ -341,6 +342,24 @@ export default function AllocationTable({
                                                     </div>
                                                 </td>
                                                 <td className="px-4 py-3 align-middle">
+                                                    <select
+                                                        value={inputValues[getInputKey(row.id, 'release_classification')] ?? row.release_classification}
+                                                        onChange={(event) => {
+                                                            onInputChange(row.id, 'release_classification', event.target.value)
+                                                            onSave(row.id, 'release_classification', event.target.value)
+                                                        }}
+                                                        className="min-h-10 rounded-md border border-border bg-background px-2 py-2 text-xs font-semibold"
+                                                    >
+                                                        <option value="FCR">FCR</option>
+                                                        <option value="FLR">FLR</option>
+                                                    </select>
+                                                    {saveStates[getInputKey(row.id, 'release_classification')] === 'saved' ? (
+                                                        <span className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-600">
+                                                            <Check className="h-3 w-3" /> Saved
+                                                        </span>
+                                                    ) : null}
+                                                </td>
+                                                <td className="px-4 py-3 align-middle">
                                                     <div className="flex gap-2 flex-col">
                                                         <div className="flex flex-col gap-1">
                                                             <label htmlFor="valid_from" className="">From</label>
@@ -435,6 +454,7 @@ export default function AllocationTable({
                                                         PHP {formatAmount(groupSubtotal.gaa_total)}
                                                     </td>
                                                     <td className="px-4 py-3" />
+                                                    <td className="px-4 py-3" />
                                                 </>
                                             ) : null}
                                             {showStaticTotals ? (
@@ -453,9 +473,9 @@ export default function AllocationTable({
                                                     </td>
                                                 </>
                                             ) : null}
-                                            <td className="px-4 py-3" />
-                                            <td className="px-4 py-3" />
-                                        </tr>
+                                        <td className="px-4 py-3" />
+                                        <td className="px-4 py-3" />
+                                    </tr>
                                     ) : null}
                                 </Fragment>
                             )
@@ -496,6 +516,7 @@ export default function AllocationTable({
                                         <td className="px-4 py-3 text-right font-mono font-semibold text-secondary-foreground">
                                             PHP {formatAmount(displayedFilteredTotals.gaa_total)}
                                         </td>
+                                        <td className="px-4 py-3" />
                                         <td className="px-4 py-3" />
                                     </>
                                 ) : null}

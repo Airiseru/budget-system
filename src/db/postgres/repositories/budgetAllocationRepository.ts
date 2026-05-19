@@ -77,6 +77,7 @@ export type AllocationDashboardFilters = {
     papId?: string;
     expenseClass?: string;
     search?: string;
+    includeRejectedPaps?: boolean;
     limit?: number;
     offset?: number;
 };
@@ -670,6 +671,21 @@ export async function seedAllocationPhaseDefaultsWithExecutor(
                 ),
             )
             .execute();
+
+        await executor
+            .updateTable("budget_allocations")
+            .set({
+                release_classification: sql`
+                    CASE
+                        WHEN origin_tag = 'legislative_insertion' THEN 'FLR'
+                        ELSE 'FCR'
+                    END
+                `,
+                updated_at: sql`now()`,
+            })
+            .where("budget_cycle_year", "=", fiscalYear)
+            .where("release_classification", "=", "unclassified")
+            .execute();
     }
 }
 
@@ -883,9 +899,24 @@ function buildAllocationDashboardBaseQuery(
     const papId = filters.papId;
     const expenseClass = filters.expenseClass;
     const search = filters.search;
+    const includeRejectedPaps = filters.includeRejectedPaps ?? false;
     let query = db
         .selectFrom("budget_allocations")
         .where("budget_allocations.budget_cycle_year", "=", filters.fiscalYear);
+
+    if (!includeRejectedPaps) {
+        query = query.where(({ eb, or }) =>
+            or([
+                eb("budget_allocations.pap_code", "is", null),
+                eb("budget_allocations.pap_code", "in", (subquery) =>
+                    subquery
+                        .selectFrom("paps")
+                        .select("paps.id")
+                        .where("paps.project_status", "!=", "rejected"),
+                ),
+            ]),
+        );
+    }
 
     if (departmentId) {
         query = query.where("budget_allocations.entity_id", "in", (eb) =>

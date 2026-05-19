@@ -67,6 +67,7 @@ export type AllocationDashboardProps = {
     selectedPapId: string
     selectedExpenseClass: string
     search: string
+    includeRejectedPaps: boolean
     isFiltered: boolean
     signoff: SignoffData | null
 }
@@ -80,6 +81,7 @@ export type LegislativeInsertionState = {
     specific_description: string
     currency: string
     gaa_amt: string
+    release_classification: 'FLR' | 'FCR'
     valid_from: string
     valid_until: string
 }
@@ -101,6 +103,7 @@ export const initialInsertionState: LegislativeInsertionState = {
     specific_description: '',
     currency: 'PHP',
     gaa_amt: '0',
+    release_classification: 'FLR',
     valid_from: '',
     valid_until: '',
 }

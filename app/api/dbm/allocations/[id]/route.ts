@@ -32,6 +32,7 @@ const WORKFLOW_STAGE_BY_FIELD = {
     gaa_amt: 'congressional_bicam',
     valid_from: 'congressional_bicam',
     valid_until: 'congressional_bicam',
+    release_classification: 'congressional_bicam',
 } as const
 
 export async function PATCH(
@@ -70,7 +71,7 @@ export async function PATCH(
     if (field === 'nep_amt' && phase !== 'presidential_approval') {
         return NextResponse.json({ error: 'NEP amounts can only be updated during the presidential approval phase.' }, { status: 403 })
     }
-    if ((field === 'gaa_amt' || field === 'valid_from' || field === 'valid_until') && phase !== 'legislative_deliberation') {
+    if ((field === 'gaa_amt' || field === 'valid_from' || field === 'valid_until' || field === 'release_classification') && phase !== 'legislative_deliberation') {
         return NextResponse.json({ error: 'GAA updates can only be made during legislative deliberation.' }, { status: 403 })
     }
 
@@ -78,11 +79,16 @@ export async function PATCH(
         return NextResponse.json({ error: 'Line items can only be removed during legislative deliberation.' }, { status: 403 })
     }
 
-    let update: Record<string, Date | number | null> = {}
+    let update: Record<string, Date | number | string | null> = {}
     if (action === 'remove_line_item') {
         update = { gaa_amt: 0 }
     } else if (field === 'valid_from' || field === 'valid_until') {
         update = { [field]: rawValue ? parseDateOnlyToUtcNoon(rawValue) : null }
+    } else if (field === 'release_classification') {
+        if (rawValue !== 'FLR' && rawValue !== 'FCR') {
+            return NextResponse.json({ error: 'Release classification must be FLR or FCR.' }, { status: 400 })
+        }
+        update = { release_classification: rawValue }
     } else if (field) {
         const clampedValue = clampNonNegativeNumber(rawValue!)
         if (!Number.isFinite(clampedValue)) {
@@ -120,6 +126,8 @@ export async function PATCH(
         remarks:
             action === 'remove_line_item'
                 ? 'Marked line item as removed in GAA.'
+                : field === 'release_classification'
+                ? `Updated release classification to ${rawValue}.`
                 : field === 'valid_from' || field === 'valid_until'
                 ? `Updated ${field.replace('_', ' ')}.`
                 : `Updated ${field!.replace(/_/g, ' ')} to ${rawValue}.`,

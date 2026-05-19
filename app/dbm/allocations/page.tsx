@@ -9,6 +9,7 @@ type AllocationSearchParams = Promise<{
     papId?: string
     expenseClass?: string
     search?: string
+    includeRejectedPaps?: string
     page?: string
 }>
 
@@ -27,6 +28,7 @@ export default async function DbmAllocationsPage({
         selectedExpenseClass: params.expenseClass as 'PS' | 'MOOE' | 'CO' | 'FINEX' | undefined,
         search: params.search || '',
         page: Number.isFinite(selectedPage) ? selectedPage : 1,
+        includeRejectedPaps: params.includeRejectedPaps === 'true',
     })
 
     return (
@@ -49,6 +51,7 @@ export default async function DbmAllocationsPage({
             selectedPapId={dashboard.selectedPapId}
             selectedExpenseClass={dashboard.selectedExpenseClass}
             search={dashboard.search}
+            includeRejectedPaps={dashboard.includeRejectedPaps}
             isFiltered={dashboard.isFiltered}
             signoff={dashboard.signoff}
         />
