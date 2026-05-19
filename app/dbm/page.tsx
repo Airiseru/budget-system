@@ -1,79 +1,270 @@
+import Link from "next/link"
 import { redirect } from "next/navigation"
 import { sessionDetails } from "@/src/actions/auth"
-import { isActiveUser, isUnverifiedUser, isDbmUser } from "@/src/lib/user-status"
-import { HomeButton } from "@/components/ui/HomeButton"
-import GeneralButton from "@/components/ui/GeneralButton"
+import { createBudgetSettingsRepository, createFormRepository } from "@/src/db/factory"
+import { BUDGET_PHASE_LABELS, FORM_NAMES, STATUS_LABELS } from "@/src/lib/constants"
+import { isActiveUser, isDbmUser, isUnverifiedUser } from "@/src/lib/user-status"
+
+const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || "postgres")
+const FormRepository = createFormRepository(process.env.DATABASE_TYPE || "postgres")
+const APPROVAL_PREVIEW_LIMIT = 8
+
+const moduleLinks = [
+    {
+        href: "/dbm/forms",
+        title: "View All Forms",
+        description: "Review submitted budget forms and version histories.",
+    },
+    {
+        href: "/dbm/proposals",
+        title: "Review Project Proposals",
+        description: "Evaluate BP 202 and BP 203 project proposals.",
+    },
+    {
+        href: "/dbm/tier-one",
+        title: "Tier One Allocations",
+        description: "Create and update DBM-originated allocations.",
+    },
+    {
+        href: "/dbm/allocations",
+        title: "NEP and GAA Dashboard",
+        description: "Manage DBM recommended, NEP, and GAA amounts.",
+    },
+    {
+        href: "/dbm/paps",
+        title: "Manage PAPs",
+        description: "Maintain PAP details and assign UACS segments.",
+    },
+    {
+        href: "/dbm/items",
+        title: "Manage Line Items",
+        description: "Create, update, and retire item catalog entries.",
+    },
+    {
+        href: "/dbm/entities",
+        title: "Manage Entities",
+        description: "Update departments, agencies, and operating units.",
+    },
+    {
+        href: "/dbm/entity-requests",
+        title: "Entity Requests",
+        description: "Review requested entity additions and changes.",
+    },
+    {
+        href: "/dbm/uacs",
+        title: "Manage UACS Codes",
+        description: "Maintain funding, object, and related UACS codes.",
+    },
+    {
+        href: "/dbm/salary",
+        title: "Salary Schedules and Compensations",
+        description: "Manage salary schedules and compensation data.",
+    },
+]
+
+function formatDate(value: Date | string) {
+    return new Intl.DateTimeFormat("en-PH", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+    }).format(new Date(value))
+}
 
 export default async function HomePage() {
     const session = await sessionDetails()
 
     if (!session) {
-        return redirect('/login')
+        return redirect("/login")
     }
-    else if (isUnverifiedUser(session.user)) {
-        return redirect('/pending-approval')
+    if (isUnverifiedUser(session.user)) {
+        return redirect("/pending-approval")
     }
-    else if (!isActiveUser(session.user)) {
-        return redirect('/login')
+    if (!isActiveUser(session.user)) {
+        return redirect("/login")
     }
-    else if (session.user.role !== 'dbm') {
-        return redirect('/home')
+    if (session.user.role !== "dbm") {
+        return redirect("/home")
     }
 
     const isApprover = isDbmUser(session.user)
-    
+    const [activeCycle, pendingFormsResult] = await Promise.all([
+        BudgetSettingsRepository.getActiveBudgetCycle(),
+        FormRepository.getAllForms({
+            auth_status: "pending_dbm",
+            limit: APPROVAL_PREVIEW_LIMIT,
+            offset: 0,
+        }),
+    ])
+    const pendingForms = pendingFormsResult.forms
+    const pendingCount = pendingFormsResult.totalCount
+    const visibleModuleLinks = isApprover
+        ? [
+            ...moduleLinks,
+            {
+                href: "/dbm/settings/cycles",
+                title: "Budget Cycles",
+                description: "Start cycles and advance the current phase with DBM approval.",
+            },
+        ]
+        : moduleLinks
+
     return (
-        <main className="m-4">
-            <h1>DBM Modules</h1>
-            <div className="flex gap-2 flex-wrap">
-                <GeneralButton
-                    url='/dbm/salary'
-                    label='Salary Schedules and Compensations'
-                />
-                <GeneralButton
-                    url='/dbm/forms'
-                    label='View All Forms'
-                />
-                <GeneralButton
-                    url='/dbm/proposals'
-                    label='Review Project Proposals'
-                />
-                <GeneralButton
-                    url='/dbm/paps'
-                    label='Manage PAPs'
-                />
-                <GeneralButton
-                    url='/dbm/tier-one'
-                    label='Tier One Allocations'
-                />
-                <GeneralButton
-                    url='/dbm/allocations'
-                    label='NEP and GAA Dashboard'
-                />
-                <GeneralButton
-                    url='/dbm/entities'
-                    label='Manage Entities'
-                />
-                <GeneralButton
-                    url='/dbm/entity-requests'
-                    label='Entity Requests'
-                />
-                <GeneralButton
-                    url='/dbm/uacs'
-                    label='Manage UACS Codes'
-                />
-                <GeneralButton
-                    url='/dbm/items'
-                    label='Manage Line Items'
-                />
-                {isApprover && (
-                    <GeneralButton
-                        url='/dbm/settings/cycles'
-                        label='Budget Cycles'
-                    />
-                )}
-                <HomeButton url="/home"></HomeButton>
+        <main className="min-h-screen bg-background">
+            <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+                <header className="rounded-3xl border border-border bg-accent p-6 shadow-sm sm:p-8">
+                    <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                        <div className="max-w-3xl">
+                            <p className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground">
+                                Department of Budget and Management
+                            </p>
+                            <h1 className="mt-3 text-3xl font-black tracking-tight text-secondary-foreground sm:text-4xl">
+                                DBM Workspace
+                            </h1>
+                            <p className="mt-3 text-base leading-7 text-muted-foreground">
+                                Monitor the active budget phase, jump to DBM modules, and review the latest forms waiting for action.
+                            </p>
+                        </div>
+                        <Link
+                            href="/home"
+                            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold text-secondary-foreground shadow-sm transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                        >
+                            Go to Home
+                        </Link>
+                    </div>
+                </header>
+
+                <section aria-labelledby="dbm-overview-heading" className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+                    <h2 id="dbm-overview-heading" className="sr-only">
+                        DBM overview
+                    </h2>
+                    <article className="rounded-3xl border border-border bg-background p-6 shadow-sm">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <p className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                    Current Phase
+                                </p>
+                                <h3 className="mt-3 text-2xl font-black text-secondary-foreground">
+                                    {activeCycle ? BUDGET_PHASE_LABELS[activeCycle.current_phase] : "No Active Cycle"}
+                                </h3>
+                            </div>
+                            <span className="rounded-full border border-border bg-muted px-3 py-1 text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                                {activeCycle?.prep_status ?? "closed"}
+                            </span>
+                        </div>
+                        <dl className="mt-6 grid gap-4 text-sm">
+                            <div className="rounded-2xl bg-muted p-4">
+                                <dt className="font-semibold text-muted-foreground">Fiscal Year</dt>
+                                <dd className="mt-1 text-xl font-black text-secondary-foreground">
+                                    {activeCycle?.fiscal_year ? `FY ${activeCycle.fiscal_year}` : "Not started"}
+                                </dd>
+                            </div>
+                            <div className="rounded-2xl bg-muted p-4">
+                                <dt className="font-semibold text-muted-foreground">Opened</dt>
+                                <dd className="mt-1 font-bold text-secondary-foreground">
+                                    {activeCycle?.prep_opened_at ? formatDate(activeCycle.prep_opened_at) : "No active preparation window"}
+                                </dd>
+                            </div>
+                        </dl>
+                        {isApprover && (
+                            <Link
+                                href="/dbm/settings/cycles"
+                                className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-secondary-foreground px-4 py-2 text-sm font-bold text-accent transition hover:bg-secondary-foreground/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            >
+                                Manage Budget Cycle
+                            </Link>
+                        )}
+                    </article>
+
+                    <article className="rounded-3xl border border-border bg-background shadow-sm">
+                        <div className="flex flex-col gap-3 border-b border-border p-6 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                    Needs Approval
+                                </p>
+                                <h3 className="mt-1 text-2xl font-black text-secondary-foreground">
+                                    Latest Pending Forms
+                                </h3>
+                            </div>
+                            <Link
+                                href="/dbm/forms?status=pending_dbm"
+                                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-border px-3 py-2 text-sm font-bold text-secondary-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                aria-label={`View all ${pendingCount} forms pending DBM approval`}
+                            >
+                                View all ({pendingCount})
+                            </Link>
+                        </div>
+                        <div className="divide-y divide-border">
+                            {pendingForms.length > 0 ? (
+                                pendingForms.map((form) => (
+                                    <Link
+                                        key={form.id}
+                                        href={`/dbm/forms/${form.id}`}
+                                        className="block p-5 transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+                                    >
+                                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                            <div>
+                                                <p className="font-black text-secondary-foreground">
+                                                    {FORM_NAMES[form.type ?? ""] ?? form.type ?? "Budget Form"}
+                                                </p>
+                                                <p className="mt-1 text-sm text-muted-foreground">
+                                                    {form.entity_name ?? "Unknown entity"}
+                                                    {form.department_name ? ` • ${form.department_name}` : ""}
+                                                </p>
+                                                <p className="mt-1 text-xs font-medium text-muted-foreground">
+                                                    FY {form.fiscal_year} • Version {form.version} • Updated {formatDate(form.updated_at)}
+                                                </p>
+                                            </div>
+                                            <span className="w-fit rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800">
+                                                {STATUS_LABELS[form.auth_status ?? ""] ?? "Pending"}
+                                            </span>
+                                        </div>
+                                    </Link>
+                                ))
+                            ) : (
+                                <div className="p-8 text-center">
+                                    <p className="text-sm font-semibold text-secondary-foreground">
+                                        No forms are pending DBM approval.
+                                    </p>
+                                    <p className="mt-1 text-sm text-muted-foreground">
+                                        The queue is clear for now.
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </article>
+                </section>
+
+                <section aria-labelledby="dbm-modules-heading" className="space-y-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <div>
+                            <p className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                Modules
+                            </p>
+                            <h2 id="dbm-modules-heading" className="text-2xl font-black text-secondary-foreground">
+                                Go to a DBM Module
+                            </h2>
+                        </div>
+                    </div>
+                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                        {visibleModuleLinks.map((module) => (
+                            <Link
+                                key={module.href}
+                                href={module.href}
+                                className="group rounded-2xl border border-border bg-background p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-secondary-foreground/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            >
+                                <span className="text-lg font-black text-secondary-foreground group-hover:underline">
+                                    {module.title}
+                                </span>
+                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                    {module.description}
+                                </p>
+                            </Link>
+                        ))}
+                    </div>
+                </section>
             </div>
         </main>
-    );
+    )
 }
