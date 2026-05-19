@@ -4105,7 +4105,7 @@ export default function ProposalForm({
                             type="submit"
                             disabled={isLoading}
                             onClick={() => setSubmitAction("draft")}
-                            className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg"
+                            className="px-6 py-2 text-muted-600 font-bold hover:bg-muted-50 rounded-lg border hover:bg-secondary-foreground hover:text-white hover:shadow-md"
                         >
                             Save Draft
                         </button>
@@ -4120,7 +4120,7 @@ export default function ProposalForm({
                                     : "pending_budget",
                             )
                         }
-                        className="px-6 py-2 bg-secondary-foreground-600 text-primary-foreground font-bold rounded-lg shadow-md hover:bg-secondary-foreground-700"
+                        className="px-6 py-2 bg-secondary-foreground-600 border border-primary-foreground text-primary-foreground font-bold rounded-lg shadow-md hover:bg-primary-foreground hover:text-white hover:shadow-lg"
                     >
                         {isDbmOverwrite ? "Overwrite Form" : "Submit Proposal"}
                     </button>

@@ -147,7 +147,7 @@ export async function loadDbmProposalReview(params: {
     const page = Math.max(1, params.page ?? 1);
     const filters = {
         fiscalYear: viewingYear,
-        status: params.status || "pending_dbm",
+        status: params.status === "all" ? undefined : params.status || "pending_dbm",
         departmentId: params.departmentId,
         agencyId: params.agencyId,
         operatingUnitId: params.operatingUnitId,
@@ -169,7 +169,7 @@ export async function loadDbmProposalReview(params: {
         page,
         viewingYear,
         availableYears: cycles.map((cycle) => cycle.fiscal_year),
-        selectedStatus: filters.status,
+        selectedStatus: params.status === "all" ? "all" : filters.status ?? "pending_dbm",
         selectedDepartmentId: params.departmentId ?? "all",
         selectedAgencyId: params.agencyId ?? "all",
         selectedOperatingUnitId: params.operatingUnitId ?? "all",
