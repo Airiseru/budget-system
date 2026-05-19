@@ -341,6 +341,33 @@ async function insertAttributions(
     }
 }
 
+async function updateLinkedPapTitleForProposal(
+    trx: Transaction<Database>,
+    proposalId: string,
+    title: string,
+) {
+    const linkedPaps = await trx
+        .selectFrom("form_paps")
+        .select("pap_id")
+        .where("form_id", "=", proposalId)
+        .execute();
+
+    if (linkedPaps.length === 0) return;
+
+    await trx
+        .updateTable("paps")
+        .set({
+            title,
+            updated_at: sql`now()`,
+        })
+        .where(
+            "id",
+            "in",
+            linkedPaps.map((row) => row.pap_id),
+        )
+        .execute();
+}
+
 export async function createProjectProposal(
     entityId: string,
     payload: ProposalWritePayload,
@@ -1063,6 +1090,7 @@ export async function updateProjectProposal(
         await trx
             .updateTable("project_proposals")
             .set({
+                title: p.title,
                 proposal_year: p.proposal_year,
                 priority_rank: p.priority_rank,
                 description: p.description,
@@ -1079,6 +1107,10 @@ export async function updateProjectProposal(
             })
             .where("id", "=", proposalId)
             .execute();
+
+        if (p.is_new) {
+            await updateLinkedPapTitleForProposal(trx, proposalId, p.title);
+        }
 
         // 4. Re-insert arrays
         if (p.pap_prerequisites?.length) {
