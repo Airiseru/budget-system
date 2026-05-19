@@ -84,7 +84,7 @@ export default function LegislativeInsertionDialog({
 
     return (
         <>
-            <div className="fixed inset-0 z-40 bg-black/25" onClick={onClose} />
+            <div className="fixed inset-0 z-40 bg-black/25 mb-0" onClick={onClose} />
             <div className="fixed inset-x-0 bottom-6 z-50 mx-auto w-[min(960px,calc(100vw-2rem))] rounded-2xl border border-border bg-background shadow-2xl">
                 <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
                     <div>

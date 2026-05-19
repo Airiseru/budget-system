@@ -10,6 +10,7 @@ type AllocationIntegrityDebugState = {
     signatoryRowsValid?: boolean
     authorizationSnapshotsValid?: boolean
     stateHashValid?: boolean
+    hasSignedSnapshot?: boolean
     isSignedSnapshotValid?: boolean
     isAllocationAuditTrailValid?: boolean
     allocationAuditMismatchCount?: number
@@ -23,6 +24,7 @@ export type AllocationSignoffIntegrityResult = {
     isSealedRootValid: boolean
     timelineBrokenAt: string | null
     isDataMatch: boolean
+    hasSignedSnapshot?: boolean
     isSignedSnapshotValid?: boolean
     isAllocationAuditTrailValid?: boolean
     allocationAuditMismatchCount?: number
@@ -64,6 +66,10 @@ function getSnapshotFailureReasons(result: AllocationSignoffIntegrityResult) {
     const reasons: string[] = []
     const debugState = result.debugState
 
+    if (result.hasSignedSnapshot === false || debugState?.hasSignedSnapshot === false) {
+        return ['No DBM approver signoff has been recorded for this allocation checkpoint yet.']
+    }
+
     if (debugState?.cryptographicValid === false) {
         reasons.push('At least one signoff signature failed cryptographic verification.')
     }
@@ -102,30 +108,34 @@ export default function AllocationSignoffIntegrityPanel({
         )
     }
 
-    const signedSnapshotValid = result.isSignedSnapshotValid !== false
+    const hasSignedSnapshot = result.hasSignedSnapshot !== false
+    const signedSnapshotValid = !hasSignedSnapshot ? true : result.isSignedSnapshotValid !== false
     const allocationTrailValid = result.isAllocationAuditTrailValid !== false
     const isFullyValid =
+        hasSignedSnapshot &&
         result.isTimelineIntact &&
         result.isSealedRootValid &&
         result.isDataMatch &&
         signedSnapshotValid &&
         allocationTrailValid
-    const Icon = isFullyValid ? ShieldCheck : ShieldX
+    const Icon = isFullyValid ? ShieldCheck : hasSignedSnapshot ? ShieldX : Unlock
     const signoffLabel = signoffType.toUpperCase()
-    const headerBg = isFullyValid ? 'bg-emerald-50/50' : 'bg-destructive/10'
-    const headerText = isFullyValid ? 'text-emerald-900' : 'text-destructive'
+    const headerBg = isFullyValid ? 'bg-emerald-50/50' : hasSignedSnapshot ? 'bg-destructive/10' : 'bg-amber-50'
+    const headerText = isFullyValid ? 'text-emerald-900' : hasSignedSnapshot ? 'text-destructive' : 'text-amber-900'
     const mismatchReasons = getSnapshotFailureReasons(result)
 
     return (
         <div className="overflow-hidden rounded-lg border border-border shadow-sm">
             <div className={`flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between ${headerBg}`}>
                 <div className="flex items-center gap-3">
-                    <Icon className={`h-5 w-5 ${isFullyValid ? 'text-emerald-600' : 'text-destructive'}`} />
+                    <Icon className={`h-5 w-5 ${isFullyValid ? 'text-emerald-600' : hasSignedSnapshot ? 'text-destructive' : 'text-amber-700'}`} />
                     <div>
                         <p className={`text-sm font-medium ${headerText}`}>
                             {isFullyValid
                                 ? `${signoffLabel} allocation package is cryptographically secured`
-                                : `${signoffLabel} allocation integrity check failed`}
+                                : hasSignedSnapshot
+                                    ? `${signoffLabel} allocation integrity check failed`
+                                    : `${signoffLabel} allocation checkpoint has not been signed yet`}
                         </p>
                         <p className="mt-0.5 text-xs text-muted-foreground">
                             Verified against {result.totalEntityEvents} ledger event(s) across allocation owner entities.
@@ -133,12 +143,12 @@ export default function AllocationSignoffIntegrityPanel({
                     </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2 justify-end">
                     <Badge variant={result.isTimelineIntact ? 'default' : 'destructive'} className={result.isTimelineIntact ? 'bg-emerald-600 text-white' : ''}>
                         Ledger: {result.isTimelineIntact ? 'Intact' : 'Broken'}
                     </Badge>
-                    <Badge variant={signedSnapshotValid ? 'outline' : 'destructive'} className={signedSnapshotValid ? 'border-emerald-600 bg-white text-emerald-700' : 'bg-white'}>
-                        Signed Snapshot: {signedSnapshotValid ? 'Matched' : 'Mismatch'}
+                    <Badge variant={signedSnapshotValid ? 'outline' : 'destructive'} className={!hasSignedSnapshot ? 'border-amber-500 bg-white text-amber-700' : signedSnapshotValid ? 'border-emerald-600 bg-white text-emerald-700' : 'bg-white'}>
+                        Signed Snapshot: {!hasSignedSnapshot ? 'Not signed' : signedSnapshotValid ? 'Matched' : 'Mismatch'}
                     </Badge>
                     <Badge variant={allocationTrailValid ? 'outline' : 'destructive'} className={allocationTrailValid ? 'border-emerald-600 bg-white text-emerald-700' : 'bg-white'}>
                         Patch Trail: {allocationTrailValid ? 'Matched' : 'Mismatch'}
@@ -156,7 +166,19 @@ export default function AllocationSignoffIntegrityPanel({
                     </div>
                 ) : null}
 
-                {!isFullyValid ? (
+                {!hasSignedSnapshot ? (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                        <div className="flex gap-2">
+                            <Unlock className="mt-0.5 h-4 w-4 shrink-0" />
+                            <div>
+                                <p className="font-semibold">No signed checkpoint yet.</p>
+                                <p className="mt-1">
+                                    The compact allocation patch trail can be checked, but there is no DBM approver signature for this {signoffLabel} yet.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                ) : !isFullyValid ? (
                     <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
                         <div className="flex gap-2">
                             <PackageCheck className="mt-0.5 h-4 w-4 shrink-0" />

@@ -893,6 +893,7 @@ export async function verifyAllocationSignoffIntegrity(
     const signedSignoffLogs = signoffLogsWithProofs.filter((log) =>
         isSignedAuditEvent(log.event_type),
     )
+    const hasSignedSnapshot = signedSignoffLogs.length > 0
 
     for (const log of signoffLogsWithProofs) {
         if (!isSignedAuditEvent(log.event_type)) {
@@ -989,13 +990,14 @@ export async function verifyAllocationSignoffIntegrity(
     }
 
     const isSignedSnapshotValid =
-        signedSignoffLogs.length > 0 &&
-        cryptographicValid &&
-        signatoryRowsValid &&
-        authorizationSnapshotsValid &&
-        stateHashValid
+        hasSignedSnapshot
+            ? cryptographicValid &&
+                signatoryRowsValid &&
+                authorizationSnapshotsValid &&
+                stateHashValid
+            : null
     const isDataMatch =
-        isSignedSnapshotValid &&
+        (hasSignedSnapshot ? isSignedSnapshotValid : true) &&
         allocationAuditTrailResult.isAllocationAuditTrailValid
 
     return {
@@ -1004,6 +1006,7 @@ export async function verifyAllocationSignoffIntegrity(
         timelineBrokenAt: chainResult.brokenAt,
         chainFailureReport: chainResult.report ?? null,
         isDataMatch,
+        hasSignedSnapshot,
         isSignedSnapshotValid,
         ...allocationAuditTrailResult,
         currentGlobalRoot,
@@ -1016,6 +1019,7 @@ export async function verifyAllocationSignoffIntegrity(
             cryptographicValid,
             signatoryRowsValid,
             authorizationSnapshotsValid,
+            hasSignedSnapshot,
             isSignedSnapshotValid,
             ...allocationAuditTrailResult,
             stateHashValid,
