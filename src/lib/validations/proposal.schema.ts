@@ -214,7 +214,33 @@ function sortCosts<T extends { expense_class: string }>(costs: T[]) {
         const leftRank = expenseOrder.get(left.expense_class) ?? 99;
         const rightRank = expenseOrder.get(right.expense_class) ?? 99;
         if (leftRank !== rightRank) return leftRank - rightRank;
-        return left.expense_class.localeCompare(right.expense_class);
+
+        const leftCost = left as T & {
+            fund_category?: string | null;
+            fund_method?: string | null;
+            currency?: string | null;
+            amount?: number | string | null;
+        };
+        const rightCost = right as T & {
+            fund_category?: string | null;
+            fund_method?: string | null;
+            currency?: string | null;
+            amount?: number | string | null;
+        };
+
+        return [
+            left.expense_class.localeCompare(right.expense_class),
+            String(leftCost.fund_category ?? "").localeCompare(
+                String(rightCost.fund_category ?? ""),
+            ),
+            String(leftCost.fund_method ?? "").localeCompare(
+                String(rightCost.fund_method ?? ""),
+            ),
+            String(leftCost.currency ?? "").localeCompare(
+                String(rightCost.currency ?? ""),
+            ),
+            Number(leftCost.amount ?? 0) - Number(rightCost.amount ?? 0),
+        ].find((comparison) => comparison !== 0) ?? 0;
     });
 }
 
@@ -223,6 +249,7 @@ export function normalizeProposalPayload(payload: unknown): ProposalPayload {
 
     const normalizedBase = {
         ...parsed,
+        existing_pap_id: parsed.existing_pap_id ?? "",
         pap_prerequisites: sortByStableString(
             parsed.pap_prerequisites,
             (prerequisite) =>

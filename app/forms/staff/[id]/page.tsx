@@ -7,6 +7,7 @@ import { redirect, notFound } from "next/navigation"
 import { revalidatePath } from "next/cache"
 import StaffingView from "@/components/ui/staff/StaffingView"
 import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle"
+import { canViewFormIntegrity } from "@/src/lib/user-status"
 
 const StaffingRepo = createStaffingRepository(process.env.DATABASE_TYPE || 'postgres')
 const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || 'postgres')
@@ -82,8 +83,7 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(summary.fiscal_year)
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForYear && !allowClosedCycleActions
-    const canVerifyIntegrity =
-        session.user.role === 'dbm' || session.user.is_admin === true
+    const canVerifyIntegrity = canViewFormIntegrity(session.user)
 
     // Server Actions
     const updateAuthStatus = async () => {

@@ -19,6 +19,7 @@ import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
 import { revalidatePath } from "next/cache";
 import RetireeView from "@/components/ui/retiree/RetireeView";
 import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import { canViewFormIntegrity } from "@/src/lib/user-status";
 
 const RetireeRepo = createRetireeRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -128,8 +129,7 @@ export default async function RetireeDetailsPage({
     );
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForYear && !allowClosedCycleActions;
-    const canVerifyIntegrity =
-        session.user.role === "dbm" || session.user.is_admin === true;
+    const canVerifyIntegrity = canViewFormIntegrity(session.user);
 
     // Server Actions
     const updateAuthStatus = async () => {

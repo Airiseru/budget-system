@@ -113,6 +113,10 @@ function getDataMismatchReasons(debugState?: IntegrityDebugState | null) {
     return reasons
 }
 
+function isSignedFormEvent(eventType: string) {
+    return eventType === 'SIGN' || eventType === 'APPROVE_FORM' || eventType === 'REJECT_FORM'
+}
+
 export type IntegrityResult = {
     isTimelineIntact: boolean
     isSealedRootValid: boolean
@@ -189,12 +193,57 @@ export function FormIntegrityPanel({
         )
     }
 
+    const hasSignedFormEvents = result.formLogs.some(
+        (log) => isSignedFormEvent(log.event_type) || !!log.signature,
+    )
+    const isUnsignedDataMismatch =
+        !hasSignedFormEvents &&
+        !result.isDataMatch &&
+        result.isTimelineIntact &&
+        result.isSealedRootValid
     // A form is only fully valid if the chain is intact, the DB state matches, AND the daily seal matches
     const isFullyValid = result.isTimelineIntact && result.isDataMatch && result.isSealedRootValid
     const Icon = isFullyValid ? ShieldCheck : ShieldX
-    const iconColor = isFullyValid ? 'text-emerald-600' : 'text-destructive'
-    const headerBg = isFullyValid ? 'bg-emerald-50/50' : 'bg-destructive/10'
+    const iconColor = isFullyValid
+        ? 'text-emerald-600'
+        : isUnsignedDataMismatch
+          ? 'text-amber-600'
+          : 'text-destructive'
+    const headerBg = isFullyValid
+        ? 'bg-emerald-50/50'
+        : isUnsignedDataMismatch
+          ? 'bg-amber-50/80'
+          : 'bg-destructive/10'
+    const headerTextColor = isFullyValid
+        ? 'text-emerald-900'
+        : isUnsignedDataMismatch
+          ? 'text-amber-900'
+          : 'text-destructive'
     const dataMismatchReasons = getDataMismatchReasons(result.debugState)
+    const dataStateLabel = result.isDataMatch
+        ? 'Matched'
+        : hasSignedFormEvents
+          ? 'Tampered'
+          : 'Mismatched'
+    const dataStateBadgeVariant =
+        result.isDataMatch || isUnsignedDataMismatch ? 'outline' : 'destructive'
+    const dataStateBadgeClass = result.isDataMatch
+        ? 'border-emerald-600 text-emerald-700 bg-white'
+        : isUnsignedDataMismatch
+          ? 'border-amber-500 text-amber-800 bg-amber-50'
+          : 'bg-white'
+    const dataMismatchBoxClass = isUnsignedDataMismatch
+        ? 'bg-amber-50 text-amber-900 border-amber-200'
+        : 'bg-destructive/10 text-destructive border-destructive/20'
+    const dataMismatchAccentClass = isUnsignedDataMismatch
+        ? 'text-amber-800'
+        : 'text-destructive'
+    const dataMismatchDetailsClass = isUnsignedDataMismatch
+        ? 'border-amber-200'
+        : 'border-destructive/20'
+    const failureTitle = hasSignedFormEvents
+        ? 'CRITICAL: Integrity check failed'
+        : 'Audit consistency check found a mismatch'
 
     return (
         <div className="border border-border rounded-lg overflow-hidden shadow-sm">
@@ -203,8 +252,8 @@ export function FormIntegrityPanel({
                 <div className="flex items-center gap-3">
                     <Icon className={`h-5 w-5 ${iconColor}`} />
                     <div>
-                        <p className={`font-medium text-sm ${isFullyValid ? 'text-emerald-900' : 'text-destructive'}`}>
-                            {isFullyValid ? 'Form data cryptographically secured' : 'CRITICAL: Integrity check failed'}
+                        <p className={`font-medium text-sm ${headerTextColor}`}>
+                            {isFullyValid ? 'Form data cryptographically secured' : failureTitle}
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
                             Verified against {result.totalEntityEvents} agency ledger events
@@ -215,8 +264,8 @@ export function FormIntegrityPanel({
                     <Badge variant={result.isTimelineIntact ? 'default' : 'destructive'} className={result.isTimelineIntact ? 'bg-emerald-600 text-white' : ''}>
                         Ledger: {result.isTimelineIntact ? 'Intact' : 'Broken'}
                     </Badge>
-                    <Badge variant={result.isDataMatch ? 'outline' : 'destructive'} className={result.isDataMatch ? 'border-emerald-600 text-emerald-700 bg-white' : 'bg-white'}>
-                        Data State: {result.isDataMatch ? 'Matched' : 'Tampered'}
+                    <Badge variant={dataStateBadgeVariant} className={dataStateBadgeClass}>
+                        Data State: {dataStateLabel}
                     </Badge>
                     <Badge variant={result.isSealedRootValid ? 'outline' : 'destructive'} className={result.isSealedRootValid ? 'border-emerald-600 text-emerald-700 bg-white' : 'bg-white'}>
                         Daily Seal: {result.isSealedRootValid ? 'Usable' : 'Unavailable'}
@@ -236,15 +285,19 @@ export function FormIntegrityPanel({
                 
                 {/* Data State Tampering Warning */}
                 {!result.isDataMatch && result.isTimelineIntact && (
-                    <div className="bg-destructive/10 text-destructive rounded-md p-3 text-xs border border-destructive/20">
+                    <div className={`rounded-md p-3 text-xs border ${dataMismatchBoxClass}`}>
                         <div className="flex gap-2">
                             <Database className="h-4 w-4 shrink-0 mt-0.5" />
                             <div className="flex-1 space-y-2">
-                                <p><strong>Database Tampering Detected:</strong> The ledger history is intact, but the current database row does not match the digitally signed history.</p>
+                                {hasSignedFormEvents ? (
+                                    <p><strong>Database Tampering Detected:</strong> The ledger history is intact, but the current database row does not match the digitally signed history.</p>
+                                ) : (
+                                    <p><strong>Audit State Mismatch:</strong> The ledger history is intact, but the current database row does not match the reconstructed audit history. No signed approval or rejection event has been recorded yet.</p>
+                                )}
                                 <button
                                     type="button"
                                     onClick={() => setShowDataMismatchDetails((current) => !current)}
-                                    className="inline-flex items-center gap-1 text-xs font-semibold text-destructive underline-offset-2 hover:underline"
+                                    className={`inline-flex items-center gap-1 text-xs font-semibold underline-offset-2 hover:underline ${dataMismatchAccentClass}`}
                                 >
                                     {showDataMismatchDetails ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                     {showDataMismatchDetails ? 'Hide mismatch details' : 'Show mismatch details'}
@@ -253,9 +306,9 @@ export function FormIntegrityPanel({
                         </div>
 
                         {showDataMismatchDetails && (
-                            <div className="mt-3 space-y-3 rounded-md border border-destructive/20 bg-white p-3 text-slate-700">
+                            <div className={`mt-3 space-y-3 rounded-md border bg-white p-3 text-slate-700 ${dataMismatchDetailsClass}`}>
                                 <div>
-                                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-destructive">Detected Cause</p>
+                                    <p className={`mb-2 text-[10px] font-bold uppercase tracking-wider ${dataMismatchAccentClass}`}>Detected Cause</p>
                                     <ul className="list-disc space-y-1 pl-4">
                                         {dataMismatchReasons.map((reason) => (
                                             <li key={reason}>{reason}</li>
@@ -281,10 +334,10 @@ export function FormIntegrityPanel({
                                 <div className="grid gap-2 md:grid-cols-2">
                                     {[
                                         ['Submitted snapshots match history', result.debugState?.snapshotsMatchHistory],
-                                        ['Signed form hashes match reconstructed state', result.debugState?.approvalHashesValid],
-                                        ['Signature events are cryptographically valid', result.debugState?.signatureEventsValid],
-                                        ['Signatory records match audit events', result.debugState?.signatoryRowsValid],
-                                        ['Authorization snapshots match workflow', result.debugState?.authorizationSnapshotsValid],
+                                        ['Signed form hashes match reconstructed state', hasSignedFormEvents ? result.debugState?.approvalHashesValid : undefined],
+                                        ['Signature events are cryptographically valid', hasSignedFormEvents ? result.debugState?.signatureEventsValid : undefined],
+                                        ['Signatory records match audit events', hasSignedFormEvents ? result.debugState?.signatoryRowsValid : undefined],
+                                        ['Authorization snapshots match workflow', hasSignedFormEvents ? result.debugState?.authorizationSnapshotsValid : undefined],
                                     ].map(([label, value]) => (
                                         <div key={String(label)} className="flex items-center justify-between gap-2 rounded border bg-slate-50 px-2 py-1.5">
                                             <span>{label}</span>

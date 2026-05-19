@@ -108,6 +108,44 @@ const DEFAULT_PREREQUISITES = [
     },
 ];
 
+function getCostRowsTotal(costs: ExpenseRow[] = []) {
+    return costs.reduce((sum, cost) => sum + Number(cost.amount || 0), 0);
+}
+
+type Bp203FundMethod = "cash" | "non_cash";
+
+function normalizeBp203FundMethod(
+    method?: ExpenseRow["fund_method"],
+): Bp203FundMethod | null {
+    if (method === "cash") return "cash";
+    if (method === "non_cash" || method === "non-cash") return "non_cash";
+    return null;
+}
+
+function normalizeBp203CostRows(
+    component: Omit<CostingComponent, "costs"> & { costs?: ExpenseRow[] },
+): ExpenseRow[] {
+    const amount = Number(component.proposed_amt || 0);
+    const expenseClass = component.costs?.[0]?.expense_class ?? "MOOE";
+
+    if (!component.costs?.length && amount > 0) {
+        return [{
+            expense_class: expenseClass,
+            amount,
+            currency: component.currency || "PHP",
+            fund_category: "LP",
+            fund_method: "cash",
+        }];
+    }
+
+    return (component.costs ?? []).map((cost) => ({
+        ...cost,
+        currency: cost.currency || component.currency || "PHP",
+        fund_category: cost.fund_category ?? "LP",
+        fund_method: normalizeBp203FundMethod(cost.fund_method) ?? "cash",
+    }));
+}
+
 type ProjectProposalField =
     | "cost_by_components"
     | "local_locations"
@@ -117,6 +155,7 @@ type ProjectProposalField =
     | "foreign_physical_targets";
 
 type MatrixField = "cost_by_components" | "foreign_physical_targets";
+type Bp203FundCategory = "LP" | "GOP";
 
 interface ExpenseRow {
     expense_class: keyof typeof EXPENSE_CLASSES;
@@ -480,7 +519,14 @@ export default function ProposalForm({
         cost_by_components:
             project?.cost_by_components?.map((component) => ({
                 ...component,
-                costs: component.costs ?? [],
+                costs:
+                    type === "203"
+                        ? normalizeBp203CostRows(component)
+                        : component.costs ?? [],
+                proposed_amt:
+                    type === "203"
+                        ? Number(component.proposed_amt || getCostRowsTotal(normalizeBp203CostRows(component)) || 0)
+                        : component.proposed_amt,
             })) || [],
 
         local_locations: project?.local_locations?.length
@@ -512,6 +558,9 @@ export default function ProposalForm({
     }, [hasExistingPaps]);
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [bp203Selections, setBp203Selections] = useState<
+        Record<number, { category?: Bp203FundCategory; method?: Bp203FundMethod }>
+    >({});
 
     const itemCatalogOptions: SearchableComboboxOption[] = itemCatalogs.map(
         (item) => ({
@@ -693,34 +742,60 @@ export default function ProposalForm({
         e.preventDefault();
         setErrors({});
 
-        const normalizedComponents = payload.cost_by_components.map((comp) => ({
-            ...comp,
-            component_name:
-                getSelectedItemCatalog(comp.item_catalog_id)?.name ||
-                comp.component_name ||
-                "",
-            tier: 2 as const,
-            currency: comp.currency || comp.costs[0]?.currency || "PHP",
-            proposed_amt: Number(
-                comp.proposed_amt || comp.costs[0]?.amount || 0,
-            ),
-            costs: [
-                {
-                    expense_class:
-                        getSelectedItemCatalog(comp.item_catalog_id)
-                            ?.expense_class ||
-                        comp.costs[0]?.expense_class ||
-                        "MOOE",
-                    amount: Number(
-                        comp.proposed_amt || comp.costs[0]?.amount || 0,
-                    ),
-                    currency: comp.currency || comp.costs[0]?.currency || "PHP",
-                },
-            ],
+        const normalizedComponents = payload.cost_by_components.map((comp) => {
+            const selectedItem = getSelectedItemCatalog(comp.item_catalog_id);
+            const expenseClass =
+                selectedItem?.expense_class || comp.costs[0]?.expense_class || "MOOE";
+            const costs = payload.type === "203"
+                ? normalizeBp203CostRows({
+                      ...comp,
+                      costs: comp.costs.length
+                          ? comp.costs.map((cost) => ({
+                                ...cost,
+                                expense_class: cost.expense_class || expenseClass,
+                            }))
+                          : [{
+                                expense_class: expenseClass,
+                                amount: Number(comp.proposed_amt || 0),
+                                currency: comp.currency || "PHP",
+                                fund_category: "LP",
+                                fund_method: "cash",
+                            }],
+                  })
+                : [{
+                      expense_class: expenseClass,
+                      amount: Number(comp.proposed_amt || comp.costs[0]?.amount || 0),
+                      currency: comp.currency || comp.costs[0]?.currency || "PHP",
+                  }];
+
+            return {
+                ...comp,
+                component_name:
+                    selectedItem?.name ||
+                    comp.component_name ||
+                    "",
+                tier: 2 as const,
+                currency: comp.currency || costs[0]?.currency || "PHP",
+                proposed_amt: Number(comp.proposed_amt || getCostRowsTotal(costs) || 0),
+                costs,
+            };
+        });
+        const normalizedLocalFinancialAttributions = payload.local_financial_attributions.map((attribution) => ({
+            ...attribution,
+            attribution_costs: payload.is_new
+                ? attribution.attribution_costs.filter(
+                      (cost) =>
+                          !(
+                              cost.year === payload.proposal_year &&
+                              cost.tier === 1
+                          ),
+                  )
+                : attribution.attribution_costs,
         }));
 
         const finalPayload = {
             ...payload,
+            local_financial_attributions: normalizedLocalFinancialAttributions,
             local_infrastructure_requirements: payload.is_infrastructure
                 ? payload.local_infrastructure_requirements
                 : [],
@@ -844,7 +919,7 @@ export default function ProposalForm({
         category: "LP" | "Grant" | "GOP",
         value: number,
         field: MatrixField,
-        method?: "cash" | "non_cash",
+        method?: Bp203FundMethod,
     ) => {
         setPayload((prev) => {
             const updatedComponents = [...prev[field]];
@@ -856,7 +931,8 @@ export default function ProposalForm({
                 (c) =>
                     c.expense_class === expenseClass &&
                     c.fund_category === category &&
-                    (category !== "LP" || c.fund_method === method),
+                    (category !== "LP" ||
+                        normalizeBp203FundMethod(c.fund_method) === method),
             );
 
             if (costIdx > -1) {
@@ -876,7 +952,7 @@ export default function ProposalForm({
 
             currentComp.costs = currentCosts;
             if ("proposed_amt" in currentComp) {
-                (currentComp as any).proposed_amt = value;
+                (currentComp as CostingComponent).proposed_amt = value;
             }
             updatedComponents[componentIdx] = currentComp;
 
@@ -917,24 +993,37 @@ export default function ProposalForm({
 
     const updateCostComponentItem = (index: number, itemCatalogId: string) => {
         const selectedItem = getSelectedItemCatalog(itemCatalogId);
+        const currentComponent = payload.cost_by_components[index];
+        const amount = Number(currentComponent?.proposed_amt || 0);
+        const expenseClass = selectedItem?.expense_class ?? "MOOE";
+        const costs = selectedItem
+            ? payload.type === "203"
+                ? normalizeBp203CostRows({
+                      ...currentComponent,
+                      costs: currentComponent?.costs?.length
+                          ? currentComponent.costs.map((cost) => ({
+                                ...cost,
+                                expense_class: expenseClass,
+                            }))
+                          : [{
+                                expense_class: expenseClass,
+                                amount,
+                                currency: currentComponent?.currency || "PHP",
+                                fund_category: "LP",
+                                fund_method: "cash",
+                            }],
+                  })
+                : [{
+                      expense_class: expenseClass,
+                      amount,
+                      currency: currentComponent?.currency || "PHP",
+                  }]
+            : [];
 
         updateRow("cost_by_components", index, {
             item_catalog_id: itemCatalogId,
             component_name: selectedItem?.name ?? "",
-            costs: selectedItem
-                ? [
-                      {
-                          expense_class: selectedItem.expense_class,
-                          amount: Number(
-                              payload.cost_by_components[index]?.proposed_amt ||
-                                  0,
-                          ),
-                          currency:
-                              payload.cost_by_components[index]?.currency ||
-                              "PHP",
-                      },
-                  ]
-                : [],
+            costs,
         });
     };
 
@@ -1190,10 +1279,7 @@ export default function ProposalForm({
                                                 className={`
                                                 rounded-md
                                                 p-2
-                                                text-muted-400
-                                                transition
-                                                hover:bg-red-50
-                                                hover:text-red-500
+                                                text-red-400 hover:text-red-600 transition-colors
                                                 ${
                                                     showGroupHover
                                                         ? "opacity-0 group-hover:opacity-100"
@@ -1228,57 +1314,78 @@ export default function ProposalForm({
                             </div>
 
                             {/* Totals Cards */}
-                            <div className="flex flex-wrap gap-3">
+                            <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:grid-cols-[repeat(4,130px)]">
                                 {(["PS", "MOOE", "CO", "FINEX"] as const).map(
-                                    (ec) => (
+                                    (ec) => {
+                                        const total = componentExpenseClassTotals[
+                                            ec
+                                        ].toLocaleString(undefined, {
+                                            minimumFractionDigits: 2,
+                                        });
+
+                                        return (
                                         <div
                                             key={ec}
                                             className="
-                                        min-w-[130px]
-                                        rounded-lg
-                                        border
-                                        border-muted-200
-                                        bg-background
-                                        px-4
-                                        py-3
-                                    "
+                                            min-w-0
+                                            rounded-lg
+                                            border
+                                            border-muted-200
+                                            bg-background
+                                            px-4
+                                            py-3
+                                            overflow-hidden
+                                            "
                                         >
                                             <div className="text-sm font-semibold text-muted-500">
                                                 {ec}
                                             </div>
 
-                                            <div className="mt-1 text-sm font-bold text-secondary-foreground">
-                                                {componentExpenseClassTotals[
-                                                    ec
-                                                ].toLocaleString(undefined, {
-                                                    minimumFractionDigits: 2,
-                                                })}
+                                            <div
+                                                className="mt-1 overflow-auto text-sm font-bold tabular-nums text-secondary-foreground"
+                                                title={total}
+                                            >
+                                                {total}
                                             </div>
                                         </div>
-                                    ),
+                                        );
+                                    },
                                 )}
 
                                 {/* Grand Total */}
                                 <div
                                     className="
-                                    min-w-[160px]
+                                    col-span-2
+                                    min-w-0
                                     rounded-lg
                                     border
                                     border-secondary-foreground/20
                                     bg-secondary-foreground/5
                                     px-4
                                     py-3
+                                    overflow-hidden
+                                    sm:col-span-4
+                                    lg:col-span-4
                                 "
                                 >
                                     <div className="text-sm font-semibold text-muted-600">
                                         GRAND TOTAL
                                     </div>
 
-                                    <div className="mt-1 text-sm font-bold text-secondary-foreground">
-                                        {grandTotal.toLocaleString(undefined, {
+                                    {(() => {
+                                        const total = grandTotal.toLocaleString(undefined, {
                                             minimumFractionDigits: 2,
-                                        })}
-                                    </div>
+                                        });
+
+                                        return (
+                                            <div
+                                                className="mt-1 overflow-auto text-sm font-bold tabular-nums text-secondary-foreground"
+                                                title={total}
+                                            >
+                                                {total}
+                                            </div>
+                                        );
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -1762,15 +1869,7 @@ export default function ProposalForm({
                             <button
                                 type="button"
                                 onClick={addCostComponent}
-                                className="rounded-lg
-                bg-secondary-foreground
-                px-4
-                py-2
-                text-sm
-                font-semibold
-                text-background
-                transition
-                hover:opacity-90  "
+                                className="rounded-lg bg-secondary-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90"
                             >
                                 + Add Component
                             </button>
@@ -1824,63 +1923,73 @@ export default function ProposalForm({
                                                 const expenseClass =
                                                     selectedItem?.expense_class;
 
-                                                // 1. Extract values safely from the structure
-                                                const lpCash = Number(
+                                                const lpCashRow =
                                                     comp.costs.find(
                                                         (c) =>
                                                             c.fund_category ===
                                                                 "LP" &&
-                                                            c.fund_method ===
-                                                                "cash",
-                                                    )?.amount || 0,
-                                                );
-
-                                                const lpNonCash = Number(
+                                                            normalizeBp203FundMethod(
+                                                                c.fund_method,
+                                                            ) === "cash",
+                                                    );
+                                                const lpNonCashRow =
                                                     comp.costs.find(
                                                         (c) =>
                                                             c.fund_category ===
                                                                 "LP" &&
-                                                            (c.fund_method ===
-                                                                "non_cash" ||
-                                                                c.fund_method ===
-                                                                    "non-cash"),
-                                                    )?.amount || 0,
-                                                );
-
-                                                const gop = Number(
+                                                            normalizeBp203FundMethod(
+                                                                c.fund_method,
+                                                            ) === "non_cash",
+                                                    );
+                                                const gopRow =
                                                     comp.costs.find(
                                                         (c) =>
                                                             c.fund_category ===
                                                             "GOP",
-                                                    )?.amount || 0,
+                                                    );
+
+                                                const lpCash = Number(
+                                                    lpCashRow?.amount || 0,
+                                                );
+                                                const lpNonCash = Number(
+                                                    lpNonCashRow?.amount || 0,
+                                                );
+                                                const gop = Number(
+                                                    gopRow?.amount || 0,
                                                 );
 
-                                                // 2. Derive the active state directly from active amounts
-                                                // Default to "LP" if both are empty so the select options render properly
-                                                const activeCategory =
+                                                const storedCategory =
                                                     gop > 0 &&
                                                     lpCash === 0 &&
                                                     lpNonCash === 0
                                                         ? "GOP"
                                                         : "LP";
-                                                const activeMethod =
+                                                const storedMethod =
                                                     lpNonCash > 0 &&
                                                     lpCash === 0
                                                         ? "non_cash"
                                                         : "cash";
+                                                const selectedCategory =
+                                                    bp203Selections[i]
+                                                        ?.category ??
+                                                    storedCategory;
+                                                const selectedMethod =
+                                                    bp203Selections[i]
+                                                        ?.method ??
+                                                    storedMethod;
 
-                                                // 3. Calculate dynamic total matching the user configuration
+                                                // Calculate dynamic total matching the user configuration
                                                 const rowTotal =
-                                                    activeCategory === "GOP"
+                                                    selectedCategory === "GOP"
                                                         ? gop
-                                                        : activeMethod ===
+                                                        : selectedMethod ===
                                                             "cash"
                                                           ? lpCash
                                                           : lpNonCash;
                                                 const activeValue =
-                                                    activeCategory === "GOP"
+                                                    selectedCategory === "GOP"
                                                         ? gop
-                                                        : activeMethod ===
+                                                        : selectedMethod ===
                                                             "cash"
                                                           ? lpCash
                                                           : lpNonCash;
@@ -1973,7 +2082,7 @@ export default function ProposalForm({
                                                                 <select
                                                                     className="w-full rounded-lg border border-muted-200 bg-background px-2 py-1.5 text-sm outline-none transition focus:border-secondary-foreground/40"
                                                                     value={
-                                                                        activeCategory
+                                                                        selectedCategory
                                                                     }
                                                                     onChange={(
                                                                         e,
@@ -1985,7 +2094,24 @@ export default function ProposalForm({
                                                                         const nextCat =
                                                                             e
                                                                                 .target
-                                                                                .value;
+                                                                                .value as Bp203FundCategory;
+                                                                        setBp203Selections(
+                                                                            (
+                                                                                prev,
+                                                                            ) => ({
+                                                                                ...prev,
+                                                                                [i]: {
+                                                                                    category:
+                                                                                        nextCat,
+                                                                                    method:
+                                                                                        prev[
+                                                                                            i
+                                                                                        ]
+                                                                                            ?.method ??
+                                                                                        selectedMethod,
+                                                                                },
+                                                                            }),
+                                                                        );
 
                                                                         if (
                                                                             nextCat ===
@@ -2032,7 +2158,7 @@ export default function ProposalForm({
                                                                                 activeValue ||
                                                                                     0,
                                                                                 "cost_by_components",
-                                                                                activeMethod,
+                                                                                selectedMethod,
                                                                             );
                                                                         }
                                                                     }}
@@ -2046,12 +2172,12 @@ export default function ProposalForm({
                                                                 </select>
 
                                                                 {/* Secondary Method Select (Only rendered if Category is LP) */}
-                                                                {activeCategory ===
+                                                                {selectedCategory ===
                                                                     "LP" && (
                                                                     <select
                                                                         className="w-full rounded-lg border border-muted-200 bg-background px-2 py-1.5 text-xs font-medium text-muted-600 outline-none transition focus:border-secondary-foreground/40 state-anim"
                                                                         value={
-                                                                            activeMethod
+                                                                            selectedMethod
                                                                         }
                                                                         onChange={(
                                                                             e,
@@ -2063,9 +2189,19 @@ export default function ProposalForm({
                                                                             const nextMethod =
                                                                                 e
                                                                                     .target
-                                                                                    .value as
-                                                                                    | "cash"
-                                                                                    | "non_cash";
+                                                                                    .value as Bp203FundMethod;
+                                                                            setBp203Selections(
+                                                                                (
+                                                                                    prev,
+                                                                                ) => ({
+                                                                                    ...prev,
+                                                                                    [i]: {
+                                                                                        category:
+                                                                                            selectedCategory,
+                                                                                        method: nextMethod,
+                                                                                    },
+                                                                                }),
+                                                                            );
                                                                             // Swap amounts between cash and non_cash variables safely
                                                                             handleMatrixChange203(
                                                                                 i,
@@ -2073,7 +2209,7 @@ export default function ProposalForm({
                                                                                 "LP",
                                                                                 0,
                                                                                 "cost_by_components",
-                                                                                activeMethod,
+                                                                                selectedMethod,
                                                                             );
                                                                             handleMatrixChange203(
                                                                                 i,
@@ -2122,12 +2258,12 @@ export default function ProposalForm({
                                                                     handleMatrixChange203(
                                                                         i,
                                                                         expenseClass,
-                                                                        activeCategory,
+                                                                        selectedCategory,
                                                                         val,
                                                                         "cost_by_components",
-                                                                        activeCategory ===
+                                                                        selectedCategory ===
                                                                             "LP"
-                                                                            ? activeMethod
+                                                                            ? selectedMethod
                                                                             : undefined,
                                                                     );
                                                                 }}
@@ -2148,7 +2284,7 @@ export default function ProposalForm({
                                                         </td>
 
                                                         {/* Action Delete Button */}
-                                                        <td className="px-2 py-4 text-center align-top w-[50px]">
+                                                        <td className="px-2 py-4 text-center align-top">
                                                             <button
                                                                 type="button"
                                                                 onClick={() =>
@@ -2157,7 +2293,7 @@ export default function ProposalForm({
                                                                         i,
                                                                     )
                                                                 }
-                                                                className="rounded-md p-2 text-muted-400 transition hover:bg-red-50 hover:text-red-500"
+                                                                className="rounded-md p-2 text-red-400 hover:text-red-600 transition-colors"
                                                             >
                                                                 ✕
                                                             </button>
@@ -2192,106 +2328,6 @@ export default function ProposalForm({
 
             {type === "202" && (
                 <div className="space-y-8">
-                    {/*  <div className="space-y-2">
-                        <div
-                            className={`rounded-xl border shadow-sm overflow-hidden ${
-                                errors.cost_by_components
-                                    ? "border-red-500 bg-red-50"
-                                    : "border-muted-200"
-                            }`}
-                        >
-                            <CollapsibleTableSection
-                                section="cost_by_components"
-                                title="Costing by Component(s)"
-                                subtitle="Allocate funding per catalog item"
-                                collapsed={collapsedSections.cost_by_components}
-                                onToggle={() =>
-                                    toggleSection("cost_by_components")
-                                }
-                                actions={
-                                    <button
-                                        type="button"
-                                        onClick={addCostComponent}
-                                        className={`
-                rounded-lg
-                bg-secondary-foreground
-                px-4
-                py-2
-                text-sm
-                font-semibold
-                text-background
-                transition
-                hover:opacity-90  
-            `}
-                                    >
-                                        + Add Allocation
-                                    </button>
-                                }
-                                summary={
-                                    <div className="flex flex-wrap gap-3">
-                                        {payload.cost_by_components
-                                            .slice(0, 3)
-                                            .map((comp, i) => {
-                                                const selectedItem =
-                                                    getSelectedItemCatalog(
-                                                        comp.item_catalog_id,
-                                                    );
-
-                                                return (
-                                                    <div
-                                                        key={i}
-                                                        className="
-                            rounded-lg
-                            border
-                            border-muted-200
-                            bg-muted-50
-                            px-4
-                            py-3
-                            min-w-[220px]
-                        "
-                                                    >
-                                                        <div className="text-sm font-semibold truncate">
-                                                            {selectedItem?.name ||
-                                                                "Unnamed Item"}
-                                                        </div>
-
-                                                        <div className="mt-1 text-sm text-muted-500">
-                                                            {
-                                                                selectedItem?.expense_class
-                                                            }
-                                                        </div>
-
-                                                        <div className="mt-2 text-sm font-bold text-secondary-foreground">
-                                                            {Number(
-                                                                comp.proposed_amt ||
-                                                                    0,
-                                                            ).toLocaleString()}
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                    </div>
-                                }
-                            >
-                                {renderCostComponentAllocationTable()}
-                            </CollapsibleTableSection>
-                        </div>
-                        {getErrorsForPath("cost_by_components").length > 0 && (
-                            <div className="bg-red-50 border border-red-100 p-3 rounded-lg mb-4">
-                                {getErrorsForPath("cost_by_components").map(
-                                    (msg, i) => (
-                                        <p
-                                            key={i}
-                                            className="text-sm text-red-600 font-semibold flex items-center gap-1"
-                                        >
-                                            <span className="w-1 h-1 bg-red-600 rounded-full" />{" "}
-                                            {msg}
-                                        </p>
-                                    ),
-                                )}
-                            </div>
-                        )}
-                    </div> */}
                     <div className="space-y-2">
                         <div
                             className={`bg-background shadow-sm overflow-hidden ${
@@ -2318,14 +2354,14 @@ export default function ProposalForm({
                                             })
                                         }
                                         className="rounded-lg
-                bg-secondary-foreground
-                px-4
-                py-2
-                text-sm
-                font-semibold
-                text-background
-                transition
-                hover:opacity-90  "
+                                        bg-secondary-foreground
+                                        px-4
+                                        py-2
+                                        text-sm
+                                        font-semibold
+                                        text-background
+                                        transition
+                                        hover:opacity-90"
                                     >
                                         + Add Location
                                     </button>
@@ -2517,15 +2553,7 @@ export default function ProposalForm({
                                                 },
                                             )
                                         }
-                                        className="rounded-lg
-                bg-secondary-foreground
-                px-4
-                py-2
-                text-sm
-                font-semibold
-                text-background
-                transition
-                hover:opacity-90  "
+                                        className="rounded-lg bg-secondary-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90"
                                     >
                                         + Add Attribution
                                     </button>
@@ -2883,31 +2911,13 @@ export default function ProposalForm({
                                                                                     >
                                                                                         <input
                                                                                             type="number"
-                                                                                            className="w-full text-center bg-transparent outline-none text-sm py-1"
+                                                                                            className="w-full text-center bg-transparent outline-none text-sm py-1 disabled:cursor-not-allowed disabled:text-slate-400"
                                                                                             placeholder="0"
-                                                                                            // disable tier 1 input of current year for new proposal
-                                                                                            disabled={(() => {
-                                                                                                // find matching attribute cost
-                                                                                                const match =
-                                                                                                    attr.attribution_costs.find(
-                                                                                                        (
-                                                                                                            c,
-                                                                                                        ) =>
-                                                                                                            c.year ===
-                                                                                                                col.year &&
-                                                                                                            c.tier ===
-                                                                                                                col.tier,
-                                                                                                    );
-
-                                                                                                // disable if current year and tier 1
-                                                                                                return (
-                                                                                                    match?.tier ===
-                                                                                                        1 &&
-                                                                                                    match?.year ===
-                                                                                                        payload.proposal_year &&
-                                                                                                    payload.is_new
-                                                                                                );
-                                                                                            })()}
+                                                                                            disabled={
+                                                                                                payload.is_new &&
+                                                                                                col.year === payload.proposal_year &&
+                                                                                                col.tier === 1
+                                                                                            }
                                                                                             value={
                                                                                                 attr.attribution_costs
                                                                                                     .find(
@@ -2932,6 +2942,14 @@ export default function ProposalForm({
                                                                                             onChange={(
                                                                                                 e,
                                                                                             ) => {
+                                                                                                if (
+                                                                                                    payload.is_new &&
+                                                                                                    col.year === payload.proposal_year &&
+                                                                                                    col.tier === 1
+                                                                                                ) {
+                                                                                                    return;
+                                                                                                }
+
                                                                                                 const newAttrCosts =
                                                                                                     [
                                                                                                         ...attr.attribution_costs,
@@ -3087,7 +3105,7 @@ export default function ProposalForm({
                                                         },
                                                     )
                                                 }
-                                                className="flex items-center gap-2 rounded-lg bg-secondary-foreground-600 px-4 py-2 text-sm font-bold text-primary-foreground shadow-md hover:bg-secondary-foreground-700 transition"
+                                                className="flex items-center gap-2 rounded-lg bg-secondary-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90"
                                             >
                                                 + Add Requirement
                                             </button>
@@ -3285,15 +3303,7 @@ export default function ProposalForm({
                                                 target_description: "",
                                             })
                                         }
-                                        className="rounded-lg
-                bg-secondary-foreground
-                px-4
-                py-2
-                text-sm
-                font-semibold
-                text-background
-                transition
-                hover:opacity-90  "
+                                        className="rounded-lg bg-secondary-foreground px-4 py-2 text-sm font-semibold text-background transition hover:opacity-90"
                                     >
                                         + Add Target
                                     </button>
@@ -3334,7 +3344,7 @@ export default function ProposalForm({
                                                     type="number"
                                                     className="w-24 border-b text-sm"
                                                     placeholder="Year"
-                                                    value={target.year}
+                                                    value={target.year ?? ""}
                                                     min={payload.proposal_year}
                                                     onChange={(e) =>
                                                         updateRow(

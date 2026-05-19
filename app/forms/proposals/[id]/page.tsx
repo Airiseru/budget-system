@@ -17,6 +17,7 @@ import { PROPOSAL_WORKFLOW } from "@/src/lib/workflows/proposal-flow";
 import { revalidatePath } from "next/cache";
 import ProposalView from "@/components/ui/proposals/ProposalView";
 import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import { canViewFormIntegrity } from "@/src/lib/user-status";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -110,8 +111,7 @@ export default async function ProposalDetailsPage({
         await canDbmActOnFormForFiscalYear(data.proposal_year)
     const entityActionsLockedByBudgetCycle =
         !isBudgetPrepOpenForProposalYear && !allowClosedCycleActions;
-    const canVerifyIntegrity =
-        session.user.role === "dbm" || session.user.is_admin === true;
+    const canVerifyIntegrity = canViewFormIntegrity(session.user);
 
     // 5. Server Actions
     const updateAuthStatus = async () => {

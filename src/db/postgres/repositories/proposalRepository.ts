@@ -417,27 +417,32 @@ export async function createProjectProposal(
             .where("e2.id", "=", entityId)
             .limit(1);
 
-        // Fetch Maximum Rank and lock corresponding matching records to serialize concurrent submissions
-        const deptRankResult = await trx
+        // Lock matching rows first, then compute max rank in JS.
+        // PostgreSQL does not allow FOR UPDATE on aggregate queries.
+        const departmentRankRows = await trx
             .selectFrom("project_proposals as pp")
             .innerJoin("forms as f", "f.id", "pp.id")
             .innerJoin("entities as e", "e.id", "f.entity_id")
             .leftJoin("agencies", "agencies.id", "e.id")
             .leftJoin("operating_units as ou", "ou.id", "e.id")
-            .select(({ fn }) =>
-                fn.max<number>("pp.dept_priority_rank").as("max_rank"),
-            )
+            .select("pp.dept_priority_rank")
             .where("pp.proposal_year", "=", payload.proposal_year)
             .where(
                 sql`COALESCE(agencies.department_id, ou.agency_id)`,
                 "=",
                 targetDeptSubquery,
             )
-            // CRITICAL: Prevent concurrent writes from reading the same maximum rank slot
-            .forUpdate()
-            .executeTakeFirst();
+            // CRITICAL: lock only proposal rows; left-joined entity subtype rows are nullable.
+            .forUpdate("pp")
+            .execute();
 
-        const nextDeptRank = (deptRankResult?.max_rank ?? 0) + 1;
+        const nextDeptRank =
+            Math.max(
+                0,
+                ...departmentRankRows.map((row) =>
+                    Number(row.dept_priority_rank ?? 0),
+                ),
+            ) + 1;
 
         // Apply calculated priority rank safely
         await trx
