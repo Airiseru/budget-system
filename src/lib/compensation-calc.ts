@@ -1,5 +1,22 @@
 import { CompensationRule } from '@/src/types/salaries'
 
+export function computeMonthlySalaryMultiplierAmount(
+    multiplier: number,
+    monthlyBaseSalary: number,
+    numPositions: number,
+    monthsEmployed: number,
+): number {
+    return multiplier * monthlyBaseSalary * monthsEmployed * numPositions
+}
+
+export function computeAnnualSalaryMultiplierAmount(
+    multiplier: number,
+    monthlyBaseSalary: number,
+    numPositions: number,
+): number {
+    return multiplier * monthlyBaseSalary * numPositions
+}
+
 export function computeCompensationAmount(
     rule: CompensationRule,
     monthlyBaseSalary: number,
@@ -30,9 +47,14 @@ export function computeCompensationAmount(
         return ruleValue * monthsEmployed * numPositions
     }
 
+    if (calcType === 'salary_multiplier' && frequency === 'monthly') {
+        // salary multiplier monthly = rule_value * monthly_base_salary * months_employed * num_positions
+        return computeMonthlySalaryMultiplierAmount(ruleValue, monthlyBaseSalary, numPositions, monthsEmployed)
+    }
+
     if (calcType === 'salary_multiplier' && frequency === 'annual') {
         // salary multiplier annual = rule_value * monthly_base_salary * num_positions
-        return ruleValue * monthlyBaseSalary * numPositions
+        return computeAnnualSalaryMultiplierAmount(ruleValue, monthlyBaseSalary, numPositions)
     }
 
     return 0

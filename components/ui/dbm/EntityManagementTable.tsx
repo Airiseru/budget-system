@@ -36,6 +36,12 @@ type Row = {
     deactivateUrl: string
 }
 
+function getEntityStatusBadgeClass(status: string) {
+    if (status === 'active') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    if (status === 'inactive') return 'border-red-200 bg-red-50 text-red-700'
+    return 'border-border bg-muted text-muted-foreground'
+}
+
 export function EntityManagementTable({ departments, agencies, operatingUnits, entityName, basePath = '/dbm/entities', showActions = true }: Props) {
     const agenciesByDeptId = new Map<string | null, AgencyOption[]>()
     const ousByParentId = new Map<string | null, OperatingUnitOption[]>()
@@ -177,10 +183,7 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
                                     </Badge>
                                 </TableCell>
                                 <TableCell>
-                                    <Badge
-                                        variant={row.status === 'inactive' ? 'destructive' : 'secondary'}
-                                        className={row.status === 'active' ? 'bg-emerald-100 text-emerald-700' : ''}
-                                    >
+                                    <Badge variant="outline" className={getEntityStatusBadgeClass(row.status)}>
                                         {row.status.toUpperCase()}
                                     </Badge>
                                 </TableCell>

@@ -188,7 +188,7 @@ export default async function HomePage() {
                                 <Link
                                     key={form.id}
                                     href={isDBM ? `/dbm/forms/${form.id}` : `${form.type?.includes("proposal") ? "/forms/proposals" : form.type === "bp_staffing" ? "/forms/staff" : "/forms/retirees"}/${form.id}`}
-                                    className="block p-5 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+                                    className="block p-5 transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
                                 >
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div>

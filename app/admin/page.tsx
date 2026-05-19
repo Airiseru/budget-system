@@ -48,6 +48,12 @@ function formatDate(value: Date | string | null | undefined) {
     }).format(new Date(value))
 }
 
+function getEntityStatusBadgeClass(status: string | null | undefined) {
+    if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700"
+    if (status === "inactive") return "border-red-200 bg-red-50 text-red-700"
+    return "border-border bg-muted text-muted-foreground"
+}
+
 function buildEntityPreviewRows(result: Awaited<ReturnType<typeof loadAdminEntities>>) {
     if (!("departments" in result) || !result.departments || !result.agencies || !result.operatingUnits) {
         return []
@@ -237,7 +243,11 @@ export default async function AdminPage() {
                                             <Badge variant="secondary">
                                                 {ENTITY_TYPE_LABELS[entity.type] ?? entity.type}
                                             </Badge>
-                                            {entity.status ? <Badge variant="outline">{entity.status}</Badge> : null}
+                                            {entity.status ?
+                                                <Badge variant="outline" className={getEntityStatusBadgeClass(entity.status)}>
+                                                    {entity.status.toUpperCase()}
+                                                </Badge>
+                                            : null}
                                         </div>
                                     </div>
                                 </Link>
