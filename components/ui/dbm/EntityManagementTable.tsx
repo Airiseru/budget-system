@@ -1,8 +1,9 @@
 'use client'
 
+import { useState } from 'react'
 import { Department, Agency, OperatingUnit } from '@/src/types/entities'
 import { Button } from '@/components/ui/button'
-import { CircleOff, Pencil } from 'lucide-react'
+import { ChevronDown, ChevronRight, CircleOff, Pencil } from 'lucide-react'
 import Link from 'next/link'
 import {
     Table, TableBody, TableCell, TableHead, TableHeader, TableRow
@@ -32,6 +33,7 @@ type Row = {
     status: string
     parent: string
     depth: number
+    parentDepartmentId: string | null
     editUrl: string
     deactivateUrl: string
 }
@@ -43,6 +45,7 @@ function getEntityStatusBadgeClass(status: string) {
 }
 
 export function EntityManagementTable({ departments, agencies, operatingUnits, entityName, basePath = '/dbm/entities', showActions = true }: Props) {
+    const [collapsedDepartmentIds, setCollapsedDepartmentIds] = useState<Set<string>>(new Set())
     const agenciesByDeptId = new Map<string | null, AgencyOption[]>()
     const ousByParentId = new Map<string | null, OperatingUnitOption[]>()
 
@@ -62,7 +65,16 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
 
     const rows: Row[] = []
 
-    function addOperatingUnit(ou: OperatingUnitOption, parentName: string, depth: number) {
+    function toggleDepartment(departmentId: string) {
+        setCollapsedDepartmentIds((current) => {
+            const next = new Set(current)
+            if (next.has(departmentId)) next.delete(departmentId)
+            else next.add(departmentId)
+            return next
+        })
+    }
+
+    function addOperatingUnit(ou: OperatingUnitOption, parentName: string, depth: number, parentDepartmentId: string | null) {
         rows.push({
             id: ou.id,
             name: ou.name,
@@ -73,14 +85,15 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
             status: ou.status ?? 'active',
             parent: parentName,
             depth,
+            parentDepartmentId,
             editUrl: `${basePath}/operating-unit/${ou.id}/edit`,
             deactivateUrl: `${basePath}/operating-unit/${ou.id}/deactivate`,
         })
 
-        ousByParentId.get(ou.id)?.forEach(childOu => addOperatingUnit(childOu, ou.name, depth + 1))
+        ousByParentId.get(ou.id)?.forEach(childOu => addOperatingUnit(childOu, ou.name, depth + 1, parentDepartmentId))
     }
 
-    function addAgency(agency: AgencyOption, parentName: string) {
+    function addAgency(agency: AgencyOption, parentName: string, depth = 0, parentDepartmentId: string | null = null) {
         rows.push({
             id: agency.id,
             name: agency.name,
@@ -90,7 +103,8 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
             badge: 'secondary',
             status: agency.status ?? 'active',
             parent: parentName,
-            depth: 0,
+            depth,
+            parentDepartmentId,
             editUrl: `${basePath}/agency/${agency.id}/edit`,
             deactivateUrl: `${basePath}/agency/${agency.id}/deactivate`,
         })
@@ -98,7 +112,7 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
         operatingUnits
             ?.filter(ou => ou?.agency_id === agency.id && !ou?.parent_ou_id)
             .forEach(ou => {
-                if (ou) addOperatingUnit(ou, agency.name, 1)
+                if (ou) addOperatingUnit(ou, agency.name, depth + 1, parentDepartmentId)
             })
     }
 
@@ -114,10 +128,11 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
             status: dept.status ?? 'active',
             parent: '—',
             depth: 0,
+            parentDepartmentId: dept.id,
             editUrl: `${basePath}/department/${dept.id}/edit`,
             deactivateUrl: `${basePath}/department/${dept.id}/deactivate`,
         })
-        agenciesByDeptId.get(dept.id)?.forEach(agency => addAgency(agency, dept.name))
+        agenciesByDeptId.get(dept.id)?.forEach(agency => addAgency(agency, dept.name, 1, dept.id))
     })
 
     if (!departments || departments.filter(Boolean).length === 0) {
@@ -142,6 +157,7 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
             status: ou.status ?? 'active',
             parent: '—',
             depth: ou.parent_ou_id ? 1 : 0,
+            parentDepartmentId: null,
             editUrl: `${basePath}/operating-unit/${ou.id}/edit`,
             deactivateUrl: `${basePath}/operating-unit/${ou.id}/deactivate`,
         })
@@ -170,11 +186,28 @@ export function EntityManagementTable({ departments, agencies, operatingUnits, e
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {rows.map(row => (
+                        {rows.filter((row) => !row.parentDepartmentId || row.type === 'Department' || !collapsedDepartmentIds.has(row.parentDepartmentId)).map(row => (
                             <TableRow key={row.id}>
                                 <TableCell className="font-medium max-w-md whitespace-normal break-words align-center" style={{ paddingLeft: `${16 + row.depth * 20}px` }}>
-                                    {row.depth > 0 ? '↳ ' : ''}
-                                    {row.name}{row.abbr}
+                                    <div className="flex items-center gap-2">
+                                        {row.type === 'Department' ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => toggleDepartment(row.id)}
+                                                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-secondary-foreground"
+                                                aria-label={collapsedDepartmentIds.has(row.id) ? 'Expand department' : 'Collapse department'}
+                                            >
+                                                {collapsedDepartmentIds.has(row.id)
+                                                    ? <ChevronRight className="h-4 w-4" />
+                                                    : <ChevronDown className="h-4 w-4" />}
+                                            </button>
+                                        ) : (
+                                            <span className="w-6 text-center text-muted-foreground">
+                                                {row.depth > 0 ? '↳' : ''}
+                                            </span>
+                                        )}
+                                        <span>{row.name}{row.abbr}</span>
+                                    </div>
                                 </TableCell>
                                 <TableCell className="font-mono text-sm text-muted-foreground">{row.uacs_code}</TableCell>
                                 <TableCell>

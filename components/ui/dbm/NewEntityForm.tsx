@@ -3,10 +3,8 @@
 import { useActionState, useState } from 'react'
 import { createNewEntity } from '@/src/actions/entities'
 import { Button } from '@/components/ui/button'
-import {
-    Select, SelectContent, SelectItem, SelectTrigger, SelectValue
-} from '@/components/ui/select'
 import { Department, Agency, OperatingUnit } from '@/src/types/entities'
+import SearchableComboboxField, { type SearchableComboboxOption } from './SearchableComboboxField'
 
 type DepartmentOption = Pick<Department, 'id' | 'name'>
 type AgencyOption = Pick<Agency, 'id' | 'name' | 'department_id'>
@@ -93,15 +91,38 @@ export function NewEntityForm({ canCreate, departments, agencies, operatingUnits
     const availableTypes = Object.entries(canCreate)
         .filter(([, can]) => can)
         .map(([type]) => type)
+    const entityTypeOptions: SearchableComboboxOption[] = availableTypes.map((type) => ({
+        value: type,
+        label: entityTypeLabels[type],
+    }))
+    const agencyTypeOptions: SearchableComboboxOption[] = Object.entries(agencyTypeLabels).map(([value, label]) => ({
+        value,
+        label,
+    }))
+    const departmentOptions: SearchableComboboxOption[] = departments.map((department) => ({
+        value: department.id,
+        label: department.name,
+    }))
 
     // Filter agencies based on the selected department (for cleaner UI)
     const filteredAgencies = selectedDepartmentId 
         ? agencies.filter(a => a?.department_id === selectedDepartmentId)
         : agencies
+    const agencyOptions: SearchableComboboxOption[] = filteredAgencies.map((agency) => ({
+        value: agency.id,
+        label: agency.name,
+    }))
 
     const filteredOperatingUnits = selectedAgencyId
         ? operatingUnits.filter(ou => ou?.agency_id === selectedAgencyId)
         : []
+    const parentOuOptions: SearchableComboboxOption[] = [
+        { value: 'none', label: 'Top-level OU under the selected agency' },
+        ...filteredOperatingUnits.map((ou) => ({
+            value: ou.id,
+            label: ou.name,
+        })),
+    ]
 
     return (
         <form action={action} className="space-y-6 border border-border rounded-lg p-6">
@@ -113,20 +134,14 @@ export function NewEntityForm({ canCreate, departments, agencies, operatingUnits
             <div className="space-y-2">
                 <label htmlFor="entity_type" className="font-medium">Entity Type to Create</label>
                 <input id="entity_type" type="hidden" name="entity_type" value={entityType} />
-                <Select value={entityType} onValueChange={handleEntityChange}>
-                    <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base bg-background">
-                        <SelectValue placeholder="Select entity type">
-                            {entityType ? entityTypeLabels[entityType] : 'Select entity type'}
-                        </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availableTypes.map(type => (
-                            <SelectItem key={type} value={type}>
-                                {entityTypeLabels[type]}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                <SearchableComboboxField
+                    items={entityTypeOptions}
+                    value={entityType}
+                    onValueChange={handleEntityChange}
+                    placeholder="Select entity type"
+                    searchPlaceholder="Search entity types"
+                    emptyText="No entity types found."
+                />
             </div>
 
             {entityType && (
@@ -137,20 +152,14 @@ export function NewEntityForm({ canCreate, departments, agencies, operatingUnits
                         <div className="space-y-2">
                             <label htmlFor="department_id" className="font-medium">Under Department</label>
                             <input type="hidden" name="department_id" value={selectedDepartmentId} />
-                            <Select value={selectedDepartmentId} onValueChange={handleDepartmentChange}>
-                                <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base bg-background">
-                                    <SelectValue placeholder="Select parent department (Leave blank if Independent)">
-                                        {selectedDepartmentId ? departments.find(d => d?.id === selectedDepartmentId)?.name : 'Select parent department (Leave blank if Independent)'}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {departments.map(dept => (
-                                        <SelectItem key={dept?.id} value={dept?.id}>
-                                            {dept?.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            <SearchableComboboxField
+                                items={departmentOptions}
+                                value={selectedDepartmentId}
+                                onValueChange={handleDepartmentChange}
+                                placeholder="Select parent department (Leave blank if Independent)"
+                                searchPlaceholder="Search departments"
+                                emptyText="No departments found."
+                            />
                         </div>
                     )}
 
@@ -159,17 +168,14 @@ export function NewEntityForm({ canCreate, departments, agencies, operatingUnits
                         <div className="space-y-2">
                             <label htmlFor="type" className="font-medium">Agency Type</label>
                             <input id="type" type="hidden" name="type" value={selectedAgencyType} />
-                            <Select value={selectedAgencyType} onValueChange={handleAgencyTypeChange}>
-                                <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base bg-background">
-                                    <SelectValue placeholder="Select agency type">
-                                        {selectedAgencyType ? agencyTypeLabels[selectedAgencyType] : 'Select agency type'}
-                                    </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="bureau">Bureau</SelectItem>
-                                    <SelectItem value="attached_agency">Attached Agency</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <SearchableComboboxField
+                                items={agencyTypeOptions}
+                                value={selectedAgencyType}
+                                onValueChange={handleAgencyTypeChange}
+                                placeholder="Select agency type"
+                                searchPlaceholder="Search agency types"
+                                emptyText="No agency types found."
+                            />
                         </div>
                     )}
 
@@ -179,44 +185,28 @@ export function NewEntityForm({ canCreate, departments, agencies, operatingUnits
                             <div className="space-y-2">
                                 <label htmlFor='agency_id' className="font-medium">Under Agency</label>
                                 <input id="agency_id" type="hidden" name="agency_id" value={selectedAgencyId} />
-                                <Select value={selectedAgencyId} onValueChange={handleAgencyIdChange} disabled={!selectedDepartmentId && filteredAgencies.length > 50}>
-                                    <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base bg-background">
-                                        <SelectValue placeholder="Select parent agency">
-                                            {selectedAgencyId
-                                                ? agencies.find(a => a?.id === selectedAgencyId)?.name
-                                                : 'Select agency'}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {filteredAgencies.map(agency => (
-                                            <SelectItem key={agency?.id} value={agency?.id}>
-                                                {agency?.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <SearchableComboboxField
+                                    items={agencyOptions}
+                                    value={selectedAgencyId}
+                                    onValueChange={handleAgencyIdChange}
+                                    placeholder="Select agency"
+                                    searchPlaceholder="Search agencies"
+                                    emptyText="No agencies found."
+                                />
                             </div>
 
                             <div className="space-y-2">
                                 <label htmlFor='parent_ou_id' className="font-medium">Parent Operating Unit</label>
                                 <input id="parent_ou_id" type="hidden" name="parent_ou_id" value={selectedParentOuId} />
-                                <Select value={selectedParentOuId} onValueChange={handleParentOuChange} disabled={!selectedAgencyId}>
-                                    <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base bg-background">
-                                        <SelectValue placeholder="Optional: choose a parent operating unit for a lower-level OU">
-                                            {selectedParentOuId
-                                                ? operatingUnits.find(ou => ou?.id === selectedParentOuId)?.name
-                                                : 'Top-level OU under the selected agency'}
-                                        </SelectValue>
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="none">Top-level OU under the selected agency</SelectItem>
-                                        {filteredOperatingUnits.map(ou => (
-                                            <SelectItem key={ou?.id} value={ou?.id}>
-                                                {ou?.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
+                                <SearchableComboboxField
+                                    items={parentOuOptions}
+                                    value={selectedParentOuId || 'none'}
+                                    onValueChange={handleParentOuChange}
+                                    disabled={!selectedAgencyId}
+                                    placeholder="Optional: choose a parent operating unit for a lower-level OU"
+                                    searchPlaceholder="Search operating units"
+                                    emptyText="No operating units found."
+                                />
                             </div>
                         </>
                     )}

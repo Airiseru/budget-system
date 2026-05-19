@@ -5,9 +5,17 @@ import { createCompensationRuleAction } from '@/src/actions/salary'
 import { VALID_COMPENSATION_NAMES, MAX_SG } from '@/src/lib/constants'
 import { Button } from '@/components/ui/button'
 import { X } from 'lucide-react'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
     const [state, action, pending] = useActionState(createCompensationRuleAction, undefined)
+    const [name, setName] = useState<string>(state?.values?.name ?? '')
     const [calcType, setCalcType] = useState<string>(state?.values?.calculation_type ?? 'fixed')
     const [frequency, setFrequency] = useState<string>(state?.values?.frequency ?? 'monthly')
     const todayDate = useMemo(() => {
@@ -50,17 +58,19 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                     {/* name */}
                     <div className="space-y-1">
                         <label className="text-sm font-medium">Benefit / Allowance</label>
-                        <select
-                            name="name"
-                            defaultValue={state?.values?.name ?? ''}
-                            className="border px-3 py-2 rounded bg-background w-full text-sm"
-                            required
-                        >
-                            <option value="" disabled>Select type...</option>
-                            {VALID_COMPENSATION_NAMES.map(n => (
-                                <option key={n} value={n}>{n}</option>
-                            ))}
-                        </select>
+                        <input type="hidden" name="name" value={name} />
+                        <Select value={name} onValueChange={(value) => setName(value ?? '')}>
+                            <SelectTrigger className="w-full border border-border bg-background text-sm">
+                                <SelectValue placeholder="Select type...">
+                                    {name || 'Select type...'}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {VALID_COMPENSATION_NAMES.map(n => (
+                                    <SelectItem key={n} value={n}>{n}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                         {state?.fieldErrors?.name && (
                             <p className="text-red-500 text-xs">{state.fieldErrors.name[0]}</p>
                         )}
@@ -85,18 +95,26 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1">
                             <label className="text-sm font-medium">Calculation Type</label>
-                            <select
-                                name="calculation_type"
-                                value={calcType}
-                                onChange={e => setCalcType(e.target.value)}
-                                className="border px-3 py-2 rounded bg-background w-full text-sm"
-                                required
-                            >
-                                <option value="fixed">Fixed Amount (PHP)</option>
-                                <option value="percentage">Salary Percentage (%)</option>
-                                <option value="salary_multiplier">Salary Multiplier</option>
-                                <option value="value_multiplier">Value Multiplier</option>
-                            </select>
+                            <input type="hidden" name="calculation_type" value={calcType} />
+                            <Select value={calcType} onValueChange={(value) => setCalcType(value ?? 'fixed')}>
+                                <SelectTrigger className="w-full border border-border bg-background text-sm">
+                                    <SelectValue placeholder="Select calculation type">
+                                        {calcType === 'fixed'
+                                            ? 'Fixed Amount (PHP)'
+                                            : calcType === 'percentage'
+                                                ? 'Salary Percentage (%)'
+                                                : calcType === 'salary_multiplier'
+                                                    ? 'Salary Multiplier'
+                                                    : 'Value Multiplier'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="fixed">Fixed Amount (PHP)</SelectItem>
+                                    <SelectItem value="percentage">Salary Percentage (%)</SelectItem>
+                                    <SelectItem value="salary_multiplier">Salary Multiplier</SelectItem>
+                                    <SelectItem value="value_multiplier">Value Multiplier</SelectItem>
+                                </SelectContent>
+                            </Select>
                             {state?.fieldErrors?.calculation_type && (
                                 <p className="text-red-500 text-xs">{state.fieldErrors.calculation_type[0]}</p>
                             )}
@@ -104,16 +122,18 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
 
                         <div className="space-y-1">
                             <label className="text-sm font-medium">Frequency</label>
-                            <select
-                                name="frequency"
-                                value={frequency}
-                                onChange={e => setFrequency(e.target.value)}
-                                className="border px-3 py-2 rounded bg-background w-full text-sm"
-                                required
-                            >
-                                <option value="monthly">Monthly</option>
-                                <option value="annual">Annual</option>
-                            </select>
+                            <input type="hidden" name="frequency" value={frequency} />
+                            <Select value={frequency} onValueChange={(value) => setFrequency(value ?? 'monthly')}>
+                                <SelectTrigger className="w-full border border-border bg-background text-sm">
+                                    <SelectValue placeholder="Select frequency">
+                                        {frequency === 'annual' ? 'Annual' : 'Monthly'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="monthly">Monthly</SelectItem>
+                                    <SelectItem value="annual">Annual</SelectItem>
+                                </SelectContent>
+                            </Select>
                             {state?.fieldErrors?.frequency && (
                                 <p className="text-red-500 text-xs">{state.fieldErrors.frequency[0]}</p>
                             )}
