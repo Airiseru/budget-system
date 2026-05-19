@@ -5,13 +5,23 @@ import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
 import {
     createItemRepository,
+    createPapRepository,
     createUacsRepository,
 } from "@/src/db/factory";
 
 const ItemRepo = createItemRepository(process.env.DATABASE_TYPE || "postgres");
+const PapRepo = createPapRepository(process.env.DATABASE_TYPE || "postgres");
 const UacsRepo = createUacsRepository(process.env.DATABASE_TYPE || "postgres");
 
-export default async function NewProposalPage() {
+type NewProposalSearchParams = Promise<{
+    type?: string;
+}>;
+
+export default async function NewProposalPage({
+    searchParams,
+}: {
+    searchParams: NewProposalSearchParams;
+}) {
     const session = await sessionWithEntity();
 
     if (!session || !session.user?.entity_id) {
@@ -33,9 +43,17 @@ export default async function NewProposalPage() {
         );
     }
 
-    const [itemCatalogs, fundingSources] = await Promise.all([
+    const params = await searchParams;
+    const proposalType = params.type === "203" ? "203" : "202";
+    const papCategory = proposalType === "203" ? "foreign" : "local";
+
+    const [itemCatalogs, fundingSources, existingPaps] = await Promise.all([
         ItemRepo.listAllItemCatalog(),
         UacsRepo.listFundingSources(),
+        PapRepo.getPapOptionsForEntityHierarchy(session.user.entity_id, {
+            includeGlobal: false,
+            category: papCategory,
+        }),
     ]);
 
     return (
@@ -46,6 +64,7 @@ export default async function NewProposalPage() {
             activeFiscalYear={activeCycle.fiscal_year}
             itemCatalogs={itemCatalogs}
             fundingSources={fundingSources}
+            existingPaps={existingPaps}
         />
     );
 }

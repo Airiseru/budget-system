@@ -93,6 +93,27 @@ function getProjectStatusLabel(status: string) {
     return PAP_PROJECT_STATUS_LABELS[status as PAP_PROJECT_STATUS_TYPES] ?? status.replace(/_/g, ' ').toUpperCase()
 }
 
+function getTimestamp(value: string | Date | undefined) {
+    if (!value) return 0
+    const timestamp = new Date(value).getTime()
+    return Number.isFinite(timestamp) ? timestamp : 0
+}
+
+function sortRelatedFormsDescending(forms: RelatedForm[]) {
+    return [...forms].sort((a, b) => {
+        const fiscalYearDiff = b.fiscal_year - a.fiscal_year
+        if (fiscalYearDiff !== 0) return fiscalYearDiff
+
+        const versionDiff = (b.version ?? 0) - (a.version ?? 0)
+        if (versionDiff !== 0) return versionDiff
+
+        const updatedAtDiff = getTimestamp(b.updated_at) - getTimestamp(a.updated_at)
+        if (updatedAtDiff !== 0) return updatedAtDiff
+
+        return getTimestamp(b.created_at) - getTimestamp(a.created_at)
+    })
+}
+
 export default function PapView({
     pap,
     relatedForms,
@@ -109,8 +130,11 @@ export default function PapView({
     }, [relatedForms])
 
     const filteredForms = useMemo(() => {
-        if (selectedFormType === 'all') return relatedForms
-        return relatedForms.filter((form) => form.type === selectedFormType)
+        const forms = selectedFormType === 'all'
+            ? relatedForms
+            : relatedForms.filter((form) => form.type === selectedFormType)
+
+        return sortRelatedFormsDescending(forms)
     }, [relatedForms, selectedFormType])
 
     return (
@@ -149,9 +173,6 @@ export default function PapView({
                         <div className="flex flex-wrap gap-2">
                             <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-bold border ${getProjectStatusClassName(pap.project_status)}`}>
                                 {getProjectStatusLabel(pap.project_status)}
-                            </span>
-                            <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                {pap.project_type?.toUpperCase() || 'No Project Type'}
                             </span>
                         </div>
                     </div>

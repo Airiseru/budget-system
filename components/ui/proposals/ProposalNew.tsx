@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import ProposalForm from "@/components/ui/proposals/ProposalForm";
 import { FullProjectProposal } from "@/src/types/project_proposals";
 import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
+import type { PapOption } from "@/src/db/postgres/repositories/papRepository";
 import type { UacsFundingSource } from "@/src/types/uacs";
 
 interface WrapperProps {
@@ -17,6 +18,7 @@ interface WrapperProps {
     activeFiscalYear?: number;
     itemCatalogs?: ItemCatalogOption[];
     fundingSources?: UacsFundingSource[];
+    existingPaps?: PapOption[];
 }
 
 export default function ProposalClientWrapper({
@@ -28,6 +30,7 @@ export default function ProposalClientWrapper({
     activeFiscalYear,
     itemCatalogs,
     fundingSources,
+    existingPaps,
 }: WrapperProps) {
     const searchParams = useSearchParams();
     const router = useRouter();
@@ -74,13 +77,13 @@ export default function ProposalClientWrapper({
                     activeFiscalYear={activeFiscalYear}
                     itemCatalogs={itemCatalogs}
                     fundingSources={fundingSources}
+                    existingPaps={existingPaps}
                 />
             </div>
 
             <footer className="text-center text-sm text-muted-foreground/75 pb-2">
                 <p>
-                    Ensure all required fields marked in the {type} manual are
-                    filled before submission.
+                    Ensure all required fields marked in the {type} manual are filled before submission.
                 </p>
             </footer>
         </div>

@@ -3,7 +3,25 @@ import { staffingFormSchema } from "@/src/lib/validations/staffing.schema"
 import * as RetireeRepository from "./retireeRepository"
 import { retireeFormSchema } from "@/src/lib/validations/retiree.schema"
 import * as ProposalRepository from "./proposalRepository"
-import { ProposalSchema } from "@/src/lib/validations/proposal.schema"
+import { normalizeProposalPayload } from "@/src/lib/validations/proposal.schema"
+
+function withProposalSchemaPapId(data: unknown) {
+    if (typeof data !== "object" || data === null) return data
+
+    const proposal = data as {
+        is_new?: boolean | null
+        pap_id?: string | null
+        existing_pap_id?: string | null
+    }
+    const existingPapId = proposal.is_new === false
+        ? proposal.existing_pap_id ?? proposal.pap_id ?? ""
+        : proposal.existing_pap_id ?? ""
+
+    return {
+        ...proposal,
+        existing_pap_id: existingPapId,
+    }
+}
 
 export async function fetchHydratedFormState(tableName: string, recordId: string) {
     switch (tableName) {
@@ -19,7 +37,7 @@ export async function fetchHydratedFormState(tableName: string, recordId: string
 
         case 'project_proposals': {
             const proposal = await ProposalRepository.getProjectProposalById(recordId)
-            return ProposalSchema.parse(proposal)
+            return normalizeProposalPayload(withProposalSchemaPapId(proposal))
         }
 
         default: {

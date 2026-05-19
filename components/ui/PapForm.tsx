@@ -22,7 +22,6 @@ export default function PapForm({
     successBasePath = '/paps',
     cancelHref = '/paps',
     defaultProjectStatus = 'draft',
-    defaultProjectType = '',
     entityLockedLabel = 'Entity ID (Locked)',
 }: PapFormProps) {
     const router = useRouter()
@@ -37,7 +36,9 @@ export default function PapForm({
         description: pap?.description || '',
         purpose: pap?.purpose || '',
         beneficiaries: pap?.beneficiaries || '',
-        project_type: pap?.project_type || '',
+        project_type: pap?.project_type === 'foreign' || pap?.project_type === 'local'
+            ? pap.project_type
+            : pap?.category || 'local',
         identifier_code: pap?.identifier_code || '1',
         actual_start_date: pap?.actual_start_date || null,
         project_status: pap?.project_status || defaultProjectStatus,
@@ -45,6 +46,16 @@ export default function PapForm({
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
+    }
+
+    function handleProjectTypeChange(e: React.ChangeEvent<HTMLSelectElement>) {
+        const projectType = e.target.value as 'local' | 'foreign'
+        setFormData(prev => ({
+            ...prev,
+            project_type: projectType,
+            category: projectType,
+            identifier_code: projectType === 'local' ? '2' : '3',
+        }))
     }
 
     const [isLoading, setIsLoading] = useState(false)
@@ -138,15 +149,16 @@ export default function PapForm({
 
                 <div>
                     <label className="block text-sm font-medium mb-1">Project Type</label>
-                    <input
+                    <select
                         name="project_type"
-                        type="text"
                         value={formData.project_type ?? ''}
-                        onChange={handleChange}
-                        placeholder={defaultProjectType || 'Project Type'}
+                        onChange={handleProjectTypeChange}
                         className="border p-2 w-full rounded"
                         disabled={isLoading}
-                    />
+                    >
+                        <option value="local">Local</option>
+                        <option value="foreign">Foreign</option>
+                    </select>
                 </div>
 
                 <div>

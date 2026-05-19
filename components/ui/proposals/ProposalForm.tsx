@@ -1443,6 +1443,7 @@ export default function ProposalForm({
                                     : "border-muted-200"
                             }`}
                             value={payload.title}
+                            disabled={!payload.is_new}
                             onChange={(e) =>
                                 setPayload({
                                     ...payload,
@@ -1598,13 +1599,28 @@ export default function ProposalForm({
                                 type="checkbox"
                                 className="w-5 h-5 rounded border-muted-300 text-secondary-foreground focus:ring-secondary-foreground-500"
                                 checked={payload.is_new}
-                                onChange={(e) =>
-                                    updateRow(
-                                        "is_new",
-                                        undefined,
-                                        e.target.checked,
-                                    )
-                                }
+                                onChange={(e) => {
+                                    const isNewProject = e.target.checked;
+
+                                    if (isNewProject) {
+                                        setSelectedPapId("");
+                                        setPayload((prev) => ({
+                                            ...prev,
+                                            is_new: true,
+                                            existing_pap_id: "",
+                                            title: "",
+                                            description: "",
+                                            org_outcome_id: "",
+                                            purpose: "",
+                                            beneficiaries: "",
+                                            is_infrastructure: false,
+                                            for_ict: false,
+                                        }));
+                                        return;
+                                    }
+
+                                    updateRow("is_new", undefined, false);
+                                }}
                             />
                             <span className="text-sm font-medium text-muted-700 group-hover:text-secondary-foreground transition-colors">
                                 New Project
@@ -1612,8 +1628,7 @@ export default function ProposalForm({
                         </label>
                         {!hasExistingPaps && (
                             <p className="text-sm text-muted-500">
-                                No existing PAPs available. Proposal is locked
-                                to New Project.
+                                No existing PAPs available. Proposal is locked to New Project.
                             </p>
                         )}
                         {payload.is_new === false && (
@@ -1641,6 +1656,13 @@ export default function ProposalForm({
                                         if (selectedPap) {
                                             setPayload((prev) => ({
                                                 ...prev,
+                                                title: selectedPap.title,
+                                                description: selectedPap.description ?? "",
+                                                org_outcome_id: selectedPap.org_outcome_id,
+                                                purpose: selectedPap.purpose,
+                                                beneficiaries: selectedPap.beneficiaries,
+                                                is_infrastructure: selectedPap.is_infrastructure ?? false,
+                                                for_ict: selectedPap.for_ict ?? false,
                                                 existing_pap_id: value,
                                             }));
                                         }

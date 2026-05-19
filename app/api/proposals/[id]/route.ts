@@ -13,6 +13,20 @@ import { normalizeProposalPayload } from "@/src/lib/validations/proposal.schema"
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || 'postgres')
 
+function withSchemaPapId<T extends { is_new?: boolean; pap_id?: string | null; existing_pap_id?: string | null }>(
+    proposal: T | null | undefined,
+) {
+    if (!proposal) return proposal
+    const existingPapId = proposal.is_new === false
+        ? proposal.existing_pap_id ?? proposal.pap_id ?? ""
+        : proposal.existing_pap_id ?? ""
+
+    return {
+        ...proposal,
+        existing_pap_id: existingPapId,
+    }
+}
+
 export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> },
@@ -87,7 +101,7 @@ export async function PUT(
         }
 
         console.log("Updating proposal with payload:", body);
-        const previousAuditPayload = normalizeProposalPayload(existing)
+        const previousAuditPayload = normalizeProposalPayload(withSchemaPapId(existing))
         const result = isDbmOverwrite
             ? await repo.createDbmProjectProposalOverwrite(id, body)
             : {
@@ -97,7 +111,7 @@ export async function PUT(
               }
         const targetFormId = result.formId
         const updated = await repo.getProjectProposalById(targetFormId)
-        const nextAuditPayload = normalizeProposalPayload(updated ?? body.payload)
+        const nextAuditPayload = normalizeProposalPayload(withSchemaPapId(updated) ?? body.payload)
         const changedAt = updated?.updated_at ?? new Date()
 
         if (result.created && updated) {

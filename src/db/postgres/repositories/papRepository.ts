@@ -38,6 +38,13 @@ export type PapEntityOption = {
 export type PapOption = {
     id: string
     title: string
+    org_outcome_id: string
+    description: string | null
+    purpose: string
+    beneficiaries: string
+    project_type: string | null
+    is_infrastructure: boolean | null
+    for_ict: boolean | null
     entity_id: string | null
     entity_name: string | null
     project_status: PAP_PROJECT_STATUS_TYPES
@@ -46,6 +53,11 @@ export type PapOption = {
 type PapOptionFilters = {
     projectStatuses?: PAP_PROJECT_STATUS_TYPES[]
     excludeProjectStatuses?: PAP_PROJECT_STATUS_TYPES[]
+}
+
+type EntityHierarchyPapOptionFilters = {
+    includeGlobal?: boolean
+    category?: 'local' | 'foreign'
 }
 
 export type PapRelatedForm = {
@@ -265,6 +277,29 @@ export async function getPapOptions(filters: PapOptionFilters = {}): Promise<Pap
         .select([
             'paps.id as id',
             'paps.title as title',
+            'paps.org_outcome_id as org_outcome_id',
+            'paps.description as description',
+            'paps.purpose as purpose',
+            'paps.beneficiaries as beneficiaries',
+            'paps.project_type as project_type',
+            sql<boolean | null>`(
+                SELECT pp.is_infrastructure
+                FROM form_paps fp
+                INNER JOIN project_proposals pp ON pp.id = fp.form_id
+                INNER JOIN forms f ON f.id = fp.form_id
+                WHERE fp.pap_id = paps.id
+                ORDER BY f.created_at DESC
+                LIMIT 1
+            )`.as('is_infrastructure'),
+            sql<boolean | null>`(
+                SELECT pp.for_ict
+                FROM form_paps fp
+                INNER JOIN project_proposals pp ON pp.id = fp.form_id
+                INNER JOIN forms f ON f.id = fp.form_id
+                WHERE fp.pap_id = paps.id
+                ORDER BY f.created_at DESC
+                LIMIT 1
+            )`.as('for_ict'),
             'paps.entity_id as entity_id',
             'paps.project_status as project_status',
             sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
@@ -281,24 +316,61 @@ export async function getPapOptions(filters: PapOptionFilters = {}): Promise<Pap
     return await query.orderBy('paps.title', 'asc').execute()
 }
 
-export async function getPapOptionsForEntityHierarchy(entityId: string): Promise<PapOption[]> {
+export async function getPapOptionsForEntityHierarchy(
+    entityId: string,
+    filters: EntityHierarchyPapOptionFilters = {}
+): Promise<PapOption[]> {
     const accessibleEntityIds = await getAccessibleEntityIds(entityId)
+    const includeGlobal = filters.includeGlobal ?? true
 
     let query = createPapBaseQuery()
         .select([
             'paps.id as id',
             'paps.title as title',
+            'paps.org_outcome_id as org_outcome_id',
+            'paps.description as description',
+            'paps.purpose as purpose',
+            'paps.beneficiaries as beneficiaries',
+            'paps.project_type as project_type',
+            sql<boolean | null>`(
+                SELECT pp.is_infrastructure
+                FROM form_paps fp
+                INNER JOIN project_proposals pp ON pp.id = fp.form_id
+                INNER JOIN forms f ON f.id = fp.form_id
+                WHERE fp.pap_id = paps.id
+                ORDER BY f.created_at DESC
+                LIMIT 1
+            )`.as('is_infrastructure'),
+            sql<boolean | null>`(
+                SELECT pp.for_ict
+                FROM form_paps fp
+                INNER JOIN project_proposals pp ON pp.id = fp.form_id
+                INNER JOIN forms f ON f.id = fp.form_id
+                WHERE fp.pap_id = paps.id
+                ORDER BY f.created_at DESC
+                LIMIT 1
+            )`.as('for_ict'),
             'paps.entity_id as entity_id',
             'paps.project_status as project_status',
             sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
         ])
 
-    query = accessibleEntityIds.length > 0
-        ? query.where(({ eb, or }) => or([
-            eb('paps.entity_id', 'is', null),
-            eb('paps.entity_id', 'in', accessibleEntityIds),
-        ]))
-        : query.where('paps.entity_id', 'is', null)
+    if (accessibleEntityIds.length > 0) {
+        query = includeGlobal
+            ? query.where(({ eb, or }) => or([
+                eb('paps.entity_id', 'is', null),
+                eb('paps.entity_id', 'in', accessibleEntityIds),
+            ]))
+            : query.where('paps.entity_id', 'in', accessibleEntityIds)
+    } else {
+        query = includeGlobal
+            ? query.where('paps.entity_id', 'is', null)
+            : query.where(sql`1`, '=', sql`0`)
+    }
+
+    if (filters.category) {
+        query = query.where('paps.category', '=', filters.category)
+    }
 
     return await query
         .orderBy('paps.title', 'asc')

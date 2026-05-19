@@ -129,7 +129,12 @@ export default async function PapPage({
                                 {paps.map((pap) => (
                                     <tr key={pap.id} className="transition-colors hover:bg-accent/60">
                                         <td className="px-4 py-3">
-                                            <div className="font-semibold text-primary-foreground">{pap.title}</div>
+                                            <Link
+                                                href={`/paps/${pap.id}`}
+                                                className="font-semibold text-primary-foreground hover:underline"
+                                            >
+                                                {pap.title}
+                                            </Link>
                                             <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                                                 {pap.description || 'No description provided.'}
                                             </div>

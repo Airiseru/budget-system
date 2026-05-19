@@ -249,7 +249,7 @@ export function normalizeProposalPayload(payload: unknown): ProposalPayload {
 
     const normalizedBase = {
         ...parsed,
-        existing_pap_id: parsed.existing_pap_id ?? "",
+        existing_pap_id: parsed.is_new ? "" : parsed.existing_pap_id ?? "",
         pap_prerequisites: sortByStableString(
             parsed.pap_prerequisites,
             (prerequisite) =>

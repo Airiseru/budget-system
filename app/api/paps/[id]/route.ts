@@ -6,6 +6,18 @@ export const dynamic = 'force-dynamic';
 const PapRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres')
 const DUPLICATE_PAP_CODE_MESSAGE = 'Another PAP already uses this full PREXC/UACS/PAP code.'
 
+function normalizePapProjectType(pap: PapUpdate): PapUpdate {
+    if (pap.project_type !== 'local' && pap.project_type !== 'foreign') {
+        return pap
+    }
+
+    return {
+        ...pap,
+        category: pap.project_type,
+        identifier_code: pap.project_type === 'local' ? '2' : '3',
+    }
+}
+
 function isDuplicatePapCodeError(error: unknown) {
     return (
         typeof error === 'object' &&
@@ -37,7 +49,7 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> }
 ) {
     const { id } = await params
-    const pap: PapUpdate = await request.json()
+    const pap: PapUpdate = normalizePapProjectType(await request.json())
     const validatedPapUacs = PapUacsUpdateSchema.safeParse(pap)
 
     if (!validatedPapUacs.success) {

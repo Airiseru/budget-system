@@ -1,6 +1,4 @@
 import { NextResponse } from "next/server";
-import { auth } from "@/src/lib/auth";
-import { headers } from "next/headers";
 import { createProposalRepository } from "@/src/db/factory";
 import { logSaveFormEdits } from "@/src/actions/audit";
 import { normalizeProposalPayload } from "@/src/lib/validations/proposal.schema";
@@ -20,6 +18,25 @@ type AuditRankChange = {
     previousPayload: Record<string, unknown>;
     nextPayload: Record<string, unknown>;
 };
+
+function withSchemaPapId<T extends { is_new?: boolean | null; pap_id?: string | null; existing_pap_id?: string | null }>(
+    proposal: T,
+) {
+    const existingPapId = proposal.is_new === false
+        ? proposal.existing_pap_id ?? proposal.pap_id ?? ""
+        : proposal.existing_pap_id ?? "";
+
+    return {
+        ...proposal,
+        existing_pap_id: existingPapId,
+    };
+}
+
+function normalizeAuditProposalPayload(
+    proposal: Parameters<typeof withSchemaPapId>[0],
+) {
+    return normalizeProposalPayload(withSchemaPapId(proposal));
+}
 
 async function logRankChangesSequentially(
     userId: string,
@@ -186,17 +203,17 @@ export async function POST(req: Request) {
                         return {
                             recordId: previousProposal.id,
                             previousPayload:
-                                normalizeProposalPayload(previousProposal),
+                                normalizeAuditProposalPayload(previousProposal),
                             nextPayload:
-                                normalizeProposalPayload(previousProposal),
+                                normalizeAuditProposalPayload(previousProposal),
                         };
                     }
 
                     return {
                         recordId: previousProposal.id,
                         previousPayload:
-                            normalizeProposalPayload(previousProposal),
-                        nextPayload: normalizeProposalPayload(updatedProposal),
+                            normalizeAuditProposalPayload(previousProposal),
+                        nextPayload: normalizeAuditProposalPayload(updatedProposal),
                     };
                 }),
                 changedAt,
@@ -253,8 +270,8 @@ export async function POST(req: Request) {
             );
         }
 
-        const previousA = normalizeProposalPayload(proposalA);
-        const previousB = normalizeProposalPayload(proposalB);
+        const previousA = normalizeAuditProposalPayload(proposalA);
+        const previousB = normalizeAuditProposalPayload(proposalB);
 
         if (session.user.role === "department") {
             await swapDeptProposalRanks(proposalIdA, rankA, proposalIdB, rankB);
@@ -289,12 +306,12 @@ export async function POST(req: Request) {
                 {
                     recordId: proposalIdA,
                     previousPayload: previousA,
-                    nextPayload: normalizeProposalPayload(updatedA),
+                    nextPayload: normalizeAuditProposalPayload(updatedA),
                 },
                 {
                     recordId: proposalIdB,
                     previousPayload: previousB,
-                    nextPayload: normalizeProposalPayload(updatedB),
+                    nextPayload: normalizeAuditProposalPayload(updatedB),
                 },
             ],
             changedAt,

@@ -4,6 +4,7 @@ import ProposalClientWrapper from "@/components/ui/proposals/ProposalNew";
 import {
     createEntityRepository,
     createItemRepository,
+    createPapRepository,
     createProposalRepository,
     createUacsRepository,
 } from "@/src/db/factory";
@@ -17,6 +18,7 @@ const ProposalRepo = createProposalRepository(
 );
 const EntityRepo = createEntityRepository(process.env.DATABASE_TYPE || "postgres");
 const ItemRepo = createItemRepository(process.env.DATABASE_TYPE || "postgres");
+const PapRepo = createPapRepository(process.env.DATABASE_TYPE || "postgres");
 const UacsRepo = createUacsRepository(process.env.DATABASE_TYPE || "postgres");
 
 export default async function EditProposalPage({
@@ -64,10 +66,14 @@ export default async function EditProposalPage({
         redirect("/forms/proposals?error=unauthorized");
     }
 
-    const [itemCatalogs, fundingSources, ownerEntityName] = await Promise.all([
+    const [itemCatalogs, fundingSources, ownerEntityName, existingPaps] = await Promise.all([
         ItemRepo.listAllItemCatalog(),
         UacsRepo.listFundingSources(),
         EntityRepo.getFullEntityNameById(project.entity_id),
+        PapRepo.getPapOptionsForEntityHierarchy(project.entity_id, {
+            includeGlobal: false,
+            category: project.type === "203" ? "foreign" : "local",
+        }),
     ]);
 
     return (
@@ -79,6 +85,7 @@ export default async function EditProposalPage({
             entityId={project.entity_id}
             itemCatalogs={itemCatalogs}
             fundingSources={fundingSources}
+            existingPaps={existingPaps}
         />
     );
 }

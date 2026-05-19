@@ -121,6 +121,144 @@ async function assertProposalRankAvailable(
     }
 }
 
+async function findPreviousYearGaaAmountWithExecutor(
+    trx: Transaction<Database>,
+    params: {
+        fiscalYear: number;
+        entityId: string;
+        papId: string;
+        fundCode: string | null;
+        tier: 1 | 2;
+        itemCatalogId: string;
+    },
+) {
+    let query = trx
+        .selectFrom("budget_allocations")
+        .select("gaa_amt")
+        .where("budget_cycle_year", "=", params.fiscalYear - 1)
+        .where("entity_id", "=", params.entityId)
+        .where("pap_code", "=", params.papId)
+        .where("tier", "=", params.tier)
+        .where("item_catalog_id", "=", params.itemCatalogId);
+
+    query = params.fundCode
+        ? query.where("fund_code", "=", params.fundCode)
+        : query.where("fund_code", "is", null);
+
+    const match = await query
+        .orderBy("updated_at", "desc")
+        .executeTakeFirst();
+
+    return Number(match?.gaa_amt ?? 0);
+}
+
+async function syncProposedExistingPapAllocationsWithExecutor(
+    trx: Transaction<Database>,
+    params: {
+        entityId: string;
+        fiscalYear: number;
+        papId: string;
+        components: ProposalCostSourceItem[];
+    },
+) {
+    const allocationInputs = new Map<
+        string,
+        {
+            item_catalog_id: string;
+            fund_code: string | null;
+            specific_description: string | null;
+            currency: string;
+            proposed_amt: number;
+        }
+    >();
+
+    for (const component of params.components) {
+        if (!component.item_catalog_id) continue;
+
+        const itemCatalogId = component.item_catalog_id;
+        const fundCode = component.fund_code ?? null;
+        const key = `${itemCatalogId}::${fundCode ?? ""}`;
+        const current = allocationInputs.get(key);
+
+        if (current) {
+            current.proposed_amt += toNumber(component.proposed_amt);
+            continue;
+        }
+
+        allocationInputs.set(key, {
+            item_catalog_id: itemCatalogId,
+            fund_code: fundCode,
+            specific_description: component.specific_description ?? null,
+            currency: component.currency ?? "PHP",
+            proposed_amt: toNumber(component.proposed_amt),
+        });
+    }
+
+    for (const allocation of allocationInputs.values()) {
+        const prevYearGaaAmount = await findPreviousYearGaaAmountWithExecutor(trx, {
+            fiscalYear: params.fiscalYear,
+            entityId: params.entityId,
+            papId: params.papId,
+            fundCode: allocation.fund_code,
+            tier: 2,
+            itemCatalogId: allocation.item_catalog_id,
+        });
+
+        const existing = await trx
+            .selectFrom("budget_allocations")
+            .select("id")
+            .where("budget_cycle_year", "=", params.fiscalYear)
+            .where("entity_id", "=", params.entityId)
+            .where("pap_code", "=", params.papId)
+            .where("item_catalog_id", "=", allocation.item_catalog_id)
+            .where((eb) =>
+                allocation.fund_code
+                    ? eb("fund_code", "=", allocation.fund_code)
+                    : eb("fund_code", "is", null),
+            )
+            .executeTakeFirst();
+
+        if (existing) {
+            await trx
+                .updateTable("budget_allocations")
+                .set({
+                    proposed_amt: allocation.proposed_amt,
+                    prev_year_gaa_amt: prevYearGaaAmount,
+                    currency: allocation.currency,
+                    specific_description: allocation.specific_description,
+                    auth_status: "proposed",
+                    updated_at: sql`now()`,
+                })
+                .where("id", "=", existing.id)
+                .where("auth_status", "in", ["draft", "proposed"])
+                .execute();
+            continue;
+        }
+
+        await trx
+            .insertInto("budget_allocations")
+            .values({
+                entity_id: params.entityId,
+                budget_cycle_year: params.fiscalYear,
+                pap_code: params.papId,
+                fund_code: allocation.fund_code,
+                item_catalog_id: allocation.item_catalog_id,
+                tier: 2,
+                specific_description: allocation.specific_description,
+                currency: allocation.currency,
+                proposed_amt: allocation.proposed_amt,
+                dbm_rec_amt: 0,
+                nep_amt: 0,
+                gaa_amt: 0,
+                prev_year_gaa_amt: prevYearGaaAmount,
+                release_classification: "unclassified",
+                origin_tag: "agency_proposed",
+                auth_status: "proposed",
+            })
+            .execute();
+    }
+}
+
 async function insertCostSourceEntity(
     trx: Transaction<Database>,
     tableName: CostSourceTableName,
@@ -505,7 +643,7 @@ export async function createProjectProposal(
                     purpose: payload.purpose || "No purpose provided.",
                     beneficiaries: payload.beneficiaries || "General Public",
 
-                    project_type: getProjectTypeFromProposalFlags(payload),
+                    project_type: getPapProjectTypeFromProposalType(payload.type),
                     project_status: "proposed",
                     category: payload.type === "202" ? "local" : "foreign",
                     identifier_code: payload.type === "202" ? "2" : "3",
@@ -546,6 +684,15 @@ export async function createProjectProposal(
             payload.cost_by_components,
             "component",
         );
+
+        if (authStatus !== "draft" && !payload.is_new && papId) {
+            await syncProposedExistingPapAllocationsWithExecutor(trx, {
+                entityId,
+                fiscalYear: payload.proposal_year,
+                papId,
+                components: payload.cost_by_components,
+            });
+        }
 
         if (payload.type === "202") {
             if (payload.local_financial_attributions?.length) {
@@ -883,12 +1030,8 @@ function getComponentAllocationKey(component: {
     ].join("::");
 }
 
-function getProjectTypeFromProposalFlags(proposal: {
-    is_infrastructure: boolean;
-    for_ict?: boolean | null;
-}) {
-    if (proposal.for_ict) return "Information & Communications Technology project";
-    return proposal.is_infrastructure ? "infrastructure" : "non-infrastructure";
+function getPapProjectTypeFromProposalType(type: "202" | "203") {
+    return type === "202" ? "local" : "foreign";
 }
 
 export async function createAllocationsForApprovedProposalWithExecutor(
@@ -903,7 +1046,14 @@ export async function createAllocationsForApprovedProposalWithExecutor(
         .executeTakeFirstOrThrow();
     const proposal = await trx
         .selectFrom("project_proposals")
-        .select(["proposal_year", "is_infrastructure", "for_ict"])
+        .select([
+            "proposal_year",
+            "description",
+            "org_outcome_id",
+            "purpose",
+            "beneficiaries",
+            "type",
+        ])
         .where("id", "=", approvedFormId)
         .executeTakeFirstOrThrow();
     const originalFormId = approvedForm.parent_form_id ?? approvedForm.id;
@@ -931,8 +1081,6 @@ export async function createAllocationsForApprovedProposalWithExecutor(
         .where("proposal_id", "=", approvedFormId)
         .where("item_catalog_id", "is not", null)
         .execute();
-
-    if (approvedComponents.length === 0) return { createdCount: 0 };
 
     const originalComponents = await trx
         .selectFrom("cost_by_components")
@@ -964,14 +1112,31 @@ export async function createAllocationsForApprovedProposalWithExecutor(
         performed_by: string;
     }> = [];
 
-    await trx
-        .updateTable("paps")
-        .set({
-            project_type: getProjectTypeFromProposalFlags(proposal),
-            updated_at: new Date(),
-        })
-        .where("id", "=", approvedPap.pap_id)
-        .execute();
+    const latestPapProposal = await trx
+        .selectFrom("form_paps")
+        .innerJoin("forms", "forms.id", "form_paps.form_id")
+        .select("forms.id")
+        .where("form_paps.pap_id", "=", approvedPap.pap_id)
+        .orderBy("forms.created_at", "desc")
+        .orderBy("forms.version", "desc")
+        .executeTakeFirst();
+
+    if (latestPapProposal?.id === approvedFormId) {
+        await trx
+            .updateTable("paps")
+            .set({
+                description: proposal.description,
+                org_outcome_id: proposal.org_outcome_id,
+                purpose: proposal.purpose,
+                beneficiaries: proposal.beneficiaries,
+                project_type: getPapProjectTypeFromProposalType(proposal.type),
+                updated_at: new Date(),
+            })
+            .where("id", "=", approvedPap.pap_id)
+            .execute();
+    }
+
+    if (approvedComponents.length === 0) return { createdCount: 0 };
 
     for (const component of approvedComponents) {
         if (!component.item_catalog_id) continue;
@@ -1192,6 +1357,23 @@ export async function updateProjectProposal(
             p.cost_by_components,
             "component",
         );
+
+        if (auth_status && auth_status !== "draft" && !p.is_new) {
+            const linkedPap = await trx
+                .selectFrom("form_paps")
+                .select("pap_id")
+                .where("form_id", "=", proposalId)
+                .executeTakeFirst();
+
+            if (linkedPap) {
+                await syncProposedExistingPapAllocationsWithExecutor(trx, {
+                    entityId: currentProposal.entity_id,
+                    fiscalYear: p.proposal_year,
+                    papId: linkedPap.pap_id,
+                    components: p.cost_by_components,
+                });
+            }
+        }
 
         if (p.type === "202") {
             if (p.local_financial_attributions?.length) {
