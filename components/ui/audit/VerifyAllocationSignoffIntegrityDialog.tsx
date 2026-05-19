@@ -4,7 +4,9 @@ import { useState } from 'react'
 import { ShieldCheck, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getAllocationSignoffIntegrity } from '@/src/actions/audit'
-import { FormIntegrityPanel, type IntegrityResult } from './FormIntegrityPanel'
+import AllocationSignoffIntegrityPanel, {
+    type AllocationSignoffIntegrityResult,
+} from './AllocationSignoffIntegrityPanel'
 
 type Props = {
     fiscalYear: number
@@ -20,7 +22,7 @@ export default function VerifyAllocationSignoffIntegrityDialog({
     const [open, setOpen] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
-    const [result, setResult] = useState<IntegrityResult | null>(null)
+    const [result, setResult] = useState<AllocationSignoffIntegrityResult | null>(null)
 
     async function handleOpen() {
         setOpen(true)
@@ -29,7 +31,7 @@ export default function VerifyAllocationSignoffIntegrityDialog({
 
         try {
             const integrityResult = await getAllocationSignoffIntegrity(fiscalYear, signoffType)
-            setResult(integrityResult as IntegrityResult | null)
+            setResult(integrityResult as AllocationSignoffIntegrityResult | null)
         } catch (caughtError) {
             console.error('Failed to verify allocation signoff integrity', caughtError)
             setError('Failed to verify allocation signoff integrity. Please try again.')
@@ -73,7 +75,7 @@ export default function VerifyAllocationSignoffIntegrityDialog({
                                     {error}
                                 </div>
                             ) : (
-                                <FormIntegrityPanel result={result} />
+                                <AllocationSignoffIntegrityPanel result={result} signoffType={signoffType} />
                             )}
                         </div>
                     </div>

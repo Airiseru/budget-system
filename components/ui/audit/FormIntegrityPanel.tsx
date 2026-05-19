@@ -52,11 +52,6 @@ type IntegrityDebugState = {
     signatureEventsValid?: boolean
     signatoryRowsValid?: boolean
     authorizationSnapshotsValid?: boolean
-    isSignedSnapshotValid?: boolean
-    isAllocationAuditTrailValid?: boolean
-    allocationAuditMismatchCount?: number
-    allocationAuditLogsChecked?: number
-    allocationAuditMismatches?: unknown[]
     isDataMatch?: boolean
 }
 
@@ -99,12 +94,6 @@ function getDataMismatchReasons(debugState?: IntegrityDebugState | null) {
     if (debugState.authorizationSnapshotsValid === false) {
         reasons.push('A signer authorization snapshot does not match the expected workflow role/access level.')
     }
-    if (debugState.isSignedSnapshotValid === false) {
-        reasons.push('The signed allocation snapshot does not match the current canonical allocation package.')
-    }
-    if (debugState.isAllocationAuditTrailValid === false) {
-        reasons.push(`The allocation patch audit trail has ${debugState.allocationAuditMismatchCount ?? 'one or more'} mismatch(es).`)
-    }
 
     const explicitChecksPassed =
         debugState.reconstructedState !== undefined &&
@@ -138,11 +127,6 @@ export type IntegrityResult = {
     totalEntityEvents: number
     formEventCount: number
     latestFormLogId?: string | null
-    isSignedSnapshotValid?: boolean
-    isAllocationAuditTrailValid?: boolean
-    allocationAuditMismatchCount?: number
-    allocationAuditLogsChecked?: number
-    allocationAuditMismatches?: unknown[]
     currentProof?: ProofCheck | null
     sealedProof?: SealedProofCheck | null
     debugState?: IntegrityDebugState | null
@@ -218,12 +202,7 @@ export function FormIntegrityPanel({
         result.isTimelineIntact &&
         result.isSealedRootValid
     // A form is only fully valid if the chain is intact, the DB state matches, AND the daily seal matches
-    const isAllocationAuditTrailValid = result.isAllocationAuditTrailValid !== false
-    const isFullyValid =
-        result.isTimelineIntact &&
-        result.isDataMatch &&
-        result.isSealedRootValid &&
-        isAllocationAuditTrailValid
+    const isFullyValid = result.isTimelineIntact && result.isDataMatch && result.isSealedRootValid
     const Icon = isFullyValid ? ShieldCheck : ShieldX
     const iconColor = isFullyValid
         ? 'text-emerald-600'
@@ -291,14 +270,6 @@ export function FormIntegrityPanel({
                     <Badge variant={result.isSealedRootValid ? 'outline' : 'destructive'} className={result.isSealedRootValid ? 'border-emerald-600 text-emerald-700 bg-white' : 'bg-white'}>
                         Daily Seal: {result.isSealedRootValid ? 'Usable' : 'Unavailable'}
                     </Badge>
-                    {result.isAllocationAuditTrailValid !== undefined ? (
-                        <Badge
-                            variant={result.isAllocationAuditTrailValid ? 'outline' : 'destructive'}
-                            className={result.isAllocationAuditTrailValid ? 'border-emerald-600 text-emerald-700 bg-white' : 'bg-white'}
-                        >
-                            Allocation Trail: {result.isAllocationAuditTrailValid ? 'Matched' : 'Mismatch'}
-                        </Badge>
-                    ) : null}
                 </div>
             </div>
 
@@ -367,8 +338,6 @@ export function FormIntegrityPanel({
                                         ['Signature events are cryptographically valid', hasSignedFormEvents ? result.debugState?.signatureEventsValid : undefined],
                                         ['Signatory records match audit events', hasSignedFormEvents ? result.debugState?.signatoryRowsValid : undefined],
                                         ['Authorization snapshots match workflow', hasSignedFormEvents ? result.debugState?.authorizationSnapshotsValid : undefined],
-                                        ['Signed allocation snapshot matches current package', result.debugState?.isSignedSnapshotValid],
-                                        ['Allocation patch audit trail matches current package', result.debugState?.isAllocationAuditTrailValid],
                                     ].map(([label, value]) => (
                                         <div key={String(label)} className="flex items-center justify-between gap-2 rounded border bg-slate-50 px-2 py-1.5">
                                             <span>{label}</span>
@@ -382,20 +351,6 @@ export function FormIntegrityPanel({
                         )}
                     </div>
                 )}
-
-                {result.isAllocationAuditTrailValid === false ? (
-                    <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-xs text-destructive">
-                        <p>
-                            <strong>Allocation Audit Trail Mismatch:</strong> Checked {result.allocationAuditLogsChecked ?? 0}{' '}
-                            allocation audit log(s) and found {result.allocationAuditMismatchCount ?? 0} mismatch(es).
-                        </p>
-                        {result.allocationAuditMismatches?.length ? (
-                            <pre className="mt-2 max-h-48 overflow-auto rounded border border-destructive/20 bg-white p-2 text-[10px] text-slate-700">
-                                {formatDebugValue(result.allocationAuditMismatches)}
-                            </pre>
-                        ) : null}
-                    </div>
-                ) : null}
 
                 {/* Rollback Attack Warning */}
                 {!result.isSealedRootValid && (
