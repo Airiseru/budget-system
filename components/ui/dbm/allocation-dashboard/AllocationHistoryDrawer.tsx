@@ -61,7 +61,7 @@ export default function AllocationHistoryDrawer({ row, open, onClose }: Props) {
     return (
         <>
             <div
-                className={`fixed inset-0 z-40 bg-black/25 transition-opacity ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
+                className={`fixed inset-0 z-40 bg-black/25 transition-opacity mb-0 ${open ? 'opacity-100' : 'pointer-events-none opacity-0'}`}
                 onClick={onClose}
             />
             <aside

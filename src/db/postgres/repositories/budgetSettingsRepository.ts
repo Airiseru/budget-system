@@ -160,20 +160,32 @@ export async function editBudgetCycleWithExecutor(
 
 export async function startBudgetCycle(fiscalYear: number, changedBy: string, legalBasisRef?: string | null): Promise<BudgetCycle> {
     return await db.transaction().execute(async (trx) => {
-        const activeCycle = await trx
+        return await startBudgetCycleWithExecutor(fiscalYear, changedBy, trx, legalBasisRef)
+    })
+}
+
+export async function startBudgetCycleWithExecutor(
+    fiscalYear: number,
+    changedBy: string,
+    executor: DbExecutor,
+    legalBasisRef?: string | null,
+): Promise<BudgetCycle> {
+        const activeCycle = await executor
             .selectFrom('budget_cycles')
             .selectAll()
             .where('prep_status', '=', 'active')
+            .forUpdate()
             .executeTakeFirst()
 
         if (activeCycle && activeCycle.fiscal_year !== fiscalYear) {
             throw new Error(`Fiscal year ${activeCycle.fiscal_year} is already active.`)
         }
 
-        const existingCycle = await trx
+        const existingCycle = await executor
             .selectFrom('budget_cycles')
             .selectAll()
             .where('fiscal_year', '=', fiscalYear)
+            .forUpdate()
             .executeTakeFirst()
 
         if (existingCycle?.prep_status === 'locked') {
@@ -185,7 +197,7 @@ export async function startBudgetCycle(fiscalYear: number, changedBy: string, le
         }
 
         if (existingCycle?.prep_status === 'closed') {
-            return await trx
+            return await executor
                 .updateTable('budget_cycles')
                 .set({
                     prep_status: 'active',
@@ -201,7 +213,7 @@ export async function startBudgetCycle(fiscalYear: number, changedBy: string, le
                 .executeTakeFirstOrThrow()
         }
 
-        return await trx
+        return await executor
             .insertInto('budget_cycles')
             .values({
                 fiscal_year: fiscalYear,
@@ -214,7 +226,6 @@ export async function startBudgetCycle(fiscalYear: number, changedBy: string, le
             })
             .returningAll()
             .executeTakeFirstOrThrow()
-    })
 }
 
 export async function lockActiveBudgetCycle(changedBy: string): Promise<BudgetCycle> {

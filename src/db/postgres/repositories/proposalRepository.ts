@@ -1773,6 +1773,7 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
     departmentId?: string;
     agencyId?: string;
     operatingUnitId?: string;
+    performedBy: string;
 }) {
     const proposals = await listDbmProposalReviewRows({
         fiscalYear: filters.fiscalYear,
@@ -1809,6 +1810,14 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
                     linkedPaps.map((row) => row.pap_id),
                 )
                 .execute();
+        }
+
+        for (const proposalId of proposalIds) {
+            await rejectProposalAllocationsWithExecutor(
+                trx,
+                proposalId,
+                filters.performedBy,
+            );
         }
     });
 

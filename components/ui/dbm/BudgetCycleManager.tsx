@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useState } from 'react'
+import { useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -11,13 +11,9 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import {
-    startBudgetCycleAction,
-    lockActiveBudgetCycleAction,
-    editBudgetCycleAction,
-} from '@/src/actions/budgetSettings'
 import { BudgetCycle, BudgetCyclePhase } from '@/src/types/budget_settings'
 import { BUDGET_PHASE_LABELS, BUDGET_PHASE_OPTIONS } from '@/src/lib/constants'
+import BudgetCycleSignatureButton from './BudgetCycleSignatureButton'
 
 const STATUS_STYLES: Record<BudgetCycle['prep_status'], string> = {
     closed: 'bg-slate-100 text-slate-700',
@@ -34,11 +30,10 @@ export function BudgetCycleManager({
     activeCycle: BudgetCycle | null
     canManage: boolean
 }) {
-    const [startState, startAction, startPending] = useActionState(startBudgetCycleAction, undefined)
-    const [lockState, lockAction, lockPending] = useActionState(lockActiveBudgetCycleAction, undefined)
-    const [phaseState, phaseAction, phasePending] = useActionState(editBudgetCycleAction, undefined)
     const [historyOpen, setHistoryOpen] = useState(false)
     const [selectedPhase, setSelectedPhase] = useState(activeCycle?.current_phase ?? 'preparation')
+    const [startFiscalYear, setStartFiscalYear] = useState(String(new Date().getFullYear() + 1))
+    const [startLegalBasisRef, setStartLegalBasisRef] = useState('')
 
     return (
         <div className="space-y-6">
@@ -51,43 +46,42 @@ export function BudgetCycleManager({
                         </p>
                     </div>
 
-                    {startState?.formErrors?.[0] && (
-                        <p className="text-sm text-red-500 italic">{startState.formErrors[0]}</p>
-                    )}
-
-                    <form action={startAction} className="space-y-4">
+                    <div className="space-y-4">
                         <div className="space-y-2">
                             <label htmlFor="fiscal_year" className="font-medium">Fiscal Year</label>
                             <input
                                 id="fiscal_year"
-                                name="fiscal_year"
                                 type="number"
                                 min="2000"
                                 max="9999"
-                                defaultValue={startState?.values?.fiscal_year ?? String(new Date().getFullYear() + 1)}
+                                value={startFiscalYear}
+                                onChange={(event) => setStartFiscalYear(event.target.value)}
                                 className="border border-border px-3 py-2 w-full my-1 rounded bg-background"
                                 required
                             />
-                            {startState?.fieldErrors?.fiscal_year?.[0] && (
-                                <p className="text-sm text-red-500 italic">{startState.fieldErrors.fiscal_year[0]}</p>
-                            )}
                         </div>
 
                         <div className="space-y-2">
                             <label htmlFor="legal_basis_ref" className="font-medium">Legal Basis Reference</label>
                             <input
                                 id="legal_basis_ref"
-                                name="legal_basis_ref"
-                                defaultValue={startState?.values?.legal_basis_ref ?? ''}
+                                value={startLegalBasisRef}
+                                onChange={(event) => setStartLegalBasisRef(event.target.value)}
                                 className="border border-border px-3 py-2 w-full my-1 rounded bg-background"
                                 placeholder="Optional memo, order, or reference"
                             />
                         </div>
 
-                        <Button type="submit" disabled={!canManage || startPending} className="w-full bg-accent-foreground text-white hover:bg-accent-foreground/90 text-md py-5 my-1">
-                            {startPending ? 'Starting...' : 'Create / Start Cycle'}
-                        </Button>
-                    </form>
+                        <BudgetCycleSignatureButton
+                            action="start_cycle"
+                            fiscalYear={Number(startFiscalYear)}
+                            legalBasisRef={startLegalBasisRef}
+                            disabled={!canManage || !Number.isFinite(Number(startFiscalYear))}
+                            className="w-full bg-accent-foreground text-white hover:bg-accent-foreground/90 text-md py-5 my-1"
+                        >
+                            Create / Start Cycle
+                        </BudgetCycleSignatureButton>
+                    </div>
                 </div>
 
                 <div className="border border-border rounded-lg p-6 space-y-4">
@@ -99,22 +93,18 @@ export function BudgetCycleManager({
                             </p>
                         </div>
 
-                        {activeCycle && (
-                            <form action={lockAction}>
-                                <Button type="submit" variant="destructive" disabled={!canManage || lockPending} className="text-md py-5">
-                                    {lockPending ? 'Locking...' : 'Stop Current Cycle'}
-                                </Button>
-                            </form>
+                        {activeCycle && canManage && (
+                            <BudgetCycleSignatureButton
+                                action="change_phase"
+                                fiscalYear={activeCycle.fiscal_year}
+                                currentPhase="enacted_gaa"
+                                legalBasisRef={activeCycle.legal_basis_ref ?? ''}
+                                className="bg-destructive text-white hover:bg-destructive/90 text-md py-5"
+                            >
+                                Stop Current Cycle
+                            </BudgetCycleSignatureButton>
                         )}
                     </div>
-
-                    {lockState?.formErrors?.[0] && (
-                        <p className="text-sm text-red-500 italic">{lockState.formErrors[0]}</p>
-                    )}
-
-                    {phaseState?.formErrors?.[0] && (
-                        <p className="text-sm text-red-500 italic">{phaseState.formErrors[0]}</p>
-                    )}
 
                     {activeCycle ? (
                         <div className="rounded-lg border border-border p-4 space-y-2">
@@ -135,12 +125,7 @@ export function BudgetCycleManager({
                             </p>
 
                             {canManage && (
-                                <form action={phaseAction} className="pt-4 space-y-3 border-t border-border">
-                                    <input type="hidden" name="fiscal_year" value={activeCycle.fiscal_year} />
-                                    <input type="hidden" name="prep_status" value="active" />
-                                    <input type="hidden" name="legal_basis_ref" value={activeCycle.legal_basis_ref ?? ''} />
-                                    <input type="hidden" name="current_phase" value={selectedPhase} />
-
+                                <div className="pt-4 space-y-3 border-t border-border">
                                     <div className="space-y-2">
                                         <label htmlFor="current_phase_select" className="font-medium">
                                             Change Current Phase
@@ -162,19 +147,19 @@ export function BudgetCycleManager({
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        {phaseState?.fieldErrors?.current_phase?.[0] && (
-                                            <p className="text-sm text-red-500 italic">{phaseState.fieldErrors.current_phase[0]}</p>
-                                        )}
                                     </div>
 
-                                    <Button
-                                        type="submit"
-                                        disabled={phasePending || selectedPhase === activeCycle.current_phase}
+                                    <BudgetCycleSignatureButton
+                                        action="change_phase"
+                                        fiscalYear={activeCycle.fiscal_year}
+                                        currentPhase={selectedPhase}
+                                        legalBasisRef={activeCycle.legal_basis_ref ?? ''}
+                                        disabled={selectedPhase === activeCycle.current_phase}
                                         className="w-full bg-accent-foreground text-white hover:bg-accent-foreground/90 text-md py-5"
                                     >
-                                        {phasePending ? 'Updating phase...' : 'Update Current Phase'}
-                                    </Button>
-                                </form>
+                                        Update Current Phase
+                                    </BudgetCycleSignatureButton>
+                                </div>
                             )}
                         </div>
                     ) : (

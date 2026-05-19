@@ -11,6 +11,7 @@ export default async function BudgetCyclesPage() {
 
     const isAdmin = isAdminUser(session.user)
     const isDbmApprover = isDbmUser(session.user)
+    const canSignBudgetCycleChanges = isDbmApprover && session.user.workflow_role === 'dbm'
 
     if (!isAdmin && !isDbmApprover) {
         redirect('/home')
@@ -34,7 +35,7 @@ export default async function BudgetCyclesPage() {
             <BudgetCycleManager
                 cycles={cycles}
                 activeCycle={activeCycle}
-                canManage={isAdmin || isDbmApprover}
+                canManage={canSignBudgetCycleChanges}
             />
         </main>
     )

@@ -187,22 +187,24 @@ export default function AllocationFiltersPanel({
                                 Clear
                             </Link>
                         </div>
-                        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <input
-                                type="checkbox"
-                                checked={showUacs}
-                                onChange={(event) => onShowUacsChange(event.target.checked)}
-                            />
-                            Show UACS
-                        </label>
-                        <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <input
-                                type="checkbox"
-                                checked={showRejectedPaps}
-                                onChange={(event) => onShowRejectedPapsChange(event.target.checked)}
-                            />
-                            Include rejected PAPs
-                        </label>
+                        <div className="flex flex-wrap gap-4">
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <input
+                                    type="checkbox"
+                                    checked={showUacs}
+                                    onChange={(event) => onShowUacsChange(event.target.checked)}
+                                />
+                                Show UACS
+                            </label>
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <input
+                                    type="checkbox"
+                                    checked={showRejectedPaps}
+                                    onChange={(event) => onShowRejectedPapsChange(event.target.checked)}
+                                />
+                                Include rejected PAPs
+                            </label>
+                        </div>
                     </div>
                 </form>
             ) : null}
