@@ -19,17 +19,21 @@ export default async function EntitiesPage() {
 
     return (
         <main className="m-6 space-y-6 max-w-7xl md:mx-auto md:my-12">
-            <div className="flex items-center justify-between">
-                <BackButton url="/admin" />
+            <div className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+                <div className="flex justify-start">
+                    <BackButton url="/admin" />
+                </div>
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">Entity Overview</h1>
                     <p className="text-muted-foreground text-sm mt-1">
                         Viewing entities under <span className="font-medium underline">{entityName}</span>
                     </p>
                 </div>
-                <Button variant="outline">
-                    <Link href="/admin/entities/request">Request New Entity</Link>
-                </Button>
+                <div className="flex justify-start md:justify-end">
+                    <Button variant="outline">
+                        <Link href="/admin/entities/request">Request New Entity</Link>
+                    </Button>
+                </div>
             </div>
 
             <EntityManagementTable
