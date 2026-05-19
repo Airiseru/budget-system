@@ -993,7 +993,7 @@ export default function ProposalForm({
                                     Currency
                                 </th>
 
-                                <th className="bg-muted-50 px-4 py-4 text-right text-sm font-bold text-muted-600 w-44">
+                                <th className="bg-muted-50 px-4 py-4 text-center text-sm font-bold text-muted-600 w-44">
                                     Proposed Amount
                                 </th>
 
@@ -1154,7 +1154,7 @@ export default function ProposalForm({
                                                 bg-background
                                                 px-3
                                                 py-2
-                                                text-right
+                                                text-center
                                                 text-sm
                                                 font-semibold
                                                 outline-none
@@ -1802,11 +1802,11 @@ export default function ProposalForm({
                                                 Description
                                             </th>
 
-                                            <th className="bg-muted-50 px-3 py-4 text-right text-sm font-bold text-muted-600 w-[140px]">
+                                            <th className="bg-muted-50 px-3 py-4 text-center text-sm font-bold text-muted-600 w-[140px]">
                                                 Fund Method
                                             </th>
 
-                                            <th className="bg-muted-50 px-3 py-4 text-right text-sm font-bold text-muted-600 w-[160px]">
+                                            <th className="bg-muted-50 px-3 py-4 text-center text-sm font-bold text-muted-600 w-[160px]">
                                                 Total
                                             </th>
 
@@ -2101,7 +2101,7 @@ export default function ProposalForm({
                                                         <td className="px-3 py-4 align-top w-[150px]">
                                                             <input
                                                                 type="number"
-                                                                className="w-full rounded-lg border border-muted-200 px-3 py-2 text-right text-sm outline-none focus:border-secondary-foreground/40"
+                                                                className="w-full rounded-lg border border-muted-200 px-3 py-2 text-center text-sm outline-none focus:border-secondary-foreground/40"
                                                                 value={
                                                                     activeValue ||
                                                                     ""
@@ -2135,7 +2135,7 @@ export default function ProposalForm({
                                                         </td>
 
                                                         {/* Row Total Display */}
-                                                        <td className="px-3 py-4 align-top text-right min-w-[120px]">
+                                                        <td className="px-3 py-4 align-top text-center min-w-[120px]">
                                                             <div className="text-sm font-bold text-secondary-foreground pt-2">
                                                                 {rowTotal.toLocaleString(
                                                                     undefined,
@@ -2410,7 +2410,7 @@ export default function ProposalForm({
                                                                     >
                                                                         <input
                                                                             type="number"
-                                                                            className="w-full bg-transparent text-right outline-none text-sm"
+                                                                            className="w-full bg-transparent text-center outline-none text-sm"
                                                                             placeholder="0"
                                                                             value={
                                                                                 item.costs.find(
@@ -2774,7 +2774,7 @@ export default function ProposalForm({
                                                                                 key={
                                                                                     colIdx
                                                                                 }
-                                                                                className={`px-2 text-right text-sm ${col.isTotal ? "bg-slate-100/50" : ""}`}
+                                                                                className={`px-2 text-center text-sm ${col.isTotal ? "bg-slate-100/50" : ""}`}
                                                                             >
                                                                                 {colTotal >
                                                                                 0
@@ -2864,7 +2864,7 @@ export default function ProposalForm({
                                                                                             key={
                                                                                                 colIdx
                                                                                             }
-                                                                                            className="bg-slate-50/50 text-right px-2 text-sm font-bold text-slate-400"
+                                                                                            className="bg-slate-50/50 text-center px-2 text-sm font-bold text-slate-400"
                                                                                         >
                                                                                             {(
                                                                                                 t1 +
@@ -2883,7 +2883,7 @@ export default function ProposalForm({
                                                                                     >
                                                                                         <input
                                                                                             type="number"
-                                                                                            className="w-full text-right bg-transparent outline-none text-sm py-1"
+                                                                                            className="w-full text-center bg-transparent outline-none text-sm py-1"
                                                                                             placeholder="0"
                                                                                             // disable tier 1 input of current year for new proposal
                                                                                             disabled={(() => {
@@ -3172,7 +3172,7 @@ export default function ProposalForm({
                                                                             >
                                                                                 <input
                                                                                     type="number"
-                                                                                    className="w-full bg-transparent text-right outline-none text-sm"
+                                                                                    className="w-full bg-transparent text-center outline-none text-sm"
                                                                                     placeholder="0"
                                                                                     value={
                                                                                         item.costs.find(
@@ -3558,7 +3558,7 @@ export default function ProposalForm({
                                                                 <td className="py-3 px-2 border-r">
                                                                     <input
                                                                         type="number"
-                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        className="w-full bg-transparent text-center outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                         placeholder="0"
                                                                         min={0}
                                                                         value={
@@ -3587,7 +3587,7 @@ export default function ProposalForm({
                                                                 <td className="py-3 px-2 border-r">
                                                                     <input
                                                                         type="number"
-                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        className="w-full bg-transparent text-center outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                         placeholder="0"
                                                                         min={0}
                                                                         value={
@@ -3616,7 +3616,7 @@ export default function ProposalForm({
                                                                 <td className="py-3 px-2 border-r">
                                                                     <input
                                                                         type="number"
-                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        className="w-full bg-transparent text-center outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                         placeholder="0"
                                                                         min={0}
                                                                         value={
@@ -3644,7 +3644,7 @@ export default function ProposalForm({
                                                                 <td className="py-3 px-2 border-r">
                                                                     <input
                                                                         type="number"
-                                                                        className="w-full bg-transparent text-right outline-none text-sm text-muted-600 focus:text-secondary-foreground"
+                                                                        className="w-full bg-transparent text-center outline-none text-sm text-muted-600 focus:text-secondary-foreground"
                                                                         placeholder="0"
                                                                         min={0}
                                                                         value={
@@ -3669,7 +3669,7 @@ export default function ProposalForm({
                                                                         }
                                                                     />
                                                                 </td>
-                                                                <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                                <td className="py-3 px-4 text-center font-bold text-muted-700 bg-muted-50/50">
                                                                     {rowTotal.toLocaleString()}
                                                                 </td>
                                                                 <td className="py-3 px-2 text-center">
@@ -3910,7 +3910,7 @@ export default function ProposalForm({
                                                                                     </span>
                                                                                     <input
                                                                                         type="number"
-                                                                                        className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
+                                                                                        className="flex-1 text-center border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
                                                                                         min={
                                                                                             0
                                                                                         }
@@ -3944,7 +3944,7 @@ export default function ProposalForm({
                                                                                     </span>
                                                                                     <input
                                                                                         type="number"
-                                                                                        className="flex-1 text-right border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
+                                                                                        className="flex-1 text-center border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground"
                                                                                         min={
                                                                                             0
                                                                                         }
@@ -3977,7 +3977,7 @@ export default function ProposalForm({
                                                                                     </span>
                                                                                     <input
                                                                                         type="number"
-                                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                                                                        className="flex-1 text-center bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
                                                                                         min={
                                                                                             0
                                                                                         }
@@ -4019,7 +4019,7 @@ export default function ProposalForm({
                                                                         </td>
                                                                     );
                                                                 })}
-                                                                <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                                <td className="py-3 px-4 text-center font-bold text-muted-700 bg-muted-50/50">
                                                                     <button
                                                                         type="button"
                                                                         onClick={() =>

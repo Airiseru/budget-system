@@ -261,35 +261,36 @@ export default function ProposalView({
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
                 <div className="flex flex-row gap-2">
-                {canVerifyIntegrity && (
-                    <VerifyIntegrityDialog
-                        tableName="project_proposals"
-                        formId={data.id ?? ""}
-                    />
-                )}
-                {canEditCurrentVersion && !budgetPrepClosedForEntityActions && (
-                    <>
-                        <Link
-                            href={`/forms/proposals/${data.id}/edit`}
-                            className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
-                        >
-                            <Pencil size={14} />
-                            {session.user.role !== "dbm"
-                                ? "Edit Form"
-                                : "Overwrite Form"}
-                        </Link>
-                        {session.user.role !== "dbm" && (    
-                            <form action={updateAuthStatus}>
-                                <button
-                                    type="submit"
-                                    className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
+                    {canVerifyIntegrity && (
+                        <VerifyIntegrityDialog
+                            tableName="project_proposals"
+                            formId={data.id ?? ""}
+                        />
+                    )}
+                    {canEditCurrentVersion &&
+                        !budgetPrepClosedForEntityActions && (
+                            <>
+                                <Link
+                                    href={`/forms/proposals/${data.id}/edit`}
+                                    className="flex items-center gap-2 bg-accent-foreground hover:bg-accent-foreground/80 text-white px-4 py-2 rounded-md text-sm font-semibold transition-all shadow-sm"
                                 >
-                                    Submit Form
-                                </button>
-                            </form>
+                                    <Pencil size={14} />
+                                    {session.user.role !== "dbm"
+                                        ? "Edit Form"
+                                        : "Overwrite Form"}
+                                </Link>
+                                {session.user.role !== "dbm" && (
+                                    <form action={updateAuthStatus}>
+                                        <button
+                                            type="submit"
+                                            className="bg-secondary-foreground text-white px-4 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/80"
+                                        >
+                                            Submit Form
+                                        </button>
+                                    </form>
+                                )}
+                            </>
                         )}
-                    </>
-                )}
                 </div>
             </div>
 
@@ -507,7 +508,10 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y">
                                     {data.cost_by_components?.map(
-                                        (comp: ProposalCostedItem, i: number) => (
+                                        (
+                                            comp: ProposalCostedItem,
+                                            i: number,
+                                        ) => (
                                             <tr key={i}>
                                                 <td className="p-4 font-medium text-muted-700">
                                                     {comp.component_name}
@@ -590,7 +594,10 @@ export default function ProposalView({
                                 </thead>
 
                                 {data.local_financial_attributions?.map(
-                                    (attr: ProposalFinancialAttribution, pIdx: number) => {
+                                    (
+                                        attr: ProposalFinancialAttribution,
+                                        pIdx: number,
+                                    ) => {
                                         const order = [
                                             "PS",
                                             "MOOE",
@@ -601,25 +608,33 @@ export default function ProposalView({
                                         const uniqueClasses = Array.from(
                                             new Set(
                                                 attr.attribution_costs?.flatMap(
-                                                    (c: ProposalAttributionCost) =>
+                                                    (
+                                                        c: ProposalAttributionCost,
+                                                    ) =>
                                                         // Add a check for c?.costs to handle the null in your FY 2028 data
                                                         c?.costs
                                                             ?.map(
-                                                                (cost: ProposalCostEntry) =>
+                                                                (
+                                                                    cost: ProposalCostEntry,
+                                                                ) =>
                                                                     cost?.expense_class,
                                                             )
                                                             .filter(Boolean) ||
                                                         [],
                                                 ),
                                             ),
-                                        ).filter(
-                                            (cls): cls is ProposalExpenseClass =>
-                                                typeof cls === "string",
-                                        ).sort(
-                                            (a: string, b: string) =>
-                                                order.indexOf(a) -
-                                                order.indexOf(b),
-                                        );
+                                        )
+                                            .filter(
+                                                (
+                                                    cls,
+                                                ): cls is ProposalExpenseClass =>
+                                                    typeof cls === "string",
+                                            )
+                                            .sort(
+                                                (a: string, b: string) =>
+                                                    order.indexOf(a) -
+                                                    order.indexOf(b),
+                                            );
 
                                         const getVal = (
                                             year: number,
@@ -628,7 +643,9 @@ export default function ProposalView({
                                         ) => {
                                             const yData =
                                                 attr.attribution_costs?.find(
-                                                    (c: ProposalAttributionCost) =>
+                                                    (
+                                                        c: ProposalAttributionCost,
+                                                    ) =>
                                                         c && // Ensure c is not null (fixes the FY 2028 issue)
                                                         Number(c.year) ===
                                                             year &&
@@ -643,7 +660,9 @@ export default function ProposalView({
                                             if (cls) {
                                                 return Number(
                                                     yData.costs.find(
-                                                        (cost: ProposalCostEntry) =>
+                                                        (
+                                                            cost: ProposalCostEntry,
+                                                        ) =>
                                                             cost?.expense_class ===
                                                             cls,
                                                     )?.amount || 0,
@@ -652,7 +671,10 @@ export default function ProposalView({
 
                                             // Sum all costs for that year/tier
                                             return yData.costs.reduce(
-                                                (sum: number, cost: ProposalCostEntry) =>
+                                                (
+                                                    sum: number,
+                                                    cost: ProposalCostEntry,
+                                                ) =>
                                                     sum +
                                                     Number(cost?.amount || 0),
                                                 0,
@@ -736,12 +758,12 @@ export default function ProposalView({
                                                             <td className="p-3 pl-8 text-left text-sm font-medium text-muted-500 border-r border-muted-100 italic">
                                                                 {cls}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-50">
+                                                            <td className="p-3 text-center font-mono text-sm text-muted-500 border-r border-muted-50">
                                                                 {vbyt1 > 0
                                                                     ? vbyt1.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
+                                                            <td className="p-3 text-center font-mono text-sm text-muted-500 border-r border-muted-100">
                                                                 {vbyt2 > 0
                                                                     ? vbyt2.toLocaleString()
                                                                     : "—"}
@@ -752,12 +774,12 @@ export default function ProposalView({
                                                                     vbyt2
                                                                 ).toLocaleString()}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500 border-r border-muted-100">
+                                                            <td className="p-3 text-center font-mono text-sm text-muted-500 border-r border-muted-100">
                                                                 {vforward1 > 0
                                                                     ? vforward1.toLocaleString()
                                                                     : "—"}
                                                             </td>
-                                                            <td className="p-3 text-right font-mono text-sm text-muted-500">
+                                                            <td className="p-3 text-center font-mono text-sm text-muted-500">
                                                                 {vforward2 > 0
                                                                     ? vforward2.toLocaleString()
                                                                     : "—"}
@@ -801,7 +823,10 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y">
                                     {data.local_locations?.map(
-                                        (loc: ProposalCostedItem, i: number) => (
+                                        (
+                                            loc: ProposalCostedItem,
+                                            i: number,
+                                        ) => (
                                             <tr key={i}>
                                                 <td className="p-4 text-muted-700">
                                                     {loc.location}
@@ -824,7 +849,10 @@ export default function ProposalView({
                         </h4>
                         <div className="border rounded-xl bg-white overflow-hidden divide-y">
                             {data.local_physical_targets?.map(
-                                (pt: ProposalLocalPhysicalTarget, i: number) => (
+                                (
+                                    pt: ProposalLocalPhysicalTarget,
+                                    i: number,
+                                ) => (
                                     <div
                                         key={i}
                                         className="p-4 flex justify-between"
@@ -842,7 +870,8 @@ export default function ProposalView({
                     </div>
 
                     {/* Infrastructure Requirements */}
-                    {(data.local_infrastructure_requirements?.length ?? 0) > 0 && (
+                    {(data.local_infrastructure_requirements?.length ?? 0) >
+                        0 && (
                         <div className="space-y-3">
                             <h4 className="text-md font-black text-secondary-foreground uppercase flex items-center tracking-widest gap-2">
                                 <Building size={12} />
@@ -871,7 +900,10 @@ export default function ProposalView({
                                     </thead>
                                     <tbody className="divide-y">
                                         {data.local_infrastructure_requirements?.map(
-                                            (infra: ProposalCostedItem, i: number) => (
+                                            (
+                                                infra: ProposalCostedItem,
+                                                i: number,
+                                            ) => (
                                                 <tr key={i}>
                                                     <td className="p-4 text-muted-700">
                                                         {infra.description}
@@ -920,7 +952,10 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
                                     {data.cost_by_components?.map(
-                                        (comp: ProposalCostedItem, i: number) => (
+                                        (
+                                            comp: ProposalCostedItem,
+                                            i: number,
+                                        ) => (
                                             <tr
                                                 key={i}
                                                 className="hover:bg-muted-50/30 divide-x transition-colors group"
@@ -1012,7 +1047,10 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
                                     {data.foreign_financial_targets?.map(
-                                        (target: ProposalForeignFinancialTarget, i: number) => {
+                                        (
+                                            target: ProposalForeignFinancialTarget,
+                                            i: number,
+                                        ) => {
                                             const rowTotal =
                                                 Number(target.lp_imprest || 0) +
                                                 Number(target.lp_direct || 0) +
@@ -1030,28 +1068,28 @@ export default function ProposalView({
                                                         </div>
                                                     </td>
                                                     <td className="py-3 px-2 border-r">
-                                                        <div className="flex items-center justify-end gap-2">
+                                                        <div className="flex items-center gap-2 justify-center">
                                                             {target.lp_imprest ||
                                                                 ""}
                                                         </div>
                                                     </td>
                                                     <td className="py-3 px-2 border-r">
-                                                        <div className="flex items-center justify-end gap-2">
+                                                        <div className="flex items-center gap-2 justify-center">
                                                             {target.lp_direct ||
                                                                 ""}
                                                         </div>
                                                     </td>
                                                     <td className="py-3 px-2 border-r">
-                                                        <div className="flex items-center justify-end gap-2">
+                                                        <div className="flex items-center justify-center gap-2">
                                                             {target.grant || ""}
                                                         </div>
                                                     </td>
                                                     <td className="py-3 px-2 border-r">
-                                                        <div className="flex items-center justify-end gap-2">
+                                                        <div className="flex items-center justify-center gap-2">
                                                             {target.gop || ""}
                                                         </div>
                                                     </td>
-                                                    <td className="py-3 px-4 text-right font-bold text-muted-700 bg-muted-50/50">
+                                                    <td className="py-3 px-4 text-center font-bold text-muted-700 bg-muted-50/50">
                                                         {rowTotal.toLocaleString()}
                                                     </td>
                                                 </tr>
@@ -1091,7 +1129,10 @@ export default function ProposalView({
                                 </thead>
                                 <tbody className="divide-y divide-muted-50">
                                     {data.foreign_physical_targets?.map(
-                                        (phys: ProposalForeignPhysicalTarget, i: number) => (
+                                        (
+                                            phys: ProposalForeignPhysicalTarget,
+                                            i: number,
+                                        ) => (
                                             <tr
                                                 key={i}
                                                 className="hover:bg-muted-50/30 divide-x transition-colors group"
@@ -1112,7 +1153,9 @@ export default function ProposalView({
                                                             | "non_cash",
                                                     ) =>
                                                         phys.costs?.find(
-                                                            (c: ProposalCostEntry) =>
+                                                            (
+                                                                c: ProposalCostEntry,
+                                                            ) =>
                                                                 c.expense_class ===
                                                                     ec &&
                                                                 c.fund_category ===
@@ -1120,7 +1163,8 @@ export default function ProposalView({
                                                                 (cat !== "LP" ||
                                                                     c.fund_method ===
                                                                         method ||
-                                                                    (method === "non_cash" &&
+                                                                    (method ===
+                                                                        "non_cash" &&
                                                                         c.fund_method ===
                                                                             "non-cash")),
                                                         )?.amount || "";
@@ -1155,7 +1199,7 @@ export default function ProposalView({
                                                                     </span>
                                                                     <div
                                                                         key={`${ec}-LP-CASH`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
+                                                                        className="flex-1 text-center bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
                                                                     >
                                                                         {getCost(
                                                                             "LP",
@@ -1177,7 +1221,7 @@ export default function ProposalView({
                                                                     </span>
                                                                     <div
                                                                         key={`${ec}-LP-NON-CASH`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
+                                                                        className="flex-1 text-center bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
                                                                     >
                                                                         {getCost(
                                                                             "LP",
@@ -1198,7 +1242,7 @@ export default function ProposalView({
                                                                     </span>
                                                                     <div
                                                                         key={`${ec}-GOP`}
-                                                                        className="flex-1 text-right bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
+                                                                        className="flex-1 text-center bg-white border border-muted-200 rounded px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-secondary-foreground "
                                                                     >
                                                                         {getCost(
                                                                             "GOP",
