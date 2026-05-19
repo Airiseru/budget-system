@@ -12,10 +12,12 @@ import {
 import { Check, Trash2 } from 'lucide-react'
 import { UserEntity, UserRole, UserAccessLevel, UserWorkflowRole } from '@/src/types/entities'
 import { ROLE_LABELS, ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '@/src/lib/constants'
+import LoadingOverlay from '@/components/ui/LoadingOverlay'
 
 export function PendingUsersTable({ users }: { users: UserEntity[] }) {
     const [pendingRejectUser, setPendingRejectUser] = useState<UserEntity | null>(null)
     const [isRejecting, setIsRejecting] = useState(false)
+    const [isApproving, setIsApproving] = useState(false)
 
     async function handleConfirmReject() {
         if (!pendingRejectUser) return
@@ -41,6 +43,7 @@ export function PendingUsersTable({ users }: { users: UserEntity[] }) {
 
     return (
         <>
+            <LoadingOverlay show={isRejecting || isApproving} label={isRejecting ? "Rejecting user..." : "Approving user..."} />
             <div className="border border-border rounded-md">
                 <Table>
                     <TableHeader>
@@ -61,6 +64,7 @@ export function PendingUsersTable({ users }: { users: UserEntity[] }) {
                                 key={user.user_id}
                                 user={user}
                                 onRequestReject={() => setPendingRejectUser(user)}
+                                onLoadingChange={setIsApproving}
                             />
                         ))}
                     </TableBody>
@@ -103,9 +107,11 @@ export function PendingUsersTable({ users }: { users: UserEntity[] }) {
 function UserApprovalRow({
     user,
     onRequestReject,
+    onLoadingChange,
 }: {
     user: UserEntity
     onRequestReject: () => void
+    onLoadingChange: (loading: boolean) => void
 }) {
     const [role, setRole] = useState<string>("")
     const [accessLevel, setAccessLevel] = useState<string>("")
@@ -117,6 +123,7 @@ function UserApprovalRow({
         if (!role || !accessLevel || !workflowRole) return
         
         setIsLoading(true)
+        onLoadingChange(true)
         try {
             const finalWorkflowRole = workflowRole === 'none' ? null : workflowRole
 
@@ -129,7 +136,9 @@ function UserApprovalRow({
             )
         } catch (error) {
             console.error("Failed to approve user", error)
+        } finally {
             setIsLoading(false)
+            onLoadingChange(false)
         }
     }
 

@@ -1,7 +1,6 @@
 import { createStaffingRepository, createFormRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
-import { ModeToggle } from "@/components/ui/system-toggle"
 import Link from "next/link"
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
@@ -52,18 +51,13 @@ export default async function StaffingPage() {
             return (
                 <div className='m-4'>
                     <ButtonGroup className='my-4'>
-                        <ModeToggle />
-                        <ButtonGroup>
-                            <Link href="/home">
-                                <Button variant="outline" aria-label="Home">Home</Button>
-                            </Link>
-                        </ButtonGroup>
+                        <Link href="/home">
+                            <Button variant="outline" aria-label="Home">Home</Button>
+                        </Link>
                         {canCreate && (
-                        <ButtonGroup>
                             <Link href="/forms/staff/new">
                                 <Button variant="outline">Create New Staffing Form</Button>
                             </Link>
-                        </ButtonGroup>
                         )}
                     </ButtonGroup>
                     {shouldShowBudgetPrepBanner && <BudgetPrepClosedBanner />}
@@ -75,18 +69,13 @@ export default async function StaffingPage() {
         return (
             <div className='m-4'>
                 <ButtonGroup className='my-4'>
-                    <ModeToggle />
-                    <ButtonGroup>
-                        <Link href="/home">
-                            <Button variant="outline" aria-label="Home">Home</Button>
-                        </Link>
-                    </ButtonGroup>
+                    <Link href="/home">
+                        <Button variant="outline" aria-label="Home">Home</Button>
+                    </Link>
                     {canCreate && (
-                    <ButtonGroup>
                         <Link href="/forms/staff/new">
                             <Button variant="outline">Create New Staffing Form</Button>
                         </Link>
-                    </ButtonGroup>
                     )}
                 </ButtonGroup>
 

@@ -1,7 +1,6 @@
 import { createProposalRepository } from "@/src/db/factory"; // Ensure this exists
 import { Button } from "@/components/ui/button";
 import { ButtonGroup } from "@/components/ui/button-group";
-import { ModeToggle } from "@/components/ui/system-toggle";
 import Link from "next/link";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { redirect } from "next/navigation";
@@ -84,12 +83,9 @@ export default async function ProposalsPage({
         const renderHeader = () => (
             <div className="my-4 flex flex-wrap items-center gap-3">
                 <ButtonGroup>
-                    <ModeToggle />
-                    <ButtonGroup>
-                        <Link href="/home">
-                            <Button variant="outline">Go Back</Button>
-                        </Link>
-                    </ButtonGroup>
+                    <Link href="/home">
+                        <Button variant="outline">Go Back</Button>
+                    </Link>
                 </ButtonGroup>
                 {lockedYear ? (
                     <div className="rounded border px-3 py-2 text-sm text-muted-foreground">

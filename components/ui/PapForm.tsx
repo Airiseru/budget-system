@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from "next/navigation"
 import { Pap, NewPap } from "@/src/types/pap"
+import LoadingOverlay from '@/components/ui/LoadingOverlay'
 
 interface PapFormProps {
     pap?: Pap
@@ -94,6 +95,7 @@ export default function PapForm({
 
     return (
         <div className="max-w-lg mx-auto mt-8">
+            <LoadingOverlay show={isLoading} label="Saving PAP..." />
             <div className="mb-6 p-4 bg-gray-50 border rounded-lg shadow-sm">
                 <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entity Context</span>
                 <p className="text-md font-semibold text-gray-700">{entityName}</p>

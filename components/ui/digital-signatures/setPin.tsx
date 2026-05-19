@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { setSigningPin } from '@/src/actions/keys'
 import { Eye, EyeOff, ShieldCheck } from 'lucide-react'
+import LoadingOverlay from '@/components/ui/LoadingOverlay'
 
 export function SetPinForm({ hasPin }: { hasPin: boolean }) {
     const [pin, setPin] = useState('')
@@ -51,6 +52,7 @@ export function SetPinForm({ hasPin }: { hasPin: boolean }) {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4 max-w-full">
+            <LoadingOverlay show={isLoading} label="Saving signing PIN..." />
             <div>
                 <h3 className="font-semibold">{hasPin ? 'Update' : 'Set'} Signing PIN</h3>
                 <p className="text-sm text-muted-foreground mt-0.5">

@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { ShieldCheck, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { getAllocationSignoffIntegrity } from '@/src/actions/audit'
+import LoadingOverlay from '@/components/ui/LoadingOverlay'
 import AllocationSignoffIntegrityPanel, {
     type AllocationSignoffIntegrityResult,
 } from './AllocationSignoffIntegrityPanel'
@@ -52,6 +53,7 @@ export default function VerifyAllocationSignoffIntegrityDialog({
 
             {open ? (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+                    <LoadingOverlay show={loading} label="Running allocation integrity verification..." />
                     <div className="flex max-h-[85vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
                         <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
                             <div>
@@ -66,11 +68,7 @@ export default function VerifyAllocationSignoffIntegrityDialog({
                         </div>
 
                         <div className="overflow-y-auto px-5 py-5">
-                            {loading ? (
-                                <div className="rounded-lg border border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground">
-                                    Running integrity verification...
-                                </div>
-                            ) : error ? (
+                            {loading ? null : error ? (
                                 <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-4 text-sm text-destructive">
                                     {error}
                                 </div>

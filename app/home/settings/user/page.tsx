@@ -1,6 +1,7 @@
 import { sessionWithEntity } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
 import BackButton from '@/components/ui/BackButton'
+import { ModeToggle } from '@/components/ui/system-toggle'
 import { ROLE_LABELS, ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '@/src/lib/constants'
 
 export default async function UserSettingsPage() {
@@ -21,6 +22,13 @@ export default async function UserSettingsPage() {
             </div>
 
             <div className="border border-border rounded-lg p-6 space-y-4">
+                <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-muted p-4">
+                    <div>
+                        <p className="font-medium">Appearance</p>
+                        <p className="text-sm text-muted-foreground">Choose light, dark, or system theme.</p>
+                    </div>
+                    <ModeToggle />
+                </div>
                 <div className="space-y-1">
                     <p className="text-sm text-muted-foreground">Name</p>
                     <p className="font-medium">{session.user.name}</p>

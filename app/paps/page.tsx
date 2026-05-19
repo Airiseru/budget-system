@@ -2,7 +2,6 @@ import { createPapRepository } from '@/src/db/factory'
 import { createEntityRepository } from '@/src/db/factory'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from "@/components/ui/button-group"
-import { ModeToggle } from "@/components/ui/system-toggle"
 import PapFilters from '@/components/ui/paps/PapFilters'
 import PaginationControls from '@/components/ui/PaginationControls'
 import Link from "next/link"
@@ -88,12 +87,9 @@ export default async function PapPage({
         <main className="mx-auto max-w-[1700px] space-y-6 px-4 py-8 pb-20">
             <div className="flex flex-wrap items-center justify-between gap-4">
                 <ButtonGroup>
-                    <ModeToggle />
-                    <ButtonGroup>
-                        <Link href="/home">
-                            <Button variant="outline" aria-label="Go Back">Go Back</Button>
-                        </Link>
-                    </ButtonGroup>
+                    <Link href="/home">
+                        <Button variant="outline" aria-label="Go Back">Go Back</Button>
+                    </Link>
                 </ButtonGroup>
                 <div className="text-center">
                     <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">All PAPs</h1>

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
 import Link from "next/link";
 import { ArrowLeft, ArrowRightLeft } from "lucide-react";
 
@@ -307,6 +308,7 @@ export default function RankManager({
 
     return (
         <div className="space-y-4 p-4">
+            <LoadingOverlay show={loading} label="Updating proposal ranks..." />
             <div className="flex justify-between items-center mb-6">
                 <Link
                     href="/forms/proposals"

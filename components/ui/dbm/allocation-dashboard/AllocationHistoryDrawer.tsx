@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { MessageSquareText, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import LoadingOverlay from '@/components/ui/LoadingOverlay'
 import type {
     AllocationDashboardRow,
     AllocationWorkflowLogEntry,
@@ -25,8 +26,10 @@ type Props = {
 
 export default function AllocationHistoryDrawer({ row, open, onClose }: Props) {
     const [logs, setLogs] = useState<AllocationWorkflowLogEntry[]>([])
-    const [loading, setLoading] = useState(open && !!row)
-    const [error, setError] = useState<string | null>(null)
+    const [loadedRowId, setLoadedRowId] = useState<string | null>(null)
+    const [error, setError] = useState<{ rowId: string; message: string } | null>(null)
+    const loading = open && !!row && loadedRowId !== row.id && error?.rowId !== row.id
+    const currentError = row && error?.rowId === row.id ? error.message : null
 
     useEffect(() => {
         if (!open || !row) return
@@ -44,13 +47,15 @@ export default function AllocationHistoryDrawer({ row, open, onClose }: Props) {
             .then((result) => {
                 if (!active) return
                 setLogs(result.logs ?? [])
+                setLoadedRowId(row.id)
+                setError(null)
             })
             .catch((fetchError: unknown) => {
                 if (!active) return
-                setError(fetchError instanceof Error ? fetchError.message : 'Failed to load allocation history.')
-            })
-            .finally(() => {
-                if (active) setLoading(false)
+                setError({
+                    rowId: row.id,
+                    message: fetchError instanceof Error ? fetchError.message : 'Failed to load allocation history.',
+                })
             })
 
         return () => {
@@ -68,6 +73,7 @@ export default function AllocationHistoryDrawer({ row, open, onClose }: Props) {
                 className={`fixed right-0 top-0 z-50 flex h-full w-full max-w-xl flex-col border-l border-border bg-background shadow-2xl transition-transform duration-200 ${open ? 'translate-x-0' : 'translate-x-full'}`}
                 aria-hidden={!open}
             >
+                <LoadingOverlay show={loading} label="Loading activity history..." />
                 <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
                     <div>
                         <div className="flex items-center gap-2 text-secondary-foreground">
@@ -90,8 +96,8 @@ export default function AllocationHistoryDrawer({ row, open, onClose }: Props) {
                 <div className="flex-1 overflow-y-auto px-5 py-4">
                     {loading ? (
                         <p className="text-sm text-muted-foreground">Loading activity history...</p>
-                    ) : error ? (
-                        <p className="text-sm text-red-700">{error}</p>
+                    ) : currentError ? (
+                        <p className="text-sm text-red-700">{currentError}</p>
                     ) : logs.length === 0 ? (
                         <p className="text-sm text-muted-foreground">No allocation activity recorded yet.</p>
                     ) : (

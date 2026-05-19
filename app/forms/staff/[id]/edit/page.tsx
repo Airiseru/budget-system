@@ -3,7 +3,6 @@ import { sessionWithEntity } from "@/src/actions/auth";
 import { createFormRepository, createStaffingRepository, createPapRepository, createSalaryRepository, createEntityRepository } from "@/src/db/factory"
 import { ButtonGroup } from "@/components/ui/button-group"
 import BackButton from "@/components/ui/BackButton";
-import { ModeToggle } from "@/components/ui/system-toggle";
 import { notFound, redirect } from 'next/navigation'
 import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 
@@ -90,10 +89,7 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
     return (
         <main className="m-4">
             <ButtonGroup className='my-4'>
-                <ModeToggle/>
-                <ButtonGroup>
-                    <BackButton url={`/forms/staff/${id}`} label="Back"></BackButton>
-                </ButtonGroup>
+                <BackButton url={`/forms/staff/${id}`} label="Back"></BackButton>
             </ButtonGroup>
             <StaffForm
                 isDBM={isDbmEvaluator && isPendingDbm}

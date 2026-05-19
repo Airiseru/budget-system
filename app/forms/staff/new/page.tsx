@@ -4,7 +4,6 @@ import { createPapRepository, createSalaryRepository } from "@/src/db/factory";
 import { redirect } from "next/navigation";
 import { ButtonGroup } from "@/components/ui/button-group"
 import BackButton from "@/components/ui/BackButton";
-import { ModeToggle } from "@/components/ui/system-toggle";
 import BudgetPrepClosedBanner from "@/components/ui/BudgetPrepClosedBanner";
 import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
 
@@ -59,10 +58,7 @@ export default async function NewStaffingPage() {
     return (
         <main className="m-4">
             <ButtonGroup className='my-4'>
-                <ModeToggle/>
-                <ButtonGroup>
-                    <BackButton url="/forms/staff" label="Back to List"></BackButton>
-                </ButtonGroup>
+                <BackButton url="/forms/staff" label="Back to List"></BackButton>
             </ButtonGroup>
             {components}
         </main>

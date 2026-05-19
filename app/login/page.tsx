@@ -7,6 +7,7 @@ import { logUserLogin } from "@/src/actions/audit";
 import BackButton from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/button"
 import { Eye, EyeOff } from 'lucide-react'
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
 
 export default function LoginPage() {
     const router = useRouter()
@@ -59,6 +60,7 @@ export default function LoginPage() {
 
     return (
         <div className="max-w-full p-8 flex h-screen items-center justify-center flex-col">
+            <LoadingOverlay show={isLoading} label="Logging in..." />
             <div className="max-w-lg w-full">
                 <h1 className="text-2xl font-bold mb-4">Login</h1>
             </div>

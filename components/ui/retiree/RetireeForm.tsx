@@ -7,6 +7,7 @@ import { z } from "zod";
 import { RetireeRowSchema, BP205Schema } from '@/src/lib/validations/retiree.schema';
 import { TLB_FACTOR, MAX_STEP } from '@/src/lib/constants';
 import { AllSalaryRates } from '@/src/types/salaries';
+import LoadingOverlay from '@/components/ui/LoadingOverlay';
 
 type RetireeRow = z.infer<typeof RetireeRowSchema>;
 
@@ -204,6 +205,7 @@ const BP205EntryGrid = ({ schedule, highestSG, initialFiscalYear, retireeData, u
 
   return (
     <div className="p-6 mx-auto space-y-6">
+      <LoadingOverlay show={isLoading} label={submitAction === 'draft' ? 'Saving retiree form...' : 'Submitting retiree form...'} />
       <div className="mb-6 p-4 bg-muted/50 border-l-4 border-muted-400 rounded-r-lg shadow-sm">
             <span className="text-xs font-bold text-muted-500 uppercase tracking-widest">Government Entity</span>
             <h2 className="text-lg font-semibold text-muted-800">{entityName}</h2>

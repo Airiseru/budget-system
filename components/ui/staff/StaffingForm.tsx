@@ -14,6 +14,7 @@ import React from "react";
 import SearchableComboboxField, {
     SearchableComboboxOption,
 } from "@/components/ui/dbm/SearchableComboboxField";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
 
 interface StaffingSummaryProps {
     schedule: AllSalaryRates;
@@ -748,6 +749,7 @@ export default function StaffForm({
 
     return (
         <div key="staffing-form" className="max-w-5xl mx-auto mt-8 px-4 pb-20">
+            <LoadingOverlay show={isLoading} label={submitAction === "draft" ? "Saving staffing form..." : "Submitting staffing form..."} />
             <div className="mb-6 p-4 bg-muted/50 border-l-4 border-border rounded-r-lg">
                 <span className="text-sm font-bold text-muted-foreground uppercase">
                     Government Entity

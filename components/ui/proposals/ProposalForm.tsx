@@ -7,6 +7,7 @@ import { AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
 import SearchableComboboxField, {
     SearchableComboboxOption,
 } from "@/components/ui/dbm/SearchableComboboxField";
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
 import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
 import type { UacsFundingSource } from "@/src/types/uacs";
 import type { FullProjectProposal } from "@/src/types/project_proposals";
@@ -1402,6 +1403,8 @@ export default function ProposalForm({
     };
 
     return (
+        <>
+        <LoadingOverlay show={isLoading} label={submitAction === "draft" ? "Saving proposal..." : "Submitting proposal..."} />
         <form
             onSubmit={handleSubmit}
             className="max-w-5xl mx-auto mt-8 px-4 space-y-8"
@@ -4149,5 +4152,6 @@ export default function ProposalForm({
                 </div>
             </div>
         </form>
+        </>
     );
 }

@@ -2,7 +2,6 @@ import BP205EntryGrid from "@/components/ui/retiree/RetireeForm";
 import { sessionWithEntity } from "@/src/actions/auth";
 import { ButtonGroup } from "@/components/ui/button-group";
 import BackButton from "@/components/ui/BackButton";
-import { ModeToggle } from "@/components/ui/system-toggle";
 import {
     createFormRepository,
     createRetireeRepository,
@@ -99,13 +98,10 @@ export default async function EditRetireePage({
     return (
         <main className="m-4">
             <ButtonGroup className="my-4">
-                <ModeToggle />
-                <ButtonGroup>
-                    <BackButton
-                        url={`/forms/retirees/${id}`}
-                        label="Back"
-                    ></BackButton>
-                </ButtonGroup>
+                <BackButton
+                    url={`/forms/retirees/${id}`}
+                    label="Back"
+                ></BackButton>
             </ButtonGroup>
             <BP205EntryGrid
                 schedule={schedule}
