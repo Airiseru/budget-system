@@ -6,6 +6,7 @@ import { CirclePlus } from 'lucide-react'
 import BackButton from '@/components/ui/BackButton'
 import VerifyAllocationSignoffIntegrityDialog from '@/components/ui/audit/VerifyAllocationSignoffIntegrityDialog'
 import { Button } from '@/components/ui/button'
+import FloatingStatus, { type FloatingStatusMessage } from '@/components/ui/FloatingStatus'
 import type { AllocationDashboardRow } from '@/src/db/postgres/repositories/budgetAllocationRepository'
 import type { AllocationDashboardProps, BulkValidityState, LegislativeInsertionState } from './allocation-dashboard/shared'
 import {
@@ -67,6 +68,7 @@ export default function AllocationDashboard({
     const [insertionError, setInsertionError] = useState<string | null>(null)
     const [insertionLoading, setInsertionLoading] = useState(false)
     const [historyRow, setHistoryRow] = useState<AllocationDashboardRow | null>(null)
+    const [floatingStatus, setFloatingStatus] = useState<FloatingStatusMessage>(null)
     const timersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
     const currentPhase = activeCycle?.current_phase ?? null
     const canEditGaa = currentPhase === 'legislative_deliberation'
@@ -227,8 +229,23 @@ export default function AllocationDashboard({
                 setTimeout(() => {
                     setSaveStates((current) => ({ ...current, [saveKey]: 'idle' }))
                 }, 2500)
-            } catch {
+            } catch (error) {
                 setSaveStates((current) => ({ ...current, [saveKey]: 'error' }))
+                const message = error instanceof Error ? error.message : 'Allocation update failed.'
+                setFloatingStatus({
+                    type: 'error',
+                    message: action === 'remove_line_item'
+                        ? `Failed to remove line item: ${message}`
+                        : `Failed to save allocation change: ${message}`,
+                })
+                return
+            }
+
+            if (action === 'remove_line_item') {
+                setFloatingStatus({
+                    type: 'success',
+                    message: 'Line item marked as removed in GAA.',
+                })
             }
         }, 500)
     }
@@ -261,9 +278,18 @@ export default function AllocationDashboard({
             }
 
             setBulkValidityStatus(`Updated ${result.updatedCount} allocation validity records.`)
+            setFloatingStatus({
+                type: 'success',
+                message: `Updated ${result.updatedCount} allocation validity record${result.updatedCount === 1 ? '' : 's'}.`,
+            })
             router.refresh()
         } catch (error) {
-            setBulkValidityError(error instanceof Error ? error.message : 'Bulk validity update failed.')
+            const message = error instanceof Error ? error.message : 'Bulk validity update failed.'
+            setBulkValidityError(message)
+            setFloatingStatus({
+                type: 'error',
+                message: `Bulk validity update failed: ${message}`,
+            })
         } finally {
             setBulkValidityLoading(false)
         }
@@ -290,9 +316,18 @@ export default function AllocationDashboard({
 
             setInsertionState(initialInsertionState)
             setLegislativeInsertOpen(false)
+            setFloatingStatus({
+                type: 'success',
+                message: 'Legislative insertion line item created.',
+            })
             router.refresh()
         } catch (error) {
-            setInsertionError(error instanceof Error ? error.message : 'Failed to create legislative insertion.')
+            const message = error instanceof Error ? error.message : 'Failed to create legislative insertion.'
+            setInsertionError(message)
+            setFloatingStatus({
+                type: 'error',
+                message: `Legislative insertion failed: ${message}`,
+            })
         } finally {
             setInsertionLoading(false)
         }
@@ -300,6 +335,10 @@ export default function AllocationDashboard({
 
     return (
         <main className="mx-auto max-w-[1900px] space-y-5 px-4 py-8 pb-24">
+            <FloatingStatus
+                status={floatingStatus}
+                onClear={() => setFloatingStatus(null)}
+            />
             <div className="flex items-center justify-between">
                 <BackButton url="/dbm" />
                 <div className="text-center">
@@ -351,7 +390,19 @@ export default function AllocationDashboard({
                         ? 'GAA sign-off is blocked while the GAA total exceeds the NEP total.'
                         : undefined
                 }
-                onApproved={() => router.refresh()}
+                onApproved={() => {
+                    setFloatingStatus({
+                        type: 'success',
+                        message: `${currentPhase === 'presidential_approval' ? 'NEP' : 'GAA'} signoff completed.`,
+                    })
+                    router.refresh()
+                }}
+                onSignError={(message) => {
+                    setFloatingStatus({
+                        type: 'error',
+                        message: `${currentPhase === 'presidential_approval' ? 'NEP' : 'GAA'} signoff failed: ${message}`,
+                    })
+                }}
             />
 
             {canEditGaa ? (

@@ -23,6 +23,7 @@ type Props = {
     fromAuthStatus?: string
     toAuthStatus?: string
     onApproved?: () => void
+    onError?: (message: string) => void
     approvedRedirectHref?: string
     allowClosedCycleAction?: boolean
     disabled?: boolean
@@ -39,6 +40,7 @@ export function SignButton({
     fromAuthStatus,
     toAuthStatus,
     onApproved,
+    onError,
     approvedRedirectHref,
     allowClosedCycleAction = false,
     disabled = false,
@@ -123,11 +125,11 @@ export function SignButton({
                 router.push(approvedRedirectHref)
             }
         } catch (err: unknown) {
-            setError(
-                err instanceof Error
-                    ? err.message
-                    : "Failed to approved. Please try again.",
-            )
+            const message = err instanceof Error
+                ? err.message
+                : "Failed to approved. Please try again."
+            setError(message)
+            onError?.(message)
             setStep("pin")
             setPin("")
         }

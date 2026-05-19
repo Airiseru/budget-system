@@ -13,6 +13,7 @@ type Props = {
     signingBlocked: boolean
     signingBlockedMessage?: string
     onApproved: () => void
+    onSignError?: (message: string) => void
 }
 
 export default function AllocationSignoffPanel({
@@ -21,6 +22,7 @@ export default function AllocationSignoffPanel({
     signingBlocked,
     signingBlockedMessage,
     onApproved,
+    onSignError,
 }: Props) {
     const [certified, setCertified] = useState(false)
     const [open, setOpen] = useState(false)
@@ -119,6 +121,7 @@ export default function AllocationSignoffPanel({
                                 fromAuthStatus={signoff.authStatus}
                                 toAuthStatus="approved"
                                 onApproved={onApproved}
+                                onError={onSignError}
                                 disabled={disabled}
                                 disabledMessage={disabledMessage}
                             />
