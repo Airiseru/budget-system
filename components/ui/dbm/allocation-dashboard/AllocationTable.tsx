@@ -231,7 +231,7 @@ export default function AllocationTable({
                                                     {legislativeInsertion ? (
                                                         <span className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-2 text-xs font-semibold text-emerald-800">
                                                             <CirclePlus className="h-5 w-5" />
-                                                            Legislative insertion
+                                                            Legislative Insertion
                                                         </span>
                                                     ) : null}
                                                     {rejectedByDbm ? (
