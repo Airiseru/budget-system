@@ -37,8 +37,6 @@ export default async function EditProposalPage({
     // 2. Fetch the existing proposal
     const project = await ProposalRepo.getProjectProposalById(id);
 
-    console.log(project);
-
     if (!project) {
         redirect("/forms/proposals?error=not-found");
     }

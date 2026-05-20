@@ -145,9 +145,7 @@ async function findPreviousYearGaaAmountWithExecutor(
         ? query.where("fund_code", "=", params.fundCode)
         : query.where("fund_code", "is", null);
 
-    const match = await query
-        .orderBy("updated_at", "desc")
-        .executeTakeFirst();
+    const match = await query.orderBy("updated_at", "desc").executeTakeFirst();
 
     return Number(match?.gaa_amt ?? 0);
 }
@@ -195,14 +193,17 @@ async function syncProposedExistingPapAllocationsWithExecutor(
     }
 
     for (const allocation of allocationInputs.values()) {
-        const prevYearGaaAmount = await findPreviousYearGaaAmountWithExecutor(trx, {
-            fiscalYear: params.fiscalYear,
-            entityId: params.entityId,
-            papId: params.papId,
-            fundCode: allocation.fund_code,
-            tier: 2,
-            itemCatalogId: allocation.item_catalog_id,
-        });
+        const prevYearGaaAmount = await findPreviousYearGaaAmountWithExecutor(
+            trx,
+            {
+                fiscalYear: params.fiscalYear,
+                entityId: params.entityId,
+                papId: params.papId,
+                fundCode: allocation.fund_code,
+                tier: 2,
+                itemCatalogId: allocation.item_catalog_id,
+            },
+        );
 
         const existing = await trx
             .selectFrom("budget_allocations")
@@ -471,7 +472,6 @@ async function insertAttributions(
                         expense_class: c.expense_class,
                         amount: Number(c.amount || 0),
                         currency: c.currency || "PHP",
-                        // fund_category, fund_component, etc. if provided
                     })),
                 )
                 .execute();
@@ -547,33 +547,6 @@ export async function createProjectProposal(
             rootFormId,
         );
 
-        // 2. Insert into Project Proposals
-        const project = await trx
-            .insertInto("project_proposals")
-            .values({
-                id: form.id,
-                parent_form_id: parent_form_id ?? null,
-                root_form_id: rootFormId,
-                entity_id: entityId,
-                title: payload.title,
-                proposal_year: payload.proposal_year,
-                priority_rank: payload.priority_rank,
-                description: payload.description,
-                org_outcome_id: payload.org_outcome_id,
-                purpose: payload.purpose,
-                beneficiaries: payload.beneficiaries,
-                is_new: payload.is_new ?? true,
-                is_infrastructure: payload.is_infrastructure ?? false,
-                for_ict: payload.for_ict ?? false,
-                myca_issuance: payload.myca_issuance,
-                total_proposal_currency:
-                    payload.total_proposal_currency || "PHP",
-                total_proposal_cost: payload.total_proposal_cost || 0,
-                type: payload.type,
-            })
-            .returningAll()
-            .executeTakeFirstOrThrow();
-
         const targetDeptSubquery = trx
             .selectFrom("entities as e2")
             .leftJoin("agencies as a", "a.id", "e2.id")
@@ -609,12 +582,33 @@ export async function createProjectProposal(
                 ),
             ) + 1;
 
-        // Apply calculated priority rank safely
-        await trx
-            .updateTable("project_proposals")
-            .set({ dept_priority_rank: nextDeptRank })
-            .where("id", "=", form.id)
-            .execute();
+        // 2. Insert into Project Proposals
+        const project = await trx
+            .insertInto("project_proposals")
+            .values({
+                id: form.id,
+                parent_form_id: parent_form_id ?? null,
+                root_form_id: rootFormId,
+                entity_id: entityId,
+                title: payload.title,
+                proposal_year: payload.proposal_year,
+                priority_rank: payload.priority_rank,
+                dept_priority_rank: nextDeptRank,
+                description: payload.description,
+                org_outcome_id: payload.org_outcome_id,
+                purpose: payload.purpose,
+                beneficiaries: payload.beneficiaries,
+                is_new: payload.is_new ?? true,
+                is_infrastructure: payload.is_infrastructure ?? false,
+                for_ict: payload.for_ict ?? false,
+                myca_issuance: payload.myca_issuance,
+                total_proposal_currency:
+                    payload.total_proposal_currency || "PHP",
+                total_proposal_cost: payload.total_proposal_cost || 0,
+                type: payload.type,
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
 
         // 3. Original proposals create a PAP. Versioned overwrites reuse the family PAP by default.
         let papId = existingPapId;
@@ -643,7 +637,9 @@ export async function createProjectProposal(
                     purpose: payload.purpose || "No purpose provided.",
                     beneficiaries: payload.beneficiaries || "General Public",
 
-                    project_type: getPapProjectTypeFromProposalType(payload.type),
+                    project_type: getPapProjectTypeFromProposalType(
+                        payload.type,
+                    ),
                     project_status: "proposed",
                     category: payload.type === "202" ? "local" : "foreign",
                     identifier_code: payload.type === "202" ? "2" : "3",
@@ -925,21 +921,27 @@ export async function getAllProposalSummaries(
             "pp.is_infrastructure",
             "pp.title",
             "entities.type as entity_type",
-            sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as("entity_name"),
-        ])
-        .orderBy("pp.submission_date", "desc")
-        .orderBy("pp.priority_rank", "asc");
+            sql<
+                string | null
+            >`COALESCE(departments.name, agencies.name, operating_units.name)`.as(
+                "entity_name",
+            ),
+        ]);
 
     if (fiscalYear) {
         query = query.where("pp.proposal_year", "=", fiscalYear);
     }
 
-    if (hierarchyScope === "national" || userRole === "national" || userRole === "dbm") {
+    if (
+        hierarchyScope === "national" ||
+        userRole === "national" ||
+        userRole === "dbm"
+    ) {
         const rows = await query
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
             .execute();
-        return getLatestProposalSummariesByFamily(rows);
+        return getLatestProposalSummariesByFamily(rows, hierarchyScope);
     }
 
     if (hierarchyScope === "department") {
@@ -958,8 +960,10 @@ export async function getAllProposalSummaries(
                     ),
                 ]),
             )
+            .orderBy("pp.proposal_year", "desc")
+            .orderBy("pp.dept_priority_rank", "asc")
             .execute();
-        return getLatestProposalSummariesByFamily(rows);
+        return getLatestProposalSummariesByFamily(rows, hierarchyScope);
     }
 
     if (hierarchyScope === "agency") {
@@ -970,8 +974,10 @@ export async function getAllProposalSummaries(
                     eb("operating_units.agency_id", "=", entityId),
                 ]),
             )
+            .orderBy("pp.submission_date", "desc")
+            .orderBy("pp.priority_rank", "asc")
             .execute();
-        return getLatestProposalSummariesByFamily(rows);
+        return getLatestProposalSummariesByFamily(rows, hierarchyScope);
     }
 
     if (hierarchyScope === "ou") {
@@ -981,7 +987,7 @@ export async function getAllProposalSummaries(
             .orderBy("pp.proposal_year", "desc")
             .orderBy("pp.priority_rank", "asc")
             .execute();
-        return getLatestProposalSummariesByFamily(rows);
+        return getLatestProposalSummariesByFamily(rows, hierarchyScope);
     }
 
     const rows = await query
@@ -989,7 +995,7 @@ export async function getAllProposalSummaries(
         .orderBy("pp.proposal_year", "desc")
         .orderBy("pp.priority_rank", "asc")
         .execute();
-    return getLatestProposalSummariesByFamily(rows);
+    return getLatestProposalSummariesByFamily(rows, hierarchyScope);
 }
 
 function getLatestProposalSummariesByFamily<
@@ -999,14 +1005,14 @@ function getLatestProposalSummariesByFamily<
         version: number;
         proposal_year: number;
         priority_rank: number;
+        dept_priority_rank: number;
     },
->(rows: T[]) {
+>(rows: T[], entityType: string) {
     const latestByFamily = new Map<string, T>();
 
     for (const row of rows) {
         const familyId = row.parent_form_id ?? row.id;
         const current = latestByFamily.get(familyId);
-
         if (!current || row.version > current.version) {
             latestByFamily.set(familyId, row);
         }
@@ -1017,6 +1023,9 @@ function getLatestProposalSummariesByFamily<
             return b.proposal_year - a.proposal_year;
         }
 
+        if (entityType === "department") {
+            return a.dept_priority_rank - b.dept_priority_rank;
+        }
         return a.priority_rank - b.priority_rank;
     });
 }
@@ -1188,7 +1197,8 @@ export async function createAllocationsForApprovedProposalWithExecutor(
             workflowLogs.push({
                 allocation_id: duplicate.id,
                 workflow_stage: "dbm_review",
-                remarks: "Updated tier 2 allocation from DBM-approved proposal.",
+                remarks:
+                    "Updated tier 2 allocation from DBM-approved proposal.",
                 amt_before: Number(existingAllocation.dbm_rec_amt ?? 0),
                 amt_after: dbmRecommendedAmount,
                 performed_by: performedBy,
@@ -1223,7 +1233,8 @@ export async function createAllocationsForApprovedProposalWithExecutor(
                 workflowLogs.push({
                     allocation_id: allocationId,
                     workflow_stage: "dbm_review",
-                    remarks: "Created tier 2 allocation from DBM-approved proposal.",
+                    remarks:
+                        "Created tier 2 allocation from DBM-approved proposal.",
                     amt_before: null,
                     amt_after: dbmRecommendedAmount,
                     performed_by: performedBy,

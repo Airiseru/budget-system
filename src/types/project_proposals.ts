@@ -14,7 +14,7 @@ export interface ProjectProposalTable {
     title: string;
     proposal_year: number;
     priority_rank: number;
-    dept_priority_rank: number | null;
+    dept_priority_rank: number;
     description: string;
     org_outcome_id: string;
     purpose: string;
