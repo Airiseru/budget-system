@@ -7,7 +7,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('id', 'uuid', (col) => col.primaryKey().notNull().defaultTo(sql`gen_random_uuid()`))
         .addColumn('circular_reference', 'text', (col) => col.notNull())
         .addColumn('effective_date', 'date', (col) => col.notNull())
-        .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 
     // Rates
@@ -38,7 +38,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('rule_value', 'numeric', (col) => col.notNull())
         .addColumn('min_salary_grade', 'integer', (col) => col.defaultTo(1))
         .addColumn('max_salary_grade', 'integer', (col) => col.defaultTo(33))
-        .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 }
 

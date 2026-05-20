@@ -23,7 +23,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
             )
         `))
 
-        // PREXC_FPAP_ID (0 = not set)
+        // PREXC_FPAP_ID (all 0s = not set)
         .addColumn('cost_structure_code', 'varchar(1)', (col) => col.defaultTo('0'))
         .addColumn('organizational_outcome_code', 'varchar(1)', (col) => col.defaultTo('0'))
         .addColumn('program_code', 'varchar(2)', (col) => col.defaultTo('00'))

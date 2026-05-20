@@ -51,13 +51,13 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn("total_proposal_currency", "text", (col) => col.notNull())
         .addColumn("total_proposal_cost", "decimal", (col) => col.notNull())
         .addColumn("type", "text", (col) => col.notNull()) // '202' or '203'
-        .addColumn("submission_date", "timestamp", (col) =>
+        .addColumn("submission_date", "timestamptz", (col) =>
             col.defaultTo(sql`now()`),
         )
-        .addColumn("created_at", "timestamp", (col) =>
+        .addColumn("created_at", "timestamptz", (col) =>
             col.defaultTo(sql`now()`),
         )
-        .addColumn("updated_at", "timestamp", (col) =>
+        .addColumn("updated_at", "timestamptz", (col) =>
             col.defaultTo(sql`now()`),
         )
         .execute();

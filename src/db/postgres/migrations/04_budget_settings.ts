@@ -18,8 +18,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('legal_basis_ref', 'varchar')
 
         // Timestamps
-        .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
-        .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+        .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 
     await sql`

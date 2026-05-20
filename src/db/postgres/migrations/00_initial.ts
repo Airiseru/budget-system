@@ -42,8 +42,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('version', 'integer', (col) => col.notNull().defaultTo(1))
         .addColumn('codename', 'text')
         .addColumn('auth_status', 'text', (col) => col.defaultTo('draft'))
-        .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
-        .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+        .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 
     // Create User Key Table

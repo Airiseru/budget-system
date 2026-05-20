@@ -35,8 +35,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('valid_until', 'date')
 
         .addColumn('auth_status', 'varchar', (col) => col.notNull().defaultTo('draft')) // draft, proposed, dbm_approved, nep_approved, gaa_approved, rejected
-        .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
-        .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+        .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 
     await db.schema

@@ -17,8 +17,8 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('expense_class', 'varchar', (col) => col.notNull())
         .addColumn('expense_class_code', 'varchar(1)', (col) => col.notNull())
         .addColumn('unit_of_measure', 'varchar') // for procurement projects
-        .addColumn('created_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
-        .addColumn('updated_at', 'timestamp', (col) => col.defaultTo(sql`now()`))
+        .addColumn('created_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
+        .addColumn('updated_at', 'timestamptz', (col) => col.defaultTo(sql`now()`))
         .execute()
 
     // Create B-tree indexes
