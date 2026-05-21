@@ -12,6 +12,7 @@ import * as PostgreBudgetSettingsRepository from "@/src/db/postgres/repositories
 import * as PostgreItemRepository from "@/src/db/postgres/repositories/itemRepository";
 import * as PostgreBudgetAllocationRepository from "@/src/db/postgres/repositories/budgetAllocationRepository";
 import * as PostgreAdministrativeOverrideRepository from "@/src/db/postgres/repositories/administrativeOverrideRepository";
+import * as PostgreHomepageContentRepository from "@/src/db/postgres/repositories/homepageContentRepository";
 
 export function createAuditRepository(dbType: string) {
     switch (dbType) {
@@ -134,6 +135,15 @@ export function createAdministrativeOverrideRepository(dbType: string) {
     switch (dbType) {
         case "postgres":
             return PostgreAdministrativeOverrideRepository;
+        default:
+            throw new Error(`Unsupported database type: ${dbType}`);
+    }
+}
+
+export function createHomepageContentRepository(dbType: string) {
+    switch (dbType) {
+        case "postgres":
+            return PostgreHomepageContentRepository;
         default:
             throw new Error(`Unsupported database type: ${dbType}`);
     }

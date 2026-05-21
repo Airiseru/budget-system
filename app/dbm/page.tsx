@@ -60,6 +60,11 @@ const moduleLinks = [
         title: "Salary Schedules and Compensations",
         description: "Manage salary schedules and compensation data.",
     },
+    {
+        href: "/dbm/homepage-content",
+        title: "Homepage Content",
+        description: "Draft, edit, publish, and archive FAQs and announcements.",
+    },
 ]
 
 function formatDate(value: Date | string) {
