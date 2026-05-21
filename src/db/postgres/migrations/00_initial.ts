@@ -196,7 +196,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .execute()
 
     // Create B-tree indexes
-    await db.schema.createIndex('idx_entities_id').on('entities').column('id').execute()
+    await db.schema.createIndex('idx_users_entity_id').on('users').column('entity_id').execute()
     await db.schema.createIndex('idx_forms_entity_id').on('forms').column('entity_id').execute()
     await db.schema.createIndex('idx_forms_created_at').on('forms').column('created_at').execute()
     await db.schema.createIndex('idx_user_keys_user_id').on('user_keys').column('user_id').execute()
@@ -235,7 +235,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 
 export async function down(db: Kysely<unknown>): Promise<void> {
     // Drop indexes
-    await db.schema.dropIndex('idx_entities_id').execute()
+    await db.schema.dropIndex('idx_users_entity_id').execute()
     await db.schema.dropIndex('idx_forms_entity_id').execute()
     await db.schema.dropIndex('idx_forms_created_at').execute()
     await db.schema.dropIndex('idx_user_keys_user_id').execute()
