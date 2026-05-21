@@ -1,8 +1,9 @@
 'use client'
 
 import Link from "next/link"
-import { ArrowRight, CalendarDays, ShieldCheck } from "lucide-react"
+import { ArrowRight, BarChart3, CalendarDays, FileText, History, ShieldCheck } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import Carousel from "@/components/ui/Carousel"
 import MarkdownContent from "@/components/ui/MarkdownContent"
 
 export type PublicAnnouncement = {
@@ -67,6 +68,34 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
             description: 'Preserves data lineage through an immutable hashed audit chain and supports public visibility into the budget process.',
         },
     ]
+    const heroCarouselItems = [
+        {
+            id: 'digitalizing-paper-trails',
+            title: 'Digitalizing Paper Trails',
+            description: "Say goodbye to lost physical forms. The system fully digitalizes traditional budget documents to accelerate the government's digital transformation efforts.",
+        },
+        {
+            id: 'accountable-data',
+            title: 'Built for Accountable Data',
+            description: 'Every action is tracked. By combining role-based access, secure digital signatures, and permanent audit logs, the system ensures complete transparency during the budget process.',
+        },
+        {
+            id: 'complete-proposal-history',
+            title: 'Complete Proposal History',
+            description: 'Nothing is ever lost or deleted without a trace. The system keeps a permanent historical record of all changes, rejections, and revisions to make audits and congressional reviews effortless.',
+        },
+        {
+            id: 'real-time-dashboards',
+            title: 'Real-Time Dashboards',
+            description: 'See the big picture instantly. Analysts can monitor up-to-date totals and track line-item allocations across hundreds of thousands of records.',
+        },
+    ]
+    const heroCarouselIcons = {
+        'digitalizing-paper-trails': FileText,
+        'accountable-data': ShieldCheck,
+        'complete-proposal-history': History,
+        'real-time-dashboards': BarChart3,
+    }
 
     return (
         <main className="min-h-screen bg-[#f7f3ea] text-slate-950">
@@ -94,13 +123,13 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
 
             <section className="relative overflow-hidden border-b border-slate-900/10">
                 <div className="absolute inset-0 bg-[radial-gradient(circle_at_20%_20%,rgba(221,214,254,0.82),transparent_30%),radial-gradient(circle_at_82%_8%,rgba(196,181,253,0.42),transparent_28%),radial-gradient(circle_at_70%_90%,rgba(237,233,254,0.72),transparent_26%)]" />
-                <div className="relative mx-auto grid max-w-7xl gap-10 px-4 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:py-28">
+                <div className="relative mx-auto grid max-w-7xl gap-12 px-4 py-20 lg:grid-cols-[1.1fr_0.9fr] lg:items-center lg:py-28">
                     <div>
                         <p className="text-sm font-black uppercase tracking-[0.35em] text-primary-foreground">
                             Philippine Budget Portal for Government Entities
                         </p>
                         <h1 className="mt-5 max-w-4xl text-4xl font-black leading-tight tracking-tight md:text-7xl">
-                            Balanced, unified, digitalized government expenditure and transparency system.
+                            Balanced, unified, and digitalized government expenditure and transparency system.
                         </h1>
                         <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700">
                             BUDGET turns the preparation, review, and approval process into accountable data: proposals, allocations, signatures, and audit trails working from one source of truth.
@@ -114,14 +143,23 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                             </Button>
                         </div>
                     </div>
-                    <div className="rounded-[2rem] border border-slate-900/10 bg-white/65 p-6 shadow-2xl backdrop-blur">
-                        <div className="rounded-[1.5rem] bg-slate-950 p-6 text-white">
-                            <ShieldCheck className="h-10 w-10 text-violet-300" />
-                            <h2 className="mt-8 text-2xl font-black">Built for accountable data</h2>
-                            <p className="mt-3 text-sm leading-7 text-slate-300">
-                                The system combines entity-based access, database records, digital signatures, allocation histories, and immutable audit logs to support transparent budget preparation.
-                            </p>
-                        </div>
+                    <div className="rounded-[2rem] border border-slate-900/10 bg-primary-foreground/65 p-6 shadow-2xl backdrop-blur">
+                        <Carousel
+                            items={heroCarouselItems}
+                            autoPlayIntervalMs={7500}
+                            className="rounded-[1.5rem] bg-slate-950 p-6 text-white"
+                            renderItem={(item) => {
+                                const Icon = heroCarouselIcons[item.id as keyof typeof heroCarouselIcons] ?? ShieldCheck
+
+                                return (
+                                    <article className="min-h-72">
+                                        <Icon className="h-10 w-10 text-violet-300" />
+                                        <h2 className="mt-8 text-2xl font-black">{item.title}</h2>
+                                        <p className="mt-3 text-md leading-7 text-slate-300">{item.description}</p>
+                                    </article>
+                                )
+                            }}
+                        />
                     </div>
                 </div>
             </section>
