@@ -16,6 +16,8 @@ import {
 export type SearchableComboboxOption = {
     value: string
     label: string
+    searchText?: string
+    indentLevel?: number
 }
 
 type Props = {
@@ -38,6 +40,7 @@ export default function SearchableComboboxField({
     onValueChange,
 }: Props) {
     const selectedItem = items.find((item) => item.value === value) ?? null
+    const normalizeSearch = (text: string) => text.toLocaleLowerCase().trim()
 
     return (
         <Combobox
@@ -46,6 +49,12 @@ export default function SearchableComboboxField({
             disabled={disabled}
             onValueChange={(item) => onValueChange(item?.value ?? '')}
             isItemEqualToValue={(item, selected) => item.value === selected.value}
+            filter={(item: SearchableComboboxOption, query: string) => {
+                const normalizedQuery = normalizeSearch(query)
+                if (!normalizedQuery) return true
+
+                return normalizeSearch(`${item.label} ${item.searchText ?? ''}`).includes(normalizedQuery)
+            }}
         >
             <ComboboxTrigger
                 disabled={disabled}
@@ -79,7 +88,10 @@ export default function SearchableComboboxField({
                             value={item}
                             className="items-start whitespace-normal break-words"
                         >
-                            <span className="block whitespace-normal break-words text-left">
+                            <span
+                                className="block whitespace-normal break-words text-left"
+                                style={{ paddingLeft: item.indentLevel ? `${item.indentLevel * 0.75}rem` : undefined }}
+                            >
                                 {item.label}
                             </span>
                         </ComboboxItem>

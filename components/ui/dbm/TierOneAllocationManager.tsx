@@ -74,7 +74,17 @@ function buildHierarchicalEntityOptions(
     operatingUnits: EntityOption[]
 ): SearchableComboboxOption[] {
     const ordered: SearchableComboboxOption[] = []
-    const pushOperatingUnits = (agencyId: string, parentOuId: string | null = null) => {
+    const getEntitySearchText = (entity: EntityOption, ancestors: EntityOption[] = []) =>
+        [...ancestors, entity]
+            .flatMap((item) => [item.name, item.uacs_code ?? ''])
+            .filter(Boolean)
+            .join(' ')
+
+    const pushOperatingUnits = (
+        agencyId: string,
+        parentOuId: string | null = null,
+        ancestors: EntityOption[] = []
+    ) => {
         const matches = operatingUnits.filter(
             (entity) => entity.agency_id === agencyId && (entity.parent_ou_id ?? null) === parentOuId
         )
@@ -83,8 +93,10 @@ function buildHierarchicalEntityOptions(
             ordered.push({
                 value: entity.id,
                 label: `${entity.uacs_code ?? '—'} • ${entity.name}`,
+                searchText: getEntitySearchText(entity, ancestors),
+                indentLevel: Math.max(ancestors.length, 1),
             })
-            pushOperatingUnits(agencyId, entity.id)
+            pushOperatingUnits(agencyId, entity.id, [...ancestors, entity])
         }
     }
 
@@ -92,6 +104,8 @@ function buildHierarchicalEntityOptions(
         ordered.push({
             value: department.id,
             label: `${department.uacs_code ?? '—'} • ${department.name}`,
+            searchText: getEntitySearchText(department),
+            indentLevel: 0,
         })
 
         const departmentAgencies = agencies.filter((agency) => agency.department_id === department.id)
@@ -99,8 +113,10 @@ function buildHierarchicalEntityOptions(
             ordered.push({
                 value: agency.id,
                 label: `${agency.uacs_code ?? '—'} • ${agency.name}`,
+                searchText: getEntitySearchText(agency, [department]),
+                indentLevel: 1,
             })
-            pushOperatingUnits(agency.id)
+            pushOperatingUnits(agency.id, null, [department, agency])
         }
     }
 
@@ -109,8 +125,10 @@ function buildHierarchicalEntityOptions(
         ordered.push({
             value: agency.id,
             label: `${agency.uacs_code ?? '—'} • ${agency.name}`,
+            searchText: getEntitySearchText(agency),
+            indentLevel: 0,
         })
-        pushOperatingUnits(agency.id)
+        pushOperatingUnits(agency.id, null, [agency])
     }
 
     return ordered

@@ -17,7 +17,7 @@ import type {
     FundingSourceOption,
     LegislativeInsertionState,
 } from './shared'
-import { buildOrderedEntities, getEntityLabel } from './shared'
+import { buildEntityComboboxOptions } from './shared'
 
 type Props = {
     open: boolean
@@ -48,7 +48,6 @@ export default function LegislativeInsertionDialog({
 }: Props) {
     const FIELD_CLASSNAME = "h-12 w-full rounded-md border border-border bg-background px-3 py-2"
     const SELECT_TRIGGER_CLASSNAME = "h-auto min-h-12 w-full border-border px-3 py-3 text-md"
-    const orderedEntities = buildOrderedEntities(entities)
     const sortedPaps = [...paps]
         .filter((pap) => {
             if (!['proposed', 'approved', 'for_release', 'on_going'].includes(pap.project_status)) return false
@@ -63,10 +62,7 @@ export default function LegislativeInsertionDialog({
             return !!value.pap_code && item.pap_code === value.pap_code
         })
         .sort((a, b) => a.name.localeCompare(b.name))
-    const entityOptions: SearchableComboboxOption[] = orderedEntities.map((entity) => ({
-        value: entity.id,
-        label: getEntityLabel(entity),
-    }))
+    const entityOptions = buildEntityComboboxOptions(entities)
     const papOptions: SearchableComboboxOption[] = sortedPaps.map((pap) => ({
         value: pap.id,
         label: pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`,

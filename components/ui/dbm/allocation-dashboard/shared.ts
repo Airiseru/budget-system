@@ -8,6 +8,7 @@ import type {
 import type { Department } from '@/src/types/entities'
 import type { PapOption } from '@/src/db/postgres/repositories/papRepository'
 import type { ItemCatalogOption } from '@/src/db/postgres/repositories/itemRepository'
+import type { SearchableComboboxOption } from '@/components/ui/dbm/SearchableComboboxField'
 
 export type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 
@@ -197,6 +198,62 @@ export function buildOrderedEntities(entities: EntityOption[]) {
     }
 
     return ordered
+}
+
+export function buildEntityComboboxOptions(entities: EntityOption[]): SearchableComboboxOption[] {
+    const orderedOptions: SearchableComboboxOption[] = []
+    const orderedEntities = buildOrderedEntities(entities)
+    const entityById = new Map(entities.map((entity) => [entity.id, entity]))
+
+    const getAncestors = (entity: EntityOption) => {
+        const ancestors: EntityOption[] = []
+
+        if (entity.entity_type === 'agency' && entity.department_id) {
+            const department = entityById.get(entity.department_id)
+            if (department) ancestors.push(department)
+        }
+
+        if (entity.entity_type === 'operating_unit') {
+            const agency = entity.agency_id ? entityById.get(entity.agency_id) : null
+            const departmentId = entity.department_id ?? agency?.department_id ?? null
+
+            if (departmentId) {
+                const department = entityById.get(departmentId)
+                if (department) ancestors.push(department)
+            }
+
+            if (agency) ancestors.push(agency)
+
+            let parentOuId = entity.parent_ou_id ?? null
+            const parentOperatingUnits: EntityOption[] = []
+            while (parentOuId) {
+                const parent = entityById.get(parentOuId)
+                if (!parent) break
+                parentOperatingUnits.unshift(parent)
+                parentOuId = parent.parent_ou_id ?? null
+            }
+            ancestors.push(...parentOperatingUnits)
+        }
+
+        return ancestors
+    }
+
+    for (const entity of orderedEntities) {
+        const ancestors = getAncestors(entity)
+        const searchText = [...ancestors, entity]
+            .flatMap((item) => [item.name, item.uacs_code])
+            .filter(Boolean)
+            .join(' ')
+
+        orderedOptions.push({
+            value: entity.id,
+            label: getEntityLabel(entity),
+            searchText,
+            indentLevel: ancestors.length,
+        })
+    }
+
+    return orderedOptions
 }
 
 export function getAllocationGroupKey(row: AllocationDashboardRow) {
