@@ -30,9 +30,27 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
     const orderedDepartments = [...departments].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
     const orderedAgencies = [...agencies].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
     const orderedOperatingUnits = [...operatingUnits].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
+    const parentOperatingUnitIds = new Set(
+        orderedOperatingUnits
+            .map((operatingUnit) => operatingUnit.parent_ou_id)
+            .filter((id): id is string => Boolean(id))
+    )
 
     const entityOptions: SearchableComboboxOption[] = []
-    const pushOperatingUnits = (agencyId: string, parentOuId: string | null = null, depth = 1) => {
+    const getEntitySearchText = (
+        entity: { name: string; uacs_code?: string | null },
+        ancestors: Array<{ name: string; uacs_code?: string | null }> = []
+    ) =>
+        [...ancestors, entity]
+            .flatMap((item) => [item.name, item.uacs_code ?? ''])
+            .filter(Boolean)
+            .join(' ')
+
+    const pushOperatingUnits = (
+        agencyId: string,
+        parentOuId: string | null = null,
+        ancestors: Array<{ name: string; uacs_code?: string | null }> = []
+    ) => {
         const matches = orderedOperatingUnits.filter(
             (operatingUnit) =>
                 operatingUnit.agency_id === agencyId &&
@@ -40,27 +58,36 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
         )
 
         for (const operatingUnit of matches) {
-            entityOptions.push({
-                value: operatingUnit.id,
-                label: `${'  '.repeat(depth)}↳ ${operatingUnit.name}`,
-            })
-            pushOperatingUnits(agencyId, operatingUnit.id, depth + 1)
+            const nextAncestors = [...ancestors, operatingUnit]
+            if (!parentOperatingUnitIds.has(operatingUnit.id)) {
+                entityOptions.push({
+                    value: operatingUnit.id,
+                    label: `${operatingUnit.uacs_code} • ${operatingUnit.name}`,
+                    searchText: getEntitySearchText(operatingUnit, ancestors),
+                    indentLevel: Math.max(ancestors.length, 1),
+                })
+            }
+            pushOperatingUnits(agencyId, operatingUnit.id, nextAncestors)
         }
     }
 
     for (const department of orderedDepartments) {
         entityOptions.push({
             value: department.id,
-            label: department.name,
+            label: `${department.uacs_code} • ${department.name}`,
+            searchText: getEntitySearchText(department),
+            indentLevel: 0,
         })
 
         const childAgencies = orderedAgencies.filter((agency) => agency.department_id === department.id)
         for (const agency of childAgencies) {
             entityOptions.push({
                 value: agency.id,
-                label: `${agency.name}`,
+                label: `${agency.uacs_code} • ${agency.name}`,
+                searchText: getEntitySearchText(agency, [department]),
+                indentLevel: 1,
             })
-            pushOperatingUnits(agency.id)
+            pushOperatingUnits(agency.id, null, [department, agency])
         }
     }
 
@@ -68,9 +95,11 @@ export default function SignUpForm({ departments, agencies, operatingUnits }: Pr
         for (const agency of [...independentAgencies].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))) {
             entityOptions.push({
                 value: agency.id,
-                label: `${agency.name}`,
+                label: `${agency.uacs_code} • ${agency.name}`,
+                searchText: getEntitySearchText(agency),
+                indentLevel: 0,
             })
-            pushOperatingUnits(agency.id)
+            pushOperatingUnits(agency.id, null, [agency])
         }
     }
 
