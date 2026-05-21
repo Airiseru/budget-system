@@ -52,7 +52,7 @@ test.describe.serial('Authentication Flow', () => {
             await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible()
 
             // Approve user
-            await page.getByRole('button', { name: 'Pending Approvals' }).click()
+            await page.getByRole('link', { name: 'Pending Approvals' }).click()
             await page.click('text=Select Role')
             await page.getByRole('option', { name: 'Operating Unit' }).click()
             await page.click('text=Select Workflow')
@@ -67,7 +67,7 @@ test.describe.serial('Authentication Flow', () => {
             // Go back to admin home page
             await page.getByRole('button', { name: 'Back' }).click()
             await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible()
-            await page.getByRole('button', { name: 'Home' }).click()
+            await page.getByRole('link', { name: 'Home' }).click()
             await page.getByRole('button', { name: 'Logout' }).click()
             await expect(page).toHaveURL('http://localhost:3000/login')
         })

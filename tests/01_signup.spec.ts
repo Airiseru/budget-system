@@ -34,7 +34,7 @@ test.describe.serial('Signup Flow', () => {
 
             await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible()
 
-            await page.getByRole('button', { name: 'Pending Approvals' }).click()
+            await page.getByRole('link', { name: 'Pending Approvals' }).click()
 
             await page.getByRole('button', { name: 'Reject User' }).click()
             await page.getByRole('button', { name: 'Reject User' }).last().click()
