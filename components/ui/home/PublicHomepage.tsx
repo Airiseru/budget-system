@@ -104,7 +104,7 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                     <Link href="/" className="text-lg font-black tracking-tight">
                         BUDGET System
                     </Link>
-                    <div className="hidden items-center gap-6 text-sm font-semibold text-slate-700 md:flex">
+                    <div className="hidden items-center gap-6 text-md font-semibold text-slate-700 md:flex">
                         <Link href="#about" className="hover:text-slate-950">About</Link>
                         <Link href="#announcements" className="hover:text-slate-950">News</Link>
                         <Link href="#faqs" className="hover:text-slate-950">FAQs</Link>
@@ -167,15 +167,15 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
             <section id="about" className="mx-auto max-w-7xl px-4 py-16">
                 <div className="grid gap-10">
                     <div>
-                        <p className="text-sm font-black uppercase tracking-[0.3em] text-primary-foreground">About</p>
+                        <p className="text-md font-black uppercase tracking-[0.3em] text-primary-foreground">About</p>
                         <h2 className="mt-3 text-3xl font-black tracking-tight">About the Project</h2>
-                        <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-600">
+                        <p className="mt-3 max-w-3xl text-md leading-7 text-slate-600">
                             BUDGET is an acronym for the system&apos;s design principles: fiscal balance, unified records, digitized workflows, government expenditure modeling, data-driven controls, and transparency.
                         </p>
                     </div>
                     <div className="space-y-4">
                         <div>
-                            <p className="text-xs font-black uppercase tracking-[0.25em] text-primary-foreground">Key Features</p>
+                            <p className="text-sm font-black uppercase tracking-[0.25em] text-primary-foreground">Key Features</p>
                             <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">What the system supports</h3>
                         </div>
                         <div className="grid gap-4 md:grid-cols-3">
@@ -184,7 +184,7 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                                 ['DBM Review', 'DBM users can review proposals, manage PAPs, and prepare NEP/GAA allocations.'],
                                 ['Integrity Checks', 'Digital signatures and audit trails support tamper-aware review of submitted forms.'],
                             ].map(([title, description]) => (
-                                <article key={title} className="rounded-3xl border border-slate-900/10 bg-white/70 p-5 shadow-sm">
+                                <article key={title} className="rounded-3xl border border-slate-900/10 bg-white/70 p-6 shadow-sm">
                                     <h3 className="font-black">{title}</h3>
                                     <p className="mt-3 text-sm leading-7 text-slate-600">{description}</p>
                                 </article>
@@ -194,7 +194,7 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
 
                     <div className="space-y-4">
                         <div>
-                            <p className="text-xs font-black uppercase tracking-[0.25em] text-violet-700">Meaning of the Acronym</p>
+                            <p className="text-sm font-black uppercase tracking-[0.25em] text-violet-700">Meaning of the Acronym</p>
                             <h3 className="mt-2 text-2xl font-black tracking-tight text-slate-950">What BUDGET stands for</h3>
                         </div>
                         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -220,7 +220,7 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                 <div className="mx-auto max-w-7xl">
                     <div className="">
                         <div>
-                            <p className="text-sm font-black uppercase tracking-[0.3em] text-primary-foreground">Latest Updates</p>
+                            <p className="text-md font-black uppercase tracking-[0.3em] text-primary-foreground">Latest Updates</p>
                             <h2 className="mt-3 text-3xl font-black tracking-tight">News and Announcements</h2>
                         </div>
                         <p className="max-w-xl text-md leading-7 text-slate-300">
@@ -229,7 +229,7 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                     </div>
                     <div className="mt-8 w-full max-h-[400px] overflow-y-scroll">
                         {announcements.length === 0 ? (
-                            <p className="w-full rounded-3xl border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
+                            <p className="w-full rounded-3xl border border-white/10 bg-white/5 p-6 text-md text-slate-300">
                                 No published announcements yet.
                             </p>
                         ) : announcements.map((announcement) => (
@@ -253,12 +253,12 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
 
             <section id="faqs" className="mx-auto max-w-4xl px-4 py-16">
                 <div className="text-center">
-                    <p className="text-sm font-black uppercase tracking-[0.3em] text-primary-foreground">Help</p>
+                    <p className="text-md font-black uppercase tracking-[0.3em] text-primary-foreground">Help</p>
                     <h2 className="mt-3 text-3xl font-black tracking-tight">Frequently Asked Questions</h2>
                 </div>
                 <div className="mt-8 space-y-3">
                     {faqs.length === 0 ? (
-                        <p className="rounded-3xl border border-dashed border-slate-900/20 bg-white/60 p-6 text-center text-sm text-slate-600">
+                        <p className="rounded-3xl border border-dashed border-slate-900/20 bg-white/60 p-6 text-center text-md text-slate-600">
                             No published FAQs yet.
                         </p>
                     ) : faqs.map((faq) => (
@@ -278,8 +278,8 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
             <section id="disclaimer" className="border-y border-slate-900/10 bg-white/70 px-4 py-10">
                 <div className="mx-auto max-w-4xl text-center">
                     <h2 className="text-xl font-black">Disclaimer</h2>
-                    <p className="mt-3 text-sm leading-7 text-slate-600">
-                        This system is for demo purposes only, created in fulfillment of the requirement for the degree of Bachelor of Science in Computer Science.
+                    <p className="mt-3 text-md leading-7 text-slate-600">
+                        This system is for demo purposes only, created in fulfillment of the requirement for the degree of Bachelor of Science in Computer Science at the University of the Philippines Diliman.
                     </p>
                 </div>
             </section>
@@ -288,8 +288,8 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                 <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
                     <p className="text-sm">© 2026 BUDGET System Demo. All rights reserved.</p>
                     <div className="flex flex-col gap-1 text-sm md:text-right">
-                        <p>Denise Dee • dcs.upd@up.edu.ph</p>
-                        <p>Carl Geevee Vitug • dcs.upd@up.edu.ph</p>
+                        <p>Denise Dee • dbdee@up.edu.ph</p>
+                        <p>Carl Geevee Vitug • cdvitug@up.edu.ph</p>
                     </div>
                 </div>
             </footer>
