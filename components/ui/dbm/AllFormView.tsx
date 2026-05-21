@@ -111,15 +111,16 @@ export default function AllFormView({
                         
                         <div className="space-y-1 flex-1 min-w-[200px]">
                             <label htmlFor='type' className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Status</label>
-                            <Select value={status || "none"} onValueChange={(value: string | null) => setStatus(value ? (value === "none" ? "" : value) : "")}>
+                            <Select value={status || "all"} onValueChange={(value: string | null) => setStatus(value ? (value === "all" ? "" : value) : "")}>
                                 <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mb-0 height-[38px]">
                                     <SelectValue placeholder="Select a status">
-                                        {status ? STATUS_LABELS[status] : "All"}
+                                        {status ? STATUS_LABELS[status] : "All statuses"}
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
+                                    <SelectItem value="all">All statuses</SelectItem>
                                     {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                                        <SelectItem key={key} value={key !== 'none' ? key : 'none'}>
+                                        <SelectItem key={key} value={key}>
                                             {label}
                                         </SelectItem>
                                     ))}

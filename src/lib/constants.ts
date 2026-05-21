@@ -96,7 +96,6 @@ export const FORM_NAMES: Record<string, string> = {
 }
 
 export const STATUS_LABELS: Record<string, string> = {
-    none: 'All',
     draft: 'Draft',
     pending_personnel: 'Pending Personnel Officer',
     pending_budget: 'Pending Budget Officer',
