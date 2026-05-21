@@ -65,14 +65,23 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         ) <> '000000000000000';
     `.execute(db)
 
-    // Create GIN index for full text search on title, description, and purpose
+    await sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`.execute(db)
+
+    // Create GIN trigram index for substring search on PAP text and code fields.
     await sql`
-        CREATE INDEX idx_pap_search ON paps USING GIN(
-            to_tsvector('english',
+        CREATE INDEX idx_pap_search ON paps USING GIN((
                 COALESCE(title, '') || ' ' ||
                 COALESCE(description, '') || ' ' ||
-                COALESCE(purpose, '')
-            )
+                COALESCE(purpose, '') || ' ' ||
+                COALESCE(beneficiaries, '') || ' ' ||
+                COALESCE(cost_structure_code, '') ||
+                COALESCE(organizational_outcome_code, '') ||
+                COALESCE(program_code, '') ||
+                COALESCE(subprogram_code, '') ||
+                COALESCE(identifier_code, '') ||
+                COALESCE(project_title_code, '') ||
+                COALESCE(reserved_codes, '')
+            ) gin_trgm_ops
         );
     `.execute(db)
 }

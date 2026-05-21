@@ -101,6 +101,20 @@ export function hasPapUacsUpdate(values: Partial<Record<PapUacsFieldName, unknow
         .some((field) => values[field as PapUacsFieldName] !== undefined)
 }
 
+const papSearchExpression = sql<string>`(
+    COALESCE(paps.title, '') || ' ' ||
+    COALESCE(paps.description, '') || ' ' ||
+    COALESCE(paps.purpose, '') || ' ' ||
+    COALESCE(paps.beneficiaries, '') || ' ' ||
+    COALESCE(paps.cost_structure_code, '') ||
+    COALESCE(paps.organizational_outcome_code, '') ||
+    COALESCE(paps.program_code, '') ||
+    COALESCE(paps.subprogram_code, '') ||
+    COALESCE(paps.identifier_code, '') ||
+    COALESCE(paps.project_title_code, '') ||
+    COALESCE(paps.reserved_codes, '')
+)`
+
 function createPapBaseQuery() {
     return db
         .selectFrom('paps')
@@ -201,21 +215,9 @@ export async function getPaginatedPaps(filters: PapListFilters = {}) {
 
     if (filters.search?.trim()) {
         const search = `%${filters.search.trim()}%`
-        query = query.where(({ eb, or }) => or([
-            eb('paps.title', 'ilike', search),
-            eb('paps.description', 'ilike', search),
-            eb('paps.purpose', 'ilike', search),
-            eb('paps.beneficiaries', 'ilike', search),
-            eb(sql<string>`CONCAT(
-                COALESCE(paps.cost_structure_code, ''),
-                COALESCE(paps.organizational_outcome_code, ''),
-                COALESCE(paps.program_code, ''),
-                COALESCE(paps.subprogram_code, ''),
-                COALESCE(paps.identifier_code, ''),
-                COALESCE(paps.project_title_code, ''),
-                COALESCE(paps.reserved_codes, '')
-            )`, 'ilike', search),
-        ]))
+
+        // Use GIN index made in PAP to speed up search
+        query = query.where(({ eb }) => eb(papSearchExpression, 'ilike', search))
     }
 
     const allPaps = await query
