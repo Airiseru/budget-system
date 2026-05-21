@@ -45,7 +45,7 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
         {
             letter: 'U',
             title: 'Unified',
-            description: 'Centralizes proposals, receipts, line items, and related agency documents in one PostgreSQL-backed repository.',
+            description: 'Centralizes proposals, receipts, line items, and related agency documents in one database repository.',
         },
         {
             letter: 'D',
