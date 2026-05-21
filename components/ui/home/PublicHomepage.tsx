@@ -99,8 +99,8 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                         <p className="text-sm font-black uppercase tracking-[0.35em] text-primary-foreground">
                             Philippine Budget Portal for Government Entities
                         </p>
-                        <h1 className="mt-5 max-w-4xl text-5xl font-black leading-tight tracking-tight md:text-7xl">
-                            Balanced, unified, digitalized government expenditure transparency.
+                        <h1 className="mt-5 max-w-4xl text-4xl font-black leading-tight tracking-tight md:text-7xl">
+                            Balanced, unified, digitalized government expenditure and transparency system.
                         </h1>
                         <p className="mt-6 max-w-2xl text-lg leading-8 text-slate-700">
                             BUDGET turns the preparation, review, and approval process into accountable data: proposals, allocations, signatures, and audit trails working from one source of truth.
