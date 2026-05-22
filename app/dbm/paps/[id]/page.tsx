@@ -39,7 +39,7 @@ export default async function DBMPapPage({ params }: { params: Promise<{ id: str
                         subprogram_code: pap.subprogram_code,
                         identifier_code: pap.identifier_code,
                         project_title_code: pap.project_title_code,
-                        reserved_codes: pap.reserved_codes,
+                        reserved_code: pap.reserved_code,
                     }}
                 />
             }

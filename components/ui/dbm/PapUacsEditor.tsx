@@ -13,7 +13,7 @@ type PapUacsFields = {
     subprogram_code: string | null
     identifier_code: string | null
     project_title_code: string | null
-    reserved_codes: string | null
+    reserved_code: string | null
 }
 
 type PapUacsFieldName = keyof Omit<PapUacsFields, 'id'>
@@ -32,7 +32,7 @@ export default function PapUacsEditor({ pap }: { pap: PapUacsFields }) {
         subprogram_code: pap.subprogram_code ?? '',
         identifier_code: pap.identifier_code ?? '',
         project_title_code: pap.project_title_code ?? '',
-        reserved_codes: pap.reserved_codes ?? '',
+        reserved_code: pap.reserved_code ?? '',
     })
 
     async function handleSubmit(event: React.SyntheticEvent<HTMLFormElement>) {
@@ -205,18 +205,18 @@ export default function PapUacsEditor({ pap }: { pap: PapUacsFields }) {
                     </label>
 
                     <label className="space-y-1 md:col-span-2 xl:col-span-3">
-                        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Reserved Codes</span>
+                        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">Reserved Code</span>
                         <input
-                            value={form.reserved_codes}
+                            value={form.reserved_code}
                             maxLength={3}
                             minLength={3}
                             inputMode="numeric"
                             pattern="\d{3}"
-                            onChange={(event) => setForm((current) => ({ ...current, reserved_codes: event.target.value }))}
-                            className={`w-full rounded-md border px-3 py-2 text-sm ${fieldErrors.reserved_codes ? 'border-red-400' : ''}`}
+                            onChange={(event) => setForm((current) => ({ ...current, reserved_code: event.target.value }))}
+                            className={`w-full rounded-md border px-3 py-2 text-sm ${fieldErrors.reserved_code ? 'border-red-400' : ''}`}
                         />
-                        {fieldErrors.reserved_codes && (
-                            <p className="text-xs text-red-600">{fieldErrors.reserved_codes}</p>
+                        {fieldErrors.reserved_code && (
+                            <p className="text-xs text-red-600">{fieldErrors.reserved_code}</p>
                         )}
                     </label>
                 </div>

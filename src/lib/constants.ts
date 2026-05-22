@@ -18,7 +18,7 @@ export const PAP_UACS_SEGMENTS = {
     subprogram_code: 2,
     identifier_code: 1,
     project_title_code: 5,
-    reserved_codes: 3,
+    reserved_code: 3,
 } as const
 
 export type PapUacsFieldName = keyof typeof PAP_UACS_SEGMENTS
@@ -30,7 +30,7 @@ export const PAP_UACS_LABELS: Record<PapUacsFieldName, string> = {
     subprogram_code: 'Subprogram Code',
     identifier_code: 'Identifier Code',
     project_title_code: 'Project Title Code',
-    reserved_codes: 'Reserved Codes',
+    reserved_code: 'Reserved Code',
 }
 
 export type PAP_PROJECT_STATUS_TYPES = 'draft' | 'proposed' | 'approved' | 'for_release' | 'terminating' | 'on_going' | 'completed' | 'rejected' | 'cancelled'

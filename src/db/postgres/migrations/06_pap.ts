@@ -30,7 +30,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('subprogram_code', 'varchar(2)', (col) => col.defaultTo('00'))
         .addColumn('identifier_code', 'varchar(1)', (col) => col.defaultTo('0'))
         .addColumn('project_title_code', 'varchar(5)', (col) => col.defaultTo('00000'))
-        .addColumn('reserved_codes', 'varchar(3)', (col) => col.defaultTo('000'))
+        .addColumn('reserved_code', 'varchar(3)', (col) => col.defaultTo('000'))
 
         .addColumn('actual_start_date', 'date')
         .addColumn('project_status', 'varchar', (col) => col.defaultTo('draft'))
@@ -51,7 +51,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
                 COALESCE(subprogram_code, '') ||
                 COALESCE(identifier_code, '') ||
                 COALESCE(project_title_code, '') ||
-                COALESCE(reserved_codes, '')
+                COALESCE(reserved_code, '')
             )
         )
         WHERE (
@@ -61,7 +61,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
             COALESCE(subprogram_code, '') ||
             COALESCE(identifier_code, '') ||
             COALESCE(project_title_code, '') ||
-            COALESCE(reserved_codes, '')
+            COALESCE(reserved_code, '')
         ) <> '000000000000000';
     `.execute(db)
 
@@ -80,7 +80,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
                 COALESCE(subprogram_code, '') ||
                 COALESCE(identifier_code, '') ||
                 COALESCE(project_title_code, '') ||
-                COALESCE(reserved_codes, '')
+                COALESCE(reserved_code, '')
             ) gin_trgm_ops
         );
     `.execute(db)

@@ -91,7 +91,7 @@ export function buildPapFullCode(pap: PapUacsValues) {
         pap.subprogram_code ?? '',
         pap.identifier_code ?? '',
         pap.project_title_code ?? '',
-        pap.reserved_codes ?? '',
+        pap.reserved_code ?? '',
     ].join('')
 }
 
@@ -112,7 +112,7 @@ const papSearchExpression = sql<string>`(
     COALESCE(paps.subprogram_code, '') ||
     COALESCE(paps.identifier_code, '') ||
     COALESCE(paps.project_title_code, '') ||
-    COALESCE(paps.reserved_codes, '')
+    COALESCE(paps.reserved_code, '')
 )`
 
 function createPapBaseQuery() {
@@ -148,7 +148,7 @@ export async function getPapByFullCode(fullPapCode: string, excludePapId?: strin
                 COALESCE(subprogram_code, ''),
                 COALESCE(identifier_code, ''),
                 COALESCE(project_title_code, ''),
-                COALESCE(reserved_codes, '')
+                COALESCE(reserved_code, '')
             )
         `, '=', fullPapCode)
 
@@ -452,7 +452,7 @@ export async function getFullCodeByPapId(papId: string) {
             'subprogram_code',
             'identifier_code',
             'project_title_code',
-            'reserved_codes',
+            'reserved_code',
         ])
         .where('id', '=', papId)
         .executeTakeFirst()
@@ -462,7 +462,7 @@ export async function getFullCodeByPapId(papId: string) {
     return buildPapFullCode({
         ...pap,
         identifier_code: pap.identifier_code ?? '1',
-    } as Pick<Pap, 'cost_structure_code' | 'organizational_outcome_code' | 'program_code' | 'subprogram_code' | 'identifier_code' | 'project_title_code' | 'reserved_codes'>)
+    } as Pick<Pap, 'cost_structure_code' | 'organizational_outcome_code' | 'program_code' | 'subprogram_code' | 'identifier_code' | 'project_title_code' | 'reserved_code'>)
 }
 
 // UPDATE

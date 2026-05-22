@@ -26,7 +26,7 @@ export interface PapTable {
     subprogram_code: string | null
     identifier_code: '1' | '2' | '3'
     project_title_code: string | null
-    reserved_codes: string | null
+    reserved_code: string | null
     actual_start_date: Date | null
     project_status: PAP_PROJECT_STATUS_TYPES
     created_at: Generated<Date>
