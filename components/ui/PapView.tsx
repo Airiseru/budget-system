@@ -35,7 +35,7 @@ type PapViewData = {
     subprogram_code?: string | null
     identifier_code?: string | null
     project_title_code?: string | null
-    reserved_codes?: string | null
+    reserved_code?: string | null
     full_pap_code?: string | null
     created_at?: string | Date
     updated_at?: string | Date
@@ -232,7 +232,7 @@ export default function PapView({
                                 <p><span className="font-semibold">Subprogram:</span> {pap.subprogram_code || 'None'}</p>
                                 <p><span className="font-semibold">Identifier:</span> {pap.identifier_code || 'None'}</p>
                                 <p><span className="font-semibold">Project Title:</span> {pap.project_title_code || 'None'}</p>
-                                <p><span className="font-semibold">Reserved:</span> {pap.reserved_codes || 'None'}</p>
+                                <p><span className="font-semibold">Reserved:</span> {pap.reserved_code || 'None'}</p>
                             </div>
                         </div>
                     </div>

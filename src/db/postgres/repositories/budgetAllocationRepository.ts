@@ -488,7 +488,7 @@ export async function listBudgetAllocationsByYear({
             COALESCE(paps.subprogram_code, ''),
             COALESCE(paps.identifier_code, ''),
             COALESCE(paps.project_title_code, ''),
-            COALESCE(paps.reserved_codes, '')
+            COALESCE(paps.reserved_code, '')
         )`,
             "asc",
         )
@@ -1069,7 +1069,7 @@ export async function getAllocationDashboardRows(
                 COALESCE(paps.subprogram_code, ''),
                 COALESCE(paps.identifier_code, ''),
                 COALESCE(paps.project_title_code, ''),
-                COALESCE(paps.reserved_codes, '')
+                COALESCE(paps.reserved_code, '')
             )`.as("pap_uacs_code"),
             "uacs_funding_sources.description as fund_description",
             "item_catalog.name as item_name",
@@ -1101,7 +1101,7 @@ export async function getAllocationDashboardRows(
             COALESCE(paps.subprogram_code, ''),
             COALESCE(paps.identifier_code, ''),
             COALESCE(paps.project_title_code, ''),
-            COALESCE(paps.reserved_codes, '')
+            COALESCE(paps.reserved_code, '')
         )`,
             "asc",
         )

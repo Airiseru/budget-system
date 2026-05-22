@@ -69,7 +69,7 @@ export const PapUacsUpdateSchema = z.object({
     subprogram_code: papUacsSegment('subprogram_code'),
     identifier_code: papUacsSegment('identifier_code'),
     project_title_code: papUacsSegment('project_title_code'),
-    reserved_codes: papUacsSegment('reserved_codes'),
+    reserved_code: papUacsSegment('reserved_code'),
 }).partial()
 
 export function getPapUacsFieldErrors(error: z.ZodError): PapUacsFieldErrors {

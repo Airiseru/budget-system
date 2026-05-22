@@ -51,6 +51,7 @@ import {
 } from "./line_items"
 import { BudgetCycleTable } from "./budget_settings"
 import { AdministrativeOverrideTable } from "./administrative_overrides"
+import { HomepageAnnouncementTable, HomepageFaqTable } from "./homepage_content"
 
 export interface Database {
     // users
@@ -126,4 +127,8 @@ export interface Database {
 
     // budget settings
     budget_cycles: BudgetCycleTable
+
+    // homepage content
+    homepage_announcements: HomepageAnnouncementTable
+    homepage_faqs: HomepageFaqTable
 }

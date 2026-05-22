@@ -114,6 +114,38 @@ export async function signup(state: UserFormState, formData: FormData): Promise<
         }
     }
 
+    if (!entity_id) {
+        return {
+            fieldErrors: {
+                entity_id: ['Please select your government entity.'],
+            },
+            values: submittedValues,
+        }
+    }
+
+    const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
+    const selectedEntity = await EntityRepository.getEntityById(entity_id).catch(() => null)
+    if (!selectedEntity) {
+        return {
+            fieldErrors: {
+                entity_id: ['Please select a valid government entity.'],
+            },
+            values: submittedValues,
+        }
+    }
+
+    if (selectedEntity.type === 'operating_unit') {
+        const childOperatingUnitIds = await EntityRepository.getOperatingUnitDescendantIds(entity_id)
+        if (childOperatingUnitIds.length > 0) {
+            return {
+                fieldErrors: {
+                    entity_id: ['Please select the lowest operating unit under this hierarchy.'],
+                },
+                values: submittedValues,
+            }
+        }
+    }
+
     const response = await auth.api.signUpEmail({
         body: {
             email: email,

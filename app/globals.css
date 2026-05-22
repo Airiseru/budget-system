@@ -97,6 +97,12 @@ body {
     font-family: Arial, Helvetica, sans-serif;
 }
 
+html,
+body {
+    min-height: 100%;
+    overscroll-behavior: none;
+}
+
 .light {
     --background: oklch(0.9851 0 0); /* #fafafa */
     --foreground: oklch(0.145 0 0); /* #0a0a0a */
