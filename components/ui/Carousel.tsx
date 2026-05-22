@@ -77,7 +77,7 @@ export default function Carousel({
                             aria-label={`Go to slide ${index + 1}`}
                             aria-current={index === currentIndex}
                             className={cn(
-                                'h-2.5 rounded-full transition-all',
+                                'h-2.5 rounded-full transition-all animate-in fade-in-0 slide-in-from-right-3 duration-700 ease-out',
                                 index === currentIndex
                                     ? 'w-8 bg-current'
                                     : 'w-2.5 bg-current/35 hover:bg-current/60'
