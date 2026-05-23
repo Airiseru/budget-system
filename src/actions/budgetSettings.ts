@@ -87,10 +87,9 @@ async function requireDbmApproverForBudgetCycleSignature() {
 function getBudgetCycleSourceRecordId(params: {
     action: BudgetCycleSignedAction
     fiscalYear: number
-    fromStatus: string
     toStatus: string
 }) {
-    return `budget-cycle:${params.action}:${params.fiscalYear}:${params.fromStatus}->${params.toStatus}`
+    return `budget-cycle:${params.fiscalYear}:${params.action}:${params.toStatus}`
 }
 
 function getBudgetCycleChangeState(params: {
@@ -202,7 +201,6 @@ async function buildBudgetCycleSignaturePayload(params: {
         sourceRecordId: getBudgetCycleSourceRecordId({
             action: params.action,
             fiscalYear: params.fiscalYear,
-            fromStatus: change.fromStatus,
             toStatus: change.toStatus,
         }),
     }
