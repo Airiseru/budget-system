@@ -30,7 +30,15 @@ const papRepository = createPapRepository(process.env.DATABASE_TYPE || 'postgres
 const budgetSettingsRepository = createBudgetSettingsRepository(process.env.DATABASE_TYPE || 'postgres')
 const budgetAllocationRepository = createBudgetAllocationRepository(process.env.DATABASE_TYPE || 'postgres')
 
-type SignatureEventType = 'SIGN' | 'REJECT_FORM'
+type SignatureEventType = 'SIGN' | 'APPROVE_FORM' | 'REJECT_FORM'
+
+function getApprovalSignatureEventType(tableName: string, signatoryRole: string): 'SIGN' | 'APPROVE_FORM' {
+    if (tableName !== 'budget_allocations' && signatoryRole === 'dbm') {
+        return 'APPROVE_FORM'
+    }
+
+    return 'SIGN'
+}
 
 async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
     const activeCycle = await getActiveBudgetPrepCycle()
@@ -477,10 +485,11 @@ export async function verifyAndSubmitSignature(
                 throw new Error('The signable data changed before signing completed. Please try again.')
             }
 
+            const approvalEventType = getApprovalSignatureEventType(tableName, signatoryRole)
             const expectedSignaturePayload = buildSignaturePayload({
                 entity_id: currentEntityId,
                 user_id: session.user.id,
-                event_type: 'SIGN',
+                event_type: approvalEventType,
                 table_name: tableName,
                 record_id: formId,
                 payload: authoritativePayload,
@@ -520,7 +529,7 @@ export async function verifyAndSubmitSignature(
                 source_record_id: signatoryTarget.sourceRecordId,
                 user_id: session.user.id,
                 role: signatoryRole,
-                event_type: 'SIGN',
+                event_type: approvalEventType,
                 key_id: keyId,
                 public_key_snapshot: key.public_key,
                 signature,
@@ -556,7 +565,7 @@ export async function verifyAndSubmitSignature(
             await auditRepository.createLogWithExecutor(trx, {
                 entity_id: currentEntityId,
                 user_id: session.user.id,
-                event_type: 'SIGN',
+                event_type: approvalEventType,
                 table_name: tableName,
                 record_id: formId,
                 payload: {

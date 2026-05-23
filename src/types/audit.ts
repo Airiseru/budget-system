@@ -70,8 +70,8 @@ export const REQUIRES_SIGNATURE: AuditEventType[] = [
     "REJECT_FORM",
     "EDIT",
     "REVOKE_KEY",
-    "APPROVE_USER",
-    "REJECT_USER"
+    "APPROVE_USER", // TO DO
+    "REJECT_USER" // TO DO
 ]
 
 export const SIGNATORY_EVENTS: AuditEventType[] = [

@@ -96,7 +96,9 @@ export function SignButton({
                 tableName,
                 formId,
                 formData,
-                eventType: "SIGN",
+                eventType: tableName !== "budget_allocations" && signatoryRole === "dbm"
+                    ? "APPROVE_FORM"
+                    : "SIGN",
                 fromStatus: fromAuthStatus ?? signatoryRole,
                 toStatus: toAuthStatus ?? "approved",
             })

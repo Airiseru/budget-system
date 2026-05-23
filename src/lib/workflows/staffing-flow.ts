@@ -17,18 +17,10 @@ export const STAFFING_WORKFLOW = {
         pending_personnel: {
             required_roles: ['personnel_officer'],
             on_submit: null,
-            on_approve: 'pending_budget',
-            on_reject: 'draft',
-            allowed_access_levels: ['encode'],
-            signatory_role: 'personnel_officer',
-        },
-        pending_budget: {
-            required_roles: ['budget_officer'],
-            on_submit: null,
             on_approve: 'pending_agency_head',
             on_reject: 'draft',
             allowed_access_levels: ['encode'],
-            signatory_role: 'budget_officer',
+            signatory_role: 'personnel_officer',
         },
         pending_agency_head: {
             required_roles: ['agency_head'],
