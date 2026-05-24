@@ -252,7 +252,7 @@ async function syncProposedExistingPapAllocationsWithExecutor(
                 gaa_amt: 0,
                 prev_year_gaa_amt: prevYearGaaAmount,
                 release_classification: "unclassified",
-                origin_tag: "agency_proposed",
+                origin_tag: "entity_proposed",
                 auth_status: "proposed",
             })
             .execute();
@@ -1212,7 +1212,7 @@ export async function createAllocationsForApprovedProposalWithExecutor(
                     gaa_amt: 0,
                     prev_year_gaa_amt: 0,
                     release_classification: "unclassified",
-                    origin_tag: "agency_proposed",
+                    origin_tag: "entity_proposed",
                     auth_status: "dbm_approved",
                 })
                 .returning(["id"])
@@ -2035,7 +2035,13 @@ export async function rejectProposalAllocationsWithExecutor(
 
     const components = await executor
         .selectFrom("cost_by_components")
-        .select(["item_catalog_id", "fund_code", "specific_description"])
+        .select([
+            "item_catalog_id",
+            "fund_code",
+            "specific_description",
+            "currency",
+            "proposed_amt",
+        ])
         .where("proposal_id", "=", originalFormId)
         .where("item_catalog_id", "is not", null)
         .execute();
@@ -2069,7 +2075,41 @@ export async function rejectProposalAllocationsWithExecutor(
             )
             .executeTakeFirst();
 
-        if (!allocation) continue;
+        if (!allocation) {
+            const createdAllocation = await executor
+                .insertInto("budget_allocations")
+                .values({
+                    entity_id: form.entity_id,
+                    budget_cycle_year: proposal.proposal_year,
+                    pap_code: linkedPap.pap_id,
+                    fund_code: component.fund_code ?? null,
+                    item_catalog_id: component.item_catalog_id,
+                    tier: 2,
+                    specific_description: component.specific_description ?? null,
+                    currency: component.currency ?? "PHP",
+                    proposed_amt: Number(component.proposed_amt ?? 0),
+                    dbm_rec_amt: 0,
+                    nep_amt: 0,
+                    gaa_amt: 0,
+                    prev_year_gaa_amt: 0,
+                    release_classification: "unclassified",
+                    origin_tag: "entity_proposed",
+                    auth_status: "rejected",
+                })
+                .returning(["id"])
+                .executeTakeFirstOrThrow();
+
+            workflowLogs.push({
+                allocation_id: createdAllocation.id,
+                workflow_stage: "dbm_review",
+                remarks: "Created rejected tier 2 allocation from DBM-rejected proposal.",
+                amt_before: null,
+                amt_after: 0,
+                performed_by: performedBy,
+            });
+            updatedCount += 1;
+            continue;
+        }
 
         await executor
             .updateTable("budget_allocations")

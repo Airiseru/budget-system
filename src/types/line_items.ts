@@ -11,7 +11,7 @@ export type ItemCatalogScope = 'global' | 'entity' | 'pap'
 export type ExpenseClassCode = '1' | '2' | '3' | '6'
 export type ExpenseClass = 'PS' | 'MOOE' | 'CO' | 'FINEX'
 export type AllocationReleaseClassification = 'unclassified' | 'FLR' | 'FCR'
-export type AllocationOriginTag = 'agency_proposed' | 'dbm_insertion' | 'legislative_insertion'
+export type AllocationOriginTag = 'entity_proposed' | 'dbm_insertion' | 'legislative_insertion'
 
 export interface ItemCatalogTable {
     id: Generated<string>

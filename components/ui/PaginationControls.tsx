@@ -23,7 +23,7 @@ export default function PaginationControls({
     const safeTotalPages = totalPages !== 0 ? totalPages : 1
 
     return (
-        <div className={`flex items-center justify-between border-t border-border/30 bg-muted p-4 ${className}`}>
+        <div className={`flex items-center justify-between border-t border-border/30 p-4 ${className}`}>
             <p className="text-sm text-muted-foreground">
                 Showing page <span className="font-bold">{page}</span> of <span className="font-bold">{safeTotalPages}</span>
             </p>
