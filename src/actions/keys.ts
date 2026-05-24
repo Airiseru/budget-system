@@ -63,8 +63,16 @@ async function validateAllocationSignoffPhase(formType: string, fiscalYear: numb
         throw new Error('GAA sign-off is only available during legislative deliberation.')
     }
 
-    if (activeCycle.current_phase === 'legislative_deliberation') {
-        const missingValidityCount = await budgetAllocationRepository.countAllocationsMissingValidityByYear(fiscalYear)
+    if (formType === 'gaa') {
+        const [missingValidityCount, signoffSummary] = await Promise.all([
+            budgetAllocationRepository.countAllocationsMissingValidityByYear(fiscalYear),
+            budgetAllocationRepository.getAllocationSignoffSummary(fiscalYear),
+        ])
+
+        if (signoffSummary.gaa_total > signoffSummary.nep_total) {
+            throw new Error('GAA sign-off is blocked while the GAA total exceeds the NEP total.')
+        }
+
         if (missingValidityCount > 0) {
             throw new Error('All allocations must have a complete validity period before this stage can be signed.')
         }
