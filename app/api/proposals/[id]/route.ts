@@ -129,19 +129,20 @@ export async function PUT(
             }
         }
 
-        // Log form edit
-        const logResult = await logSaveFormEdits(
-            body.userId,
-            existing.entity_id,
-            'project_proposals',
-            targetFormId,
-            previousAuditPayload,
-            nextAuditPayload,
-            changedAt,
-        )
+        if (!isDbmOverwrite) {
+            const logResult = await logSaveFormEdits(
+                body.userId,
+                existing.entity_id,
+                'project_proposals',
+                targetFormId,
+                previousAuditPayload,
+                nextAuditPayload,
+                changedAt,
+            )
 
-        if (!logResult.success) {
-            return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
+            if (!logResult.success) {
+                return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
+            }
         }
 
         if (body.auth_status === 'pending_budget') {

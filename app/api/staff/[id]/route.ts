@@ -164,8 +164,8 @@ export async function PUT(
         }
     }
 
-    // Log form edit
-    const logResult = await logSaveFormEdits(
+    if (!canEditPendingDbm) {
+        const logResult = await logSaveFormEdits(
             body.userId,
             existing.entity_id,
             'staffing_summaries',
@@ -175,8 +175,9 @@ export async function PUT(
             updated.updated_at
         )
 
-    if (!logResult.success) {
-        return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
+        if (!logResult.success) {
+            return NextResponse.json({ error: "Failed to log form update" }, { status: 500 })
+        }
     }
 
     if (body.auth_status === 'pending_personnel') {

@@ -168,19 +168,20 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             }
         }
 
-        // Log form update
-        const logResult = await logSaveFormEdits(
-            body.userId,
-            current.entity_id,
-            'retirees_list',
-            targetFormId,
-            current,
-            updated,
-            updated.updated_at
-        )
+        if (!canEditPendingDbm) {
+            const logResult = await logSaveFormEdits(
+                body.userId,
+                current.entity_id,
+                'retirees_list',
+                targetFormId,
+                current,
+                updated,
+                updated.updated_at
+            )
 
-        if (!logResult.success) {
-            return NextResponse.json({ error: "Failed to log form update" }, { status: 500 });
+            if (!logResult.success) {
+                return NextResponse.json({ error: "Failed to log form update" }, { status: 500 });
+            }
         }
 
         if (body.auth_status === 'pending_personnel') {
