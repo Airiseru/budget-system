@@ -42,11 +42,6 @@ export function computeCompensationAmount(
         return (ruleValue / 100) * monthlyBaseSalary * monthsEmployed * numPositions
     }
 
-    if (calcType === 'value_multiplier' && frequency === 'monthly') {
-        // value multiplier monthly = rule_value * months_employed * num_positions
-        return ruleValue * monthsEmployed * numPositions
-    }
-
     if (calcType === 'salary_multiplier' && frequency === 'monthly') {
         // salary multiplier monthly = rule_value * monthly_base_salary * months_employed * num_positions
         return computeMonthlySalaryMultiplierAmount(ruleValue, monthlyBaseSalary, numPositions, monthsEmployed)

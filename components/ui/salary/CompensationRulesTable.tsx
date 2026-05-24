@@ -15,7 +15,6 @@ const TYPE_LABEL = {
     fixed: 'Fixed',
     percentage: 'Percentage',
     salary_multiplier: 'Salary Multiplier',
-    value_multiplier: 'Value Multiplier',
 }
 
 export function CompensationRulesTable({ rules }: { rules: CompensationRule[] }) {

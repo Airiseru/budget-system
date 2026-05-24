@@ -103,16 +103,13 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                                             ? 'Fixed Amount (PHP)'
                                             : calcType === 'percentage'
                                                 ? 'Salary Percentage (%)'
-                                                : calcType === 'salary_multiplier'
-                                                    ? 'Salary Multiplier'
-                                                    : 'Value Multiplier'}
+                                                : 'Salary Multiplier'}
                                     </SelectValue>
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="fixed">Fixed Amount (PHP)</SelectItem>
                                     <SelectItem value="percentage">Salary Percentage (%)</SelectItem>
                                     <SelectItem value="salary_multiplier">Salary Multiplier</SelectItem>
-                                    <SelectItem value="value_multiplier">Value Multiplier</SelectItem>
                                 </SelectContent>
                             </Select>
                             {state?.fieldErrors?.calculation_type && (
@@ -141,7 +138,7 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
 
                         <div className="space-y-1">
                             <label className="text-sm font-medium">
-                                {calcType === 'percentage' ? 'Rate (%)' : (calcType === 'salary_multiplier' || calcType === 'value_multiplier') ? 'Multiplier' : 'Amount (PHP)'}
+                                {calcType === 'percentage' ? 'Rate (%)' : calcType === 'salary_multiplier' ? 'Multiplier' : 'Amount (PHP)'}
                             </label>
                             <input
                                 name="rule_value"
@@ -149,7 +146,7 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                                 min={0}
                                 step={calcType !== 'fixed' ? 0.01 : 1}
                                 defaultValue={state?.values?.rule_value ?? ''}
-                                placeholder={(calcType !== 'fixed' && calcType !== 'value_multiplier') ? 'e.g. 10.5' : 'e.g. 2000'}
+                                placeholder={calcType !== 'fixed' ? 'e.g. 10.5' : 'e.g. 2000'}
                                 className="border px-3 py-2 rounded bg-background w-full text-sm"
                                 required
                             />

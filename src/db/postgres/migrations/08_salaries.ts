@@ -32,7 +32,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
         .addColumn('name', 'text', (col) => col.notNull())
         .addColumn('effective_date', 'date', (col) => col.notNull())
         .addColumn('calculation_type', 'text', (col) => col.notNull())
-        .addCheckConstraint('valid_calculation_type', sql`calculation_type IN ('fixed', 'percentage', 'salary_multiplier', 'value_multiplier')`)
+        .addCheckConstraint('valid_calculation_type', sql`calculation_type IN ('fixed', 'percentage', 'salary_multiplier')`)
         .addColumn('frequency', 'text', (col) => col.notNull())
         .addCheckConstraint('valid_frequency', sql`frequency IN ('monthly', 'annual')`)
         .addColumn('rule_value', 'numeric', (col) => col.notNull())
