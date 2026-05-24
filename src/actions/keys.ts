@@ -713,11 +713,6 @@ export async function verifyAndRejectSignature(
                 tableName === 'project_proposals' &&
                 rejectStatus === 'rejected'
             ) {
-                await papRepository.updatePapProjectStatusForFormWithExecutor(
-                    trx,
-                    formId,
-                    'rejected'
-                )
                 await proposalRepository.rejectProposalAllocationsWithExecutor(
                     trx,
                     formId,

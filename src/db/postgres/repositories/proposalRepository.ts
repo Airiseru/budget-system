@@ -1979,24 +1979,6 @@ export async function updatePendingDbmProposalScopesToRejected(filters: {
             .where("id", "in", proposalIds)
             .execute();
 
-        const linkedPaps = await trx
-            .selectFrom("form_paps")
-            .select("pap_id")
-            .where("form_id", "in", proposalIds)
-            .execute();
-
-        if (linkedPaps.length > 0) {
-            await trx
-                .updateTable("paps")
-                .set({ project_status: "rejected", updated_at: sql`now()` })
-                .where(
-                    "id",
-                    "in",
-                    linkedPaps.map((row) => row.pap_id),
-                )
-                .execute();
-        }
-
         for (const proposalId of proposalIds) {
             await rejectProposalAllocationsWithExecutor(
                 trx,

@@ -12,7 +12,6 @@ import {
     createProposalRepository,
     createFormRepository,
     createKeyRepository,
-    createPapRepository,
 } from "../db/factory";
 import { sessionWithEntity } from "./auth";
 import { verifySigningPin } from "./keys";
@@ -34,9 +33,6 @@ const EntityRepository = createEntityRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const FormRepository = createFormRepository(
-    process.env.DATABASE_TYPE || "postgres",
-);
-const PapRepository = createPapRepository(
     process.env.DATABASE_TYPE || "postgres",
 );
 const KeyRepository = createKeyRepository(
@@ -190,11 +186,6 @@ export async function rejectProposalAction(formData: FormData) {
     });
     await db.transaction().execute(async (trx) => {
         await FormRepository.updateFormAuthStatusWithExecutor(parsed.proposal_id, "rejected", trx);
-        await PapRepository.updatePapProjectStatusForFormWithExecutor(
-            trx,
-            parsed.proposal_id,
-            "rejected",
-        );
         await ProposalRepository.rejectProposalAllocationsWithExecutor(
             trx,
             parsed.proposal_id,
@@ -406,7 +397,6 @@ export async function submitSignedBulkProposalReject(input: {
             }, trx);
 
             await FormRepository.updateFormAuthStatusWithExecutor(item.proposalId, rejectStatus, trx);
-            await PapRepository.updatePapProjectStatusForFormWithExecutor(trx, item.proposalId, "rejected");
             await ProposalRepository.rejectProposalAllocationsWithExecutor(
                 trx,
                 item.proposalId,
