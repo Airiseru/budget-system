@@ -243,7 +243,7 @@ export async function loadDbmAllocationDashboard({
     selectedExpenseClass,
     search = '',
     page = 1,
-    includeRejectedPaps = false,
+    includeDbmRejectedLineItems = false,
 }: {
     selectedYear?: number | null
     selectedDepartmentId?: string
@@ -251,7 +251,7 @@ export async function loadDbmAllocationDashboard({
     selectedExpenseClass?: ExpenseClass | ''
     search?: string
     page?: number
-    includeRejectedPaps?: boolean
+    includeDbmRejectedLineItems?: boolean
 }) {
     const session = await sessionWithEntity()
     if (!session || session.user.role !== 'dbm') {
@@ -274,9 +274,14 @@ export async function loadDbmAllocationDashboard({
     const [departments, paps, entitySegments, items, fundingSources, filteredAggregates, overallAggregates, signoffSummary] = await Promise.all([
         EntityRepository.getAllDepartments(),
         PapRepository.getPapOptions(
-            includeRejectedPaps
+            includeDbmRejectedLineItems
                 ? {}
-                : { excludeProjectStatuses: ['rejected'] }
+                : {
+                    excludeProjectStatuses: ['rejected'],
+                    ...(viewingYear
+                        ? { excludeFullyRejectedAllocationsForYear: viewingYear }
+                        : {}),
+                }
         ),
         EntityRepository.getAllEntitySegments(true),
         ItemRepository.listAllItemCatalog(),
@@ -288,7 +293,7 @@ export async function loadDbmAllocationDashboard({
                 papId: selectedPapId,
                 expenseClass: selectedExpenseClass,
                 search: search.trim() || undefined,
-                includeRejectedPaps,
+                includeDbmRejectedLineItems,
             })
             : Promise.resolve({
                 count: 0,
@@ -300,7 +305,7 @@ export async function loadDbmAllocationDashboard({
         viewingYear
             ? BudgetAllocationRepository.getAllocationDashboardAggregates({
             fiscalYear: viewingYear,
-            includeRejectedPaps,
+            includeDbmRejectedLineItems,
         })
             : Promise.resolve({
                 count: 0,
@@ -346,7 +351,7 @@ export async function loadDbmAllocationDashboard({
             papId: selectedPapId,
             expenseClass: selectedExpenseClass,
             search: search.trim() || undefined,
-            includeRejectedPaps,
+            includeDbmRejectedLineItems,
             limit: ALLOCATION_DASHBOARD_PAGE_SIZE,
             offset,
         })
@@ -414,13 +419,13 @@ export async function loadDbmAllocationDashboard({
         selectedPapId: selectedPapId ?? '',
         selectedExpenseClass: selectedExpenseClass ?? '',
         search,
-        includeRejectedPaps,
+        includeDbmRejectedLineItems,
         isFiltered: Boolean(
             selectedDepartmentId ||
             selectedPapId ||
             selectedExpenseClass ||
             search.trim() ||
-            includeRejectedPaps
+            includeDbmRejectedLineItems
         ),
         yearLockedToActivePreparation: !!activeCycle &&
             ['dbm_review', 'presidential_approval', 'legislative_deliberation'].includes(activeCycle.current_phase),

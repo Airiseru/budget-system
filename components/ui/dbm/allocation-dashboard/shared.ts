@@ -68,7 +68,7 @@ export type AllocationDashboardProps = {
     selectedPapId: string
     selectedExpenseClass: string
     search: string
-    includeRejectedPaps: boolean
+    includeDbmRejectedLineItems: boolean
     isFiltered: boolean
     signoff: SignoffData | null
 }

@@ -77,7 +77,7 @@ export type AllocationDashboardFilters = {
     papId?: string;
     expenseClass?: string;
     search?: string;
-    includeRejectedPaps?: boolean;
+    includeDbmRejectedLineItems?: boolean;
     limit?: number;
     offset?: number;
 };
@@ -899,20 +899,29 @@ function buildAllocationDashboardBaseQuery(
     const papId = filters.papId;
     const expenseClass = filters.expenseClass;
     const search = filters.search;
-    const includeRejectedPaps = filters.includeRejectedPaps ?? false;
+    const includeDbmRejectedLineItems = filters.includeDbmRejectedLineItems ?? false;
     let query = db
         .selectFrom("budget_allocations")
         .where("budget_allocations.budget_cycle_year", "=", filters.fiscalYear);
 
-    if (!includeRejectedPaps) {
-        query = query.where(({ eb, or }) =>
+    if (!includeDbmRejectedLineItems) {
+        query = query.where(({ eb, or, exists, selectFrom }) =>
             or([
                 eb("budget_allocations.pap_code", "is", null),
-                eb("budget_allocations.pap_code", "in", (subquery) =>
-                    subquery
-                        .selectFrom("paps")
-                        .select("paps.id")
-                        .where("paps.project_status", "!=", "rejected"),
+                exists(
+                    selectFrom("budget_allocations as pap_allocations")
+                        .select("pap_allocations.id")
+                        .whereRef(
+                            "pap_allocations.pap_code",
+                            "=",
+                            "budget_allocations.pap_code",
+                        )
+                        .where(
+                            "pap_allocations.budget_cycle_year",
+                            "=",
+                            filters.fiscalYear,
+                        )
+                        .where("pap_allocations.auth_status", "!=", "rejected"),
                 ),
             ]),
         );

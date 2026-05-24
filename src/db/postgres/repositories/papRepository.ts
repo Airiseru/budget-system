@@ -53,6 +53,7 @@ export type PapOption = {
 type PapOptionFilters = {
     projectStatuses?: PAP_PROJECT_STATUS_TYPES[]
     excludeProjectStatuses?: PAP_PROJECT_STATUS_TYPES[]
+    excludeFullyRejectedAllocationsForYear?: number
 }
 
 type EntityHierarchyPapOptionFilters = {
@@ -313,6 +314,24 @@ export async function getPapOptions(filters: PapOptionFilters = {}): Promise<Pap
 
     if (filters.excludeProjectStatuses?.length) {
         query = query.where('paps.project_status', 'not in', filters.excludeProjectStatuses)
+    }
+
+    if (filters.excludeFullyRejectedAllocationsForYear) {
+        query = query.where(sql<boolean>`
+            NOT EXISTS (
+                SELECT 1
+                FROM budget_allocations AS pap_allocations
+                WHERE pap_allocations.pap_code = paps.id
+                  AND pap_allocations.budget_cycle_year = ${filters.excludeFullyRejectedAllocationsForYear}
+            )
+            OR EXISTS (
+                SELECT 1
+                FROM budget_allocations AS pap_allocations
+                WHERE pap_allocations.pap_code = paps.id
+                  AND pap_allocations.budget_cycle_year = ${filters.excludeFullyRejectedAllocationsForYear}
+                  AND pap_allocations.auth_status <> 'rejected'
+            )
+        `)
     }
 
     return await query.orderBy('paps.title', 'asc').execute()
