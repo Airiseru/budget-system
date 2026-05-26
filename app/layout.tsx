@@ -4,6 +4,7 @@ import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import GeneralNavBar from "@/components/ui/GeneralNavBar";
 import GlobalFloatingUserInfo from "@/components/ui/GlobalFloatingUserInfo";
+import GlobalWelcomeStatus from "@/components/ui/GlobalWelcomeStatus";
 
 const notoSans = Noto_Sans({
   variable: "--font-noto-sans",
@@ -26,6 +27,7 @@ export default function RootLayout({
         <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
           <GeneralNavBar />
           {children}
+          <GlobalWelcomeStatus />
           <GlobalFloatingUserInfo />
         </ThemeProvider>
       </body>

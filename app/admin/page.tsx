@@ -12,7 +12,7 @@ const navigation = [
     {
         href: "/admin/pending",
         title: "Pending Approvals",
-        description: "Review and approve users under your entity hierarchy.",
+        description: "Review and approve users under your hierarchy.",
     },
     {
         href: "/admin/entities",
@@ -37,6 +37,16 @@ type EntityPreviewRow = {
     code: string
     type: string
     status?: string
+    subDescription?: string
+}
+
+type OperatingUnitPreviewSource = {
+    id: string
+    name: string
+    uacs_code: string
+    agency_id: string
+    parent_ou_id: string | null
+    status?: string
 }
 
 function formatDate(value: Date | string | null | undefined) {
@@ -52,6 +62,57 @@ function getEntityStatusBadgeClass(status: string | null | undefined) {
     if (status === "active") return "border-emerald-200 bg-emerald-50 text-emerald-700"
     if (status === "inactive") return "border-red-200 bg-red-50 text-red-700"
     return "border-border bg-muted text-muted-foreground"
+}
+
+function buildOperatingUnitRows({
+    operatingUnits,
+    agencyId,
+    codePrefix,
+    parentOuId = null,
+    parentContext,
+}: {
+    operatingUnits: OperatingUnitPreviewSource[]
+    agencyId: string
+    codePrefix: string
+    parentOuId?: string | null
+    parentContext?: { name: string; code: string }
+}) {
+    const rows: EntityPreviewRow[] = []
+    const units = operatingUnits.filter(
+        (unit) => unit.agency_id === agencyId && (unit.parent_ou_id ?? null) === parentOuId
+    )
+
+    for (const unit of units) {
+        const unitCode = `${codePrefix}-${unit.uacs_code}`
+        const childUnits = operatingUnits.filter((child) => child.parent_ou_id === unit.id)
+
+        if (childUnits.length > 0) {
+            rows.push(...buildOperatingUnitRows({
+                operatingUnits,
+                agencyId,
+                codePrefix: unitCode,
+                parentOuId: unit.id,
+                parentContext: {
+                    name: unit.name,
+                    code: unitCode,
+                },
+            }))
+            continue
+        }
+
+        rows.push({
+            id: unit.id,
+            name: unit.name,
+            code: unitCode,
+            type: "operating_unit",
+            status: unit.status,
+            subDescription: parentContext
+                ? `Under ${parentContext.name} • ${parentContext.code}`
+                : undefined,
+        })
+    }
+
+    return rows
 }
 
 function buildEntityPreviewRows(result: Awaited<ReturnType<typeof loadAdminEntities>>) {
@@ -80,16 +141,11 @@ function buildEntityPreviewRows(result: Awaited<ReturnType<typeof loadAdminEntit
                 status: agency.status,
             })
 
-            const childOperatingUnits = result.operatingUnits.filter((unit) => unit.agency_id === agency.id)
-            for (const unit of childOperatingUnits) {
-                rows.push({
-                    id: unit.id,
-                    name: unit.name,
-                    code: `${department.uacs_code}-${agency.uacs_code}-${unit.uacs_code}`,
-                    type: "operating_unit",
-                    status: unit.status,
-                })
-            }
+            rows.push(...buildOperatingUnitRows({
+                operatingUnits: result.operatingUnits,
+                agencyId: agency.id,
+                codePrefix: `${department.uacs_code}-${agency.uacs_code}`,
+            }))
         }
     }
 
@@ -103,28 +159,33 @@ function buildEntityPreviewRows(result: Awaited<ReturnType<typeof loadAdminEntit
             status: agency.status,
         })
 
-        const childOperatingUnits = result.operatingUnits.filter((unit) => unit.agency_id === agency.id)
-        for (const unit of childOperatingUnits) {
-            rows.push({
-                id: unit.id,
-                name: unit.name,
-                code: `${agency.uacs_code}-${unit.uacs_code}`,
-                type: "operating_unit",
-                status: unit.status,
-            })
-        }
+        rows.push(...buildOperatingUnitRows({
+            operatingUnits: result.operatingUnits,
+            agencyId: agency.id,
+            codePrefix: agency.uacs_code,
+        }))
     }
 
     const orphanOperatingUnits = result.operatingUnits.filter(
         (unit) => !result.agencies.some((agency) => agency.id === unit.agency_id)
     )
     for (const unit of orphanOperatingUnits) {
+        const childUnits = result.operatingUnits.filter((child) => child.parent_ou_id === unit.id)
+        if (childUnits.length > 0) continue
+
+        const parentUnit = unit.parent_ou_id
+            ? result.operatingUnits.find((parent) => parent.id === unit.parent_ou_id)
+            : null
+
         rows.push({
             id: unit.id,
             name: unit.name,
             code: unit.uacs_code,
             type: "operating_unit",
             status: unit.status,
+            subDescription: parentUnit
+                ? `Under ${parentUnit.name} • ${parentUnit.uacs_code}`
+                : undefined,
         })
     }
 
@@ -212,12 +273,15 @@ export default async function AdminPage() {
                                 <Link
                                     key={entity.id}
                                     href="/admin/entities"
-                                    className="block p-5 transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+                                    className="block p-5 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
                                 >
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div>
                                             <p className="font-black text-secondary-foreground">{entity.name}</p>
                                             <p className="mt-1 font-mono text-sm text-muted-foreground">{entity.code}</p>
+                                            {entity.subDescription ? (
+                                                <p className="mt-1 text-sm text-muted-foreground">{entity.subDescription}</p>
+                                            ) : null}
                                         </div>
                                         <div className="flex flex-wrap gap-2 sm:justify-end">
                                             <Badge variant="secondary">

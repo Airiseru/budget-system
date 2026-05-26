@@ -118,11 +118,11 @@ export default function DashboardHeader({
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    className={`${detailedNavigation ? 'min-h-28 flex-col items-start justify-center text-left' : 'min-h-11 items-center justify-center text-center'} flex w-full rounded-xl border border-border bg-background px-4 py-2 text-md font-bold text-secondary-foreground transition hover:bg-secondary-foreground hover:text-white focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2`}
+                                    className={`group hover:text-white ${detailedNavigation ? 'min-h-28 flex-col items-start justify-center text-left' : 'min-h-11 items-center justify-center text-center'} flex w-full rounded-xl border border-border bg-background px-4 py-2 text-md font-bold text-secondary-foreground transition hover:bg-secondary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2`}
                                 >
                                     <span>{item.title ?? item.label}</span>
                                     {detailedNavigation && item.description && (
-                                        <span className="mt-1 text-sm font-medium leading-5 text-muted-foreground">
+                                        <span className="mt-1 text-sm font-medium leading-5 text-muted-foreground group-hover:text-gray-300">
                                             {item.description}
                                         </span>
                                     )}

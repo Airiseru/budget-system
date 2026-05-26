@@ -8,6 +8,7 @@ import BackButton from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/button"
 import { Eye, EyeOff } from 'lucide-react'
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
+import { queueWelcomeStatus } from "@/components/ui/GlobalWelcomeStatus";
 
 export default function LoginPage() {
     const router = useRouter()
@@ -46,6 +47,10 @@ export default function LoginPage() {
                 setIsLoading(false);
                 return; // Block entry if the black box is broken
             }
+        }
+
+        if (data?.user?.name) {
+            queueWelcomeStatus(data.user.name)
         }
 
         // Route the user based on the role
