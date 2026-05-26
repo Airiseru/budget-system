@@ -799,7 +799,7 @@ export default function RankManager({
                                     key={previewProposal.id}
                                     src={getProposalHref(previewProposal.id, true)}
                                     title={`Preview of ${previewProposal.title}`}
-                                    className="h-full w-full bg-background p-4 pb-12"
+                                    className="h-full w-full bg-background p-4 pb-16"
                                     onLoad={() => setPreviewLoading(false)}
                                 />
                             </div>

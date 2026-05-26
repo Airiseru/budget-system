@@ -157,6 +157,108 @@ const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FINEX"];
 const getFundSourceLabel = (item: ProposalCostedItem) =>
     item.fund_description || item.fund_code || "-";
 
+const getCostItemAmount = (item: ProposalCostedItem) =>
+    Number(item.proposed_amt ?? item.costs?.[0]?.amount ?? 0);
+
+const getCostByExpenseClassTotals = (items: ProposalCostedItem[] = []) => {
+    const totals = {
+        PS: 0,
+        MOOE: 0,
+        CO: 0,
+        FINEX: 0,
+    };
+
+    for (const item of items) {
+        if (item.costs?.length) {
+            for (const cost of item.costs) {
+                const expenseClass =
+                    cost.expense_class === "FE" ? "FINEX" : cost.expense_class;
+
+                if (
+                    expenseClass === "PS" ||
+                    expenseClass === "MOOE" ||
+                    expenseClass === "CO" ||
+                    expenseClass === "FINEX"
+                ) {
+                    totals[expenseClass] += Number(cost.amount ?? 0);
+                }
+            }
+        } else {
+            totals.MOOE += getCostItemAmount(item);
+        }
+    }
+
+    return totals;
+};
+
+const ExpenseClassTotals = ({ items }: { items?: ProposalCostedItem[] }) => {
+    const totals = getCostByExpenseClassTotals(items ?? []);
+    const grandTotal = Object.values(totals).reduce(
+        (sum, amount) => sum + amount,
+        0,
+    );
+
+    return (
+        <div className="border-t border-muted-200 bg-muted-50/70 px-5 py-4">
+            <div className="flex flex-col gap-4">
+                <div>
+                    <h4 className="text-md font-bold text-muted-700">
+                        Totals by Expense Class
+                    </h4>
+                    <p className="text-sm text-muted-500 mt-1">
+                        Automatically calculated from all component allocations
+                    </p>
+                </div>
+
+                <div className="grid w-full grid-cols-[repeat(2,minmax(0,1fr))] gap-4">
+                    {(["PS", "MOOE", "CO", "FINEX"] as const).map((ec) => {
+                        const total = totals[ec].toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                        });
+
+                        return (
+                            <div
+                                key={ec}
+                                className="min-w-0 overflow-hidden rounded-lg border border-muted-200 bg-background px-4 py-3"
+                            >
+                                <div className="text-sm font-semibold text-muted-500">
+                                    {ec}
+                                </div>
+                                <div
+                                    className="mt-1 overflow-auto text-sm font-bold tabular-nums text-secondary-foreground"
+                                    title={total}
+                                >
+                                    {total}
+                                </div>
+                            </div>
+                        );
+                    })}
+
+                    <div className="col-span-2 min-w-0 overflow-hidden rounded-lg border border-secondary-foreground/20 bg-secondary-foreground/5 p-4">
+                        <div className="text-sm font-semibold text-muted-600">
+                            GRAND TOTAL
+                        </div>
+                        {(() => {
+                            const total = grandTotal.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                            });
+
+                            return (
+                                <div
+                                    className="mt-1 overflow-auto text-sm font-bold tabular-nums text-secondary-foreground"
+                                    title={total}
+                                >
+                                    {total}
+                                </div>
+                            );
+                        })()}
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
 const CostBreakdownColumns = ({ item }: { item: ProposalCostedItem }) => {
     if (!item.costs || item.costs.length === 0) {
         return (
@@ -423,12 +525,12 @@ export default function ProposalView({
                                             className={`p-3 bg-white border rounded-lg shadow-sm ${getStatusStyles(pre.status)}`}
                                         >
                                             <div className="flex justify-between items-start">
-                                                <p className="text-sm font-bold text-muted-700">
+                                                <p className="text-md font-bold text-muted-700">
                                                     {pre.name}
                                                 </p>
                                                 <Badge
                                                     variant="outline"
-                                                    className={`text-[8px] px-1.5 py-0.5 capitalize shadow-none ${getStatusStyles(pre.status)}`}
+                                                    className={`text-xs px-1.5 py-0.5 capitalize shadow-none ${getStatusStyles(pre.status)}`}
                                                 >
                                                     {pre.status == "True"
                                                         ? "Approved"
@@ -458,12 +560,12 @@ export default function ProposalView({
                                             className={`p-3 bg-white border rounded-lg shadow-sm ${getStatusStyles(pre.status)}`}
                                         >
                                             <div className="flex justify-between items-start">
-                                                <p className="text-sm font-bold text-muted-700">
+                                                <p className="text-md font-bold text-muted-700">
                                                     {pre.name}
                                                 </p>
                                                 <Badge
                                                     variant="outline"
-                                                    className={`text-[8px] px-1.5 py-0.5 capitalize shadow-none ${getStatusStyles(pre.status)}`}
+                                                    className={`text-xs px-1.5 py-0.5 capitalize shadow-none ${getStatusStyles(pre.status)}`}
                                                 >
                                                     {pre.status == "True"
                                                         ? "Approved"
@@ -529,12 +631,7 @@ export default function ProposalView({
                                                 </td>
                                                 <td className="p-4 text-right font-mono">
                                                     {comp.currency || "PHP"}{" "}
-                                                    {Number(
-                                                        comp.proposed_amt ??
-                                                            comp.costs?.[0]
-                                                                ?.amount ??
-                                                            0,
-                                                    ).toLocaleString(
+                                                    {getCostItemAmount(comp).toLocaleString(
                                                         undefined,
                                                         {
                                                             minimumFractionDigits: 2,
@@ -546,6 +643,11 @@ export default function ProposalView({
                                     )}
                                 </tbody>
                             </table>
+                            {data.cost_by_components?.length ? (
+                                <ExpenseClassTotals
+                                    items={data.cost_by_components}
+                                />
+                            ) : null}
                         </div>
                     </div>
 
@@ -686,10 +788,7 @@ export default function ProposalView({
                                         };
 
                                         return (
-                                            <tbody
-                                                key={pIdx}
-                                                className="border-b-2 border-chart-5/50"
-                                            >
+                                            <tbody key={pIdx}>
                                                 <tr className="bg-muted-50/20 font-bold divide-x border-b border-chart-5/20 text-center">
                                                     <td className="p-4 text-left text-muted-900">
                                                         {attr.description}
@@ -885,7 +984,7 @@ export default function ProposalView({
                                 <table className="w-full text-sm">
                                     <thead>
                                         <tr className="bg-muted-50/50 border-b border-muted-100">
-                                            <th className="py-3 px-4 text-sm font-black text-muted-400 uppercase w-1/3">
+                                            <th className="py-3 px-4 text-sm text-left font-black text-muted-400 uppercase w-1/3">
                                                 Infrastructure Requirement
                                             </th>
                                             <th className="py-3 px-2 text-sm font-black text-muted-400 uppercase text-center">
@@ -929,17 +1028,16 @@ export default function ProposalView({
             {/* FORM 203 SPECIFIC: FOREIGN DETAILS */}
             {data.type === "203" && (
                 <div className="space-y-8">
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Cost by Components
-                            </h3>
-                        </div>
-
-                        <div className="overflow-x-auto">
+                    <div className="space-y-4">
+                        <h3 className="text-md font-black uppercase text-secondary-foreground tracking-widest flex items-center gap-2">
+                            <Component size={12} />
+                            Cost by Components
+                        </h3>
+                        <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                            <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-muted-50/50 border-b text-sm divide-x font-black text-muted-400 uppercase">
+                                    <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
                                         <th className="py-4 px-4 w-64">
                                             Item Catalog
                                         </th>
@@ -962,7 +1060,7 @@ export default function ProposalView({
                                         ) => (
                                             <tr
                                                 key={i}
-                                                className="hover:bg-muted-50/30 divide-x transition-colors group"
+                                                className="hover:bg-muted-50/30 transition-colors group"
                                             >
                                                 <td className="py-3 px-4 align-top">
                                                     {comp.component_name}
@@ -976,12 +1074,7 @@ export default function ProposalView({
                                                 </td>
                                                 <td className="py-3 px-2 text-right align-top font-mono">
                                                     {comp.currency || "PHP"}{" "}
-                                                    {Number(
-                                                        comp.proposed_amt ??
-                                                            comp.costs?.[0]
-                                                                ?.amount ??
-                                                            0,
-                                                    ).toLocaleString(
+                                                    {getCostItemAmount(comp).toLocaleString(
                                                         undefined,
                                                         {
                                                             minimumFractionDigits: 2,
@@ -993,18 +1086,22 @@ export default function ProposalView({
                                     )}
                                 </tbody>
                             </table>
+                            {data.cost_by_components?.length ? (
+                                <ExpenseClassTotals
+                                    items={data.cost_by_components}
+                                />
+                            ) : null}
+                            </div>
                         </div>
                     </div>
 
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        {/* Header with Add Button */}
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Foreign Financial Targets (Loan/Grant)
-                            </h3>
-                        </div>
-
-                        <div className="overflow-x-auto">
+                    <div className="space-y-4">
+                        <h3 className="text-md font-black uppercase text-secondary-foreground tracking-widest flex items-center gap-2">
+                            <Banknote size={12} />
+                            Foreign Financial Targets (Loan/Grant)
+                        </h3>
+                        <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                            <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-muted-50/50 border-b border-muted-100 text-sm font-black text-muted-400 uppercase">
@@ -1038,7 +1135,6 @@ export default function ProposalView({
                                         >
                                             Total
                                         </th>
-                                        <th rowSpan={2} className="w-10"></th>
                                     </tr>
                                     <tr className="bg-muted-50/50 border-b border-muted-100 text-[9px] font-black text-muted-400 uppercase">
                                         <th className="py-2 px-2 text-center border-r">
@@ -1066,8 +1162,8 @@ export default function ProposalView({
                                                     key={i}
                                                     className="hover:bg-muted-50/30 transition-colors group"
                                                 >
-                                                    <td className="py-3 px-4 border-r">
-                                                        <div className="flex items-center justify-end gap-2">
+                                                    <td className="py-3 px-4 border-r text-center">
+                                                        <div className="flex items-center justify-center gap-2">
                                                             {target.year || ""}
                                                         </div>
                                                     </td>
@@ -1102,20 +1198,20 @@ export default function ProposalView({
                                     )}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     </div>
 
-                    <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
-                        <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
-                            <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
-                                Foreign Physical Targets
-                            </h3>
-                        </div>
-
-                        <div className="overflow-x-auto">
+                    <div className="space-y-4">
+                        <h3 className="text-md font-black uppercase text-secondary-foreground tracking-widest flex items-center gap-2">
+                            <Target size={12} />
+                            Foreign Physical Targets
+                        </h3>
+                        <div className="border rounded-xl bg-white overflow-hidden shadow-sm">
+                            <div className="overflow-x-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead>
-                                    <tr className="bg-muted-50/50 border-b text-sm divide-x font-black text-muted-400 uppercase">
+                                    <tr className="bg-muted-50/50 border-b text-sm font-black text-muted-400 uppercase">
                                         <th className="py-4 px-4 w-64">
                                             Components
                                         </th>
@@ -1139,7 +1235,7 @@ export default function ProposalView({
                                         ) => (
                                             <tr
                                                 key={i}
-                                                className="hover:bg-muted-50/30 divide-x transition-colors group"
+                                                className="hover:bg-muted-50/30 transition-colors group"
                                             >
                                                 <td className="py-3 px-4 align-top">
                                                     {phys.name}
@@ -1283,6 +1379,7 @@ export default function ProposalView({
                                     )}
                                 </tbody>
                             </table>
+                            </div>
                         </div>
                     </div>
                 </div>
