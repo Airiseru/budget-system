@@ -24,6 +24,7 @@ import AllocationFiltersPanel from './allocation-dashboard/AllocationFiltersPane
 import LegislativeInsertionDialog from './allocation-dashboard/LegislativeInsertionDialog'
 import AllocationTable from './allocation-dashboard/AllocationTable'
 import AllocationHistoryDrawer from './allocation-dashboard/AllocationHistoryDrawer'
+import AllocationBudgetSummary from './allocation-dashboard/AllocationBudgetSummary'
 
 export default function AllocationDashboard({
     activeCycle,
@@ -33,6 +34,7 @@ export default function AllocationDashboard({
     rows,
     overallTotals,
     filteredTotals,
+    hierarchySummaries,
     departments,
     paps,
     entities,
@@ -50,6 +52,7 @@ export default function AllocationDashboard({
 }: AllocationDashboardProps) {
     const router = useRouter()
     const [filtersOpen, setFiltersOpen] = useState(true)
+    const [activeView, setActiveView] = useState<'line_items' | 'summary'>('line_items')
     const [bulkValidityOpen, setBulkValidityOpen] = useState(false)
     const [showUacs, setShowUacs] = useState(false)
     const [legislativeInsertOpen, setLegislativeInsertOpen] = useState(false)
@@ -411,7 +414,35 @@ export default function AllocationDashboard({
                 }}
             />
 
-            {canEditGaa ? (
+            <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
+                <Button
+                    type="button"
+                    variant={activeView === 'line_items' ? 'default' : 'outline'}
+                    onClick={() => setActiveView('line_items')}
+                    className={activeView === 'line_items' ? 'bg-secondary-foreground text-background hover:bg-secondary-foreground/90' : ''}
+                >
+                    Line Items
+                </Button>
+                <Button
+                    type="button"
+                    variant={activeView === 'summary' ? 'default' : 'outline'}
+                    onClick={() => setActiveView('summary')}
+                    className={activeView === 'summary' ? 'bg-secondary-foreground text-background hover:bg-secondary-foreground/90' : ''}
+                >
+                    Department Summary
+                </Button>
+            </div>
+
+            {activeView === 'summary' ? (
+                <AllocationBudgetSummary
+                    currentPhase={currentPhase}
+                    departments={departments}
+                    summaries={hierarchySummaries}
+                    overallTotals={overallTotals}
+                />
+            ) : null}
+
+            {activeView === 'line_items' && canEditGaa ? (
                 <BulkValidityPanel
                     open={bulkValidityOpen}
                     onToggle={() => setBulkValidityOpen((open) => !open)}
@@ -424,55 +455,59 @@ export default function AllocationDashboard({
                 />
             ) : null}
 
-            <AllocationFiltersPanel
-                open={filtersOpen}
-                onToggle={() => setFiltersOpen((open) => !open)}
-                availableYears={availableYears}
-                yearLockedToActivePreparation={yearLockedToActivePreparation}
-                selectedYear={selectedYear}
-                onSelectedYearChange={setSelectedYear}
-                departments={departments}
-                departmentId={departmentId}
-                onDepartmentIdChange={setDepartmentId}
-                paps={paps}
-                papId={papId}
-                onPapIdChange={setPapId}
-                expenseClass={expenseClass}
-                onExpenseClassChange={setExpenseClass}
-                searchValue={searchValue}
-                onSearchValueChange={setSearchValue}
-                showUacs={showUacs}
-                onShowUacsChange={setShowUacs}
-                showDbmRejectedLineItems={showDbmRejectedLineItems}
-                onShowDbmRejectedLineItemsChange={setShowDbmRejectedLineItems}
-                onSubmit={() => router.push(getFilterLink({ page: '1' }))}
-                clearHref={`/dbm/allocations${yearLockedToActivePreparation && selectedYear ? `?year=${selectedYear}` : ''}`}
-            />
+            {activeView === 'line_items' ? (
+                <>
+                    <AllocationFiltersPanel
+                        open={filtersOpen}
+                        onToggle={() => setFiltersOpen((open) => !open)}
+                        availableYears={availableYears}
+                        yearLockedToActivePreparation={yearLockedToActivePreparation}
+                        selectedYear={selectedYear}
+                        onSelectedYearChange={setSelectedYear}
+                        departments={departments}
+                        departmentId={departmentId}
+                        onDepartmentIdChange={setDepartmentId}
+                        paps={paps}
+                        papId={papId}
+                        onPapIdChange={setPapId}
+                        expenseClass={expenseClass}
+                        onExpenseClassChange={setExpenseClass}
+                        searchValue={searchValue}
+                        onSearchValueChange={setSearchValue}
+                        showUacs={showUacs}
+                        onShowUacsChange={setShowUacs}
+                        showDbmRejectedLineItems={showDbmRejectedLineItems}
+                        onShowDbmRejectedLineItemsChange={setShowDbmRejectedLineItems}
+                        onSubmit={() => router.push(getFilterLink({ page: '1' }))}
+                        clearHref={`/dbm/allocations${yearLockedToActivePreparation && selectedYear ? `?year=${selectedYear}` : ''}`}
+                    />
 
-            <AllocationTable
-                rowsState={rowsState}
-                inputValues={inputValues}
-                saveStates={saveStates}
-                currentPhase={currentPhase}
-                showUacs={showUacs}
-                columnCount={columnCount}
-                page={page}
-                totalPages={totalPages}
-                isFiltered={isFiltered}
-                filteredTotals={filteredTotals}
-                displayedFilteredTotals={displayedFilteredTotals}
-                onInputChange={(allocationId, field, value) =>
-                    setInputValues((current) => ({
-                        ...current,
-                        [getInputKey(allocationId, field)]: value,
-                    }))
-                }
-                onSave={handleSave}
-                getFilterLink={getFilterLink}
-                onOpenHistory={setHistoryRow}
-            />
+                    <AllocationTable
+                        rowsState={rowsState}
+                        inputValues={inputValues}
+                        saveStates={saveStates}
+                        currentPhase={currentPhase}
+                        showUacs={showUacs}
+                        columnCount={columnCount}
+                        page={page}
+                        totalPages={totalPages}
+                        isFiltered={isFiltered}
+                        filteredTotals={filteredTotals}
+                        displayedFilteredTotals={displayedFilteredTotals}
+                        onInputChange={(allocationId, field, value) =>
+                            setInputValues((current) => ({
+                                ...current,
+                                [getInputKey(allocationId, field)]: value,
+                            }))
+                        }
+                        onSave={handleSave}
+                        getFilterLink={getFilterLink}
+                        onOpenHistory={setHistoryRow}
+                    />
+                </>
+            ) : null}
 
-            {canEditGaa ? (
+            {activeView === 'line_items' && canEditGaa ? (
                 <div className="pointer-events-none fixed bottom-6 right-6 z-30 flex justify-end">
                     <Button
                         type="button"

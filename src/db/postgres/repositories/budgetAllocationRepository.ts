@@ -113,6 +113,19 @@ export type AllocationDashboardAggregates = AllocationDashboardTotals & {
     count: number;
 };
 
+export type AllocationHierarchySummaryRow = AllocationDashboardTotals & {
+    department_id: string | null;
+    department_name: string | null;
+    department_uacs_code: string | null;
+    agency_id: string | null;
+    agency_name: string | null;
+    agency_uacs_code: string | null;
+    operating_unit_id: string | null;
+    operating_unit_name: string | null;
+    operating_unit_uacs_code: string | null;
+    expense_class: string;
+};
+
 export type AllocationSignoffSummary = {
     allocation_count: number;
     missing_validity_count: number;
@@ -1152,6 +1165,96 @@ export async function getAllocationDashboardAggregates(
         nep_total: Number(result?.nep_total ?? 0),
         gaa_total: Number(result?.gaa_total ?? 0),
     } as AllocationDashboardAggregates;
+}
+
+export async function getAllocationHierarchySummaries(
+    filters: Omit<AllocationDashboardFilters, "limit" | "offset" | "expenseClass" | "search">,
+) {
+    const rows = await buildAllocationDashboardBaseQuery(filters)
+        .leftJoin("entities", "entities.id", "budget_allocations.entity_id")
+        .leftJoin("departments", "departments.id", "entities.id")
+        .leftJoin("agencies", "agencies.id", "entities.id")
+        .leftJoin("operating_units", "operating_units.id", "entities.id")
+        .leftJoin(
+            "agencies as parent_agencies",
+            "parent_agencies.id",
+            "operating_units.agency_id",
+        )
+        .leftJoin(
+            "departments as agency_departments",
+            "agency_departments.id",
+            "agencies.department_id",
+        )
+        .leftJoin(
+            "departments as parent_agency_departments",
+            "parent_agency_departments.id",
+            "parent_agencies.department_id",
+        )
+        .leftJoin(
+            "operating_units as parent_operating_units",
+            "parent_operating_units.id",
+            "operating_units.parent_ou_id",
+        )
+        .innerJoin(
+            "item_catalog",
+            "item_catalog.id",
+            "budget_allocations.item_catalog_id",
+        )
+        .select(({ fn }) => [
+            sql<string | null>`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`.as("department_id"),
+            sql<string | null>`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`.as("department_name"),
+            sql<string | null>`COALESCE(departments.uacs_code, agency_departments.uacs_code, parent_agency_departments.uacs_code)`.as("department_uacs_code"),
+            sql<string | null>`COALESCE(agencies.id, parent_agencies.id)`.as("agency_id"),
+            sql<string | null>`COALESCE(agencies.name, parent_agencies.name)`.as("agency_name"),
+            sql<string | null>`COALESCE(agencies.uacs_code, parent_agencies.uacs_code)`.as("agency_uacs_code"),
+            sql<string | null>`operating_units.id`.as("operating_unit_id"),
+            sql<string | null>`operating_units.name`.as("operating_unit_name"),
+            sql<string | null>`CASE
+                WHEN operating_units.id IS NULL THEN NULL
+                WHEN operating_units.parent_ou_id IS NULL THEN CONCAT(COALESCE(operating_units.uacs_code, '00'), '00000')
+                ELSE CONCAT(COALESCE(parent_operating_units.uacs_code, '00'), COALESCE(operating_units.uacs_code, '00000'))
+            END`.as("operating_unit_uacs_code"),
+            "item_catalog.expense_class as expense_class",
+            fn.sum<number>("budget_allocations.proposed_amt").as("proposed_total"),
+            fn.sum<number>("budget_allocations.dbm_rec_amt").as("dbm_rec_total"),
+            fn.sum<number>("budget_allocations.nep_amt").as("nep_total"),
+            fn.sum<number>("budget_allocations.gaa_amt").as("gaa_total"),
+        ])
+        .groupBy([
+            sql`COALESCE(departments.id, agency_departments.id, parent_agency_departments.id)`,
+            sql`COALESCE(departments.name, agency_departments.name, parent_agency_departments.name)`,
+            sql`COALESCE(departments.uacs_code, agency_departments.uacs_code, parent_agency_departments.uacs_code)`,
+            sql`COALESCE(agencies.id, parent_agencies.id)`,
+            sql`COALESCE(agencies.name, parent_agencies.name)`,
+            sql`COALESCE(agencies.uacs_code, parent_agencies.uacs_code)`,
+            sql`operating_units.id`,
+            sql`operating_units.name`,
+            sql`operating_units.parent_ou_id`,
+            sql`operating_units.uacs_code`,
+            sql`parent_operating_units.uacs_code`,
+            sql`CASE
+                WHEN operating_units.id IS NULL THEN NULL
+                WHEN operating_units.parent_ou_id IS NULL THEN CONCAT(COALESCE(operating_units.uacs_code, '00'), '00000')
+                ELSE CONCAT(COALESCE(parent_operating_units.uacs_code, '00'), COALESCE(operating_units.uacs_code, '00000'))
+            END`,
+            "item_catalog.expense_class",
+        ])
+        .orderBy(sql`COALESCE(departments.uacs_code, agency_departments.uacs_code, parent_agency_departments.uacs_code)`, "asc")
+        .orderBy(sql`COALESCE(agencies.uacs_code, parent_agencies.uacs_code)`, "asc")
+        .orderBy(sql`CASE
+            WHEN operating_units.id IS NULL THEN '0000000'
+            WHEN operating_units.parent_ou_id IS NULL THEN CONCAT(COALESCE(operating_units.uacs_code, '00'), '00000')
+            ELSE CONCAT(COALESCE(parent_operating_units.uacs_code, '00'), COALESCE(operating_units.uacs_code, '00000'))
+        END`, "asc")
+        .execute();
+
+    return rows.map((row) => ({
+        ...row,
+        proposed_total: Number(row.proposed_total ?? 0),
+        dbm_rec_total: Number(row.dbm_rec_total ?? 0),
+        nep_total: Number(row.nep_total ?? 0),
+        gaa_total: Number(row.gaa_total ?? 0),
+    })) as AllocationHierarchySummaryRow[];
 }
 
 export async function countAllocationDashboardRows(

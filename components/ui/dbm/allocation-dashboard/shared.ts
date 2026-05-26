@@ -4,6 +4,7 @@ import type { BudgetCycle } from '@/src/types/budget_settings'
 import type {
     AllocationDashboardRow,
     AllocationDashboardTotals,
+    AllocationHierarchySummaryRow,
 } from '@/src/db/postgres/repositories/budgetAllocationRepository'
 import type { Department } from '@/src/types/entities'
 import type { PapOption } from '@/src/db/postgres/repositories/papRepository'
@@ -57,6 +58,7 @@ export type AllocationDashboardProps = {
     rows: AllocationDashboardRow[]
     overallTotals: AllocationDashboardTotals
     filteredTotals: AllocationDashboardTotals
+    hierarchySummaries: AllocationHierarchySummaryRow[]
     departments: Department[]
     paps: PapOption[]
     entities: EntityOption[]

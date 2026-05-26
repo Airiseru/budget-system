@@ -43,6 +43,7 @@ export default async function DbmAllocationsPage({
             rows={dashboard.rows}
             overallTotals={dashboard.overallTotals}
             filteredTotals={dashboard.filteredTotals}
+            hierarchySummaries={dashboard.hierarchySummaries}
             departments={dashboard.departments}
             paps={dashboard.paps}
             entities={dashboard.entities}

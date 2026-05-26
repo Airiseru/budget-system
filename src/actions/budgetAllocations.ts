@@ -271,7 +271,7 @@ export async function loadDbmAllocationDashboard({
             : activeCycle?.fiscal_year ?? selectedYear ?? latestYear
     const safePage = Number.isFinite(page) && page > 0 ? page : 1
 
-    const [departments, paps, entitySegments, items, fundingSources, filteredAggregates, overallAggregates, signoffSummary] = await Promise.all([
+    const [departments, paps, entitySegments, items, fundingSources, filteredAggregates, overallAggregates, hierarchySummaries, signoffSummary] = await Promise.all([
         EntityRepository.getAllDepartments(),
         PapRepository.getPapOptions(
             includeDbmRejectedLineItems
@@ -314,6 +314,12 @@ export async function loadDbmAllocationDashboard({
                 nep_total: 0,
                 gaa_total: 0,
             }),
+        viewingYear
+            ? BudgetAllocationRepository.getAllocationHierarchySummaries({
+                fiscalYear: viewingYear,
+                includeDbmRejectedLineItems,
+            })
+            : Promise.resolve([]),
         viewingYear
             ? BudgetAllocationRepository.getAllocationSignoffSummary(viewingYear)
             : Promise.resolve({
@@ -405,6 +411,7 @@ export async function loadDbmAllocationDashboard({
         totalPages,
         rows,
         overallTotals,
+        hierarchySummaries,
         filteredTotals,
         departments,
         paps,
