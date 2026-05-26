@@ -8,6 +8,13 @@ import SearchableComboboxField, {
     SearchableComboboxOption,
 } from "@/components/ui/dbm/SearchableComboboxField";
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import type { ItemCatalogOption } from "@/src/db/postgres/repositories/itemRepository";
 import type { UacsFundingSource } from "@/src/types/uacs";
 import type { FullProjectProposal } from "@/src/types/project_proposals";
@@ -1054,28 +1061,27 @@ export default function ProposalForm({
             FINEX: 0,
         },
     );
+    const componentGrandTotal = (
+        Object.values(componentExpenseClassTotals) as number[]
+    ).reduce((a, b) => a + b, 0);
 
     const renderCostComponentAllocationTable = (showGroupHover = false) => {
-        const grandTotal = (
-            Object.values(componentExpenseClassTotals) as number[]
-        ).reduce((a, b) => a + b, 0);
-
         return (
             <div className="bg-inherit">
                 {/* Scrollable Table */}
                 <div className="max-h-[520px] bg-inherit overflow-auto">
-                    <table className="w-full bg-inherit border-spacing-0">
+                    <table className="w-full table-fixed bg-inherit border-spacing-0">
                         <thead className="sticky top-0 z-20 border-b bg-inherit border-secondary-foreground">
                             <tr className="border-b border-secondary-foreground">
-                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[280px]">
+                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
                                     Item Catalog
                                 </th>
 
-                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 min-w-[220px]">
+                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
                                     Fund Source
                                 </th>
 
-                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 min-w-[120px]">
+                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
                                     Description
                                 </th>
 
@@ -1108,7 +1114,7 @@ export default function ProposalForm({
                                     `}
                                     >
                                         {/* Item Catalog */}
-                                        <td className="px-4 py-4 align-top">
+                                        <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
                                             <div className="space-y-2">
                                                 <SearchableComboboxField
                                                     items={itemCatalogOptions}
@@ -1138,7 +1144,7 @@ export default function ProposalForm({
                                         </td>
 
                                         {/* Fund Source */}
-                                        <td className="px-4 py-4 align-top">
+                                        <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
                                             <SearchableComboboxField
                                                 items={fundingSourceOptions}
                                                 value={comp.fund_code ?? ""}
@@ -1374,7 +1380,7 @@ export default function ProposalForm({
                                     </div>
 
                                     {(() => {
-                                        const total = grandTotal.toLocaleString(undefined, {
+                                        const total = componentGrandTotal.toLocaleString(undefined, {
                                             minimumFractionDigits: 2,
                                         });
 
@@ -1909,217 +1915,199 @@ export default function ProposalForm({
                         {payload.type === "202" ? (
                             renderCostComponentAllocationTable(true)
                         ) : (
-                            <div className="max-h-[520px] overflow-auto p-0">
-                                {/* Added table-fixed to make column width definitions strict and predictable */}
-                                <table className="w-full border-spacing-0 table-fixed">
-                                    <thead className="sticky top-0 z-20 bg-background border-b border-muted-200">
-                                        <tr>
-                                            <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
-                                                Item Catalog
-                                            </th>
+                            <div className="bg-inherit">
+                                <div className="max-h-[520px] overflow-auto p-0">
+                                    {/* Added table-fixed to make column width definitions strict and predictable */}
+                                    <table className="w-full border-spacing-0 table-fixed">
+                                        <thead className="sticky top-0 z-20 bg-background border-b border-muted-200">
+                                            <tr>
+                                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
+                                                    Item Catalog
+                                                </th>
 
-                                            <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
-                                                Fund Source
-                                            </th>
+                                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
+                                                    Fund Source
+                                                </th>
 
-                                            <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[140px]">
-                                                Description
-                                            </th>
+                                                <th className="bg-muted-50 px-4 py-4 text-left text-sm font-bold text-muted-600 w-[180px]">
+                                                    Description
+                                                </th>
 
-                                            <th className="bg-muted-50 px-3 py-4 text-center text-sm font-bold text-muted-600 w-[140px]">
-                                                Fund Method
-                                            </th>
+                                                <th className="bg-muted-50 px-3 py-4 text-center text-sm font-bold text-muted-600 w-[140px]">
+                                                    Fund Method
+                                                </th>
 
-                                            <th className="bg-muted-50 px-3 py-4 text-center text-sm font-bold text-muted-600 w-[160px]">
-                                                Total
-                                            </th>
+                                                <th className="bg-muted-50 px-3 py-4 text-center text-sm font-bold text-muted-600 w-[150px]">
+                                                    Amount
+                                                </th>
 
-                                            <th className="bg-muted-50 w-12" />
-                                        </tr>
-                                    </thead>
+                                                <th className="bg-muted-50 w-12" />
+                                            </tr>
+                                        </thead>
 
-                                    <tbody>
-                                        {payload.cost_by_components.map(
-                                            (comp, i) => {
-                                                const selectedItem =
-                                                    getSelectedItemCatalog(
-                                                        comp.item_catalog_id,
+                                        <tbody>
+                                            {payload.cost_by_components.map(
+                                                (comp, i) => {
+                                                    const selectedItem =
+                                                        getSelectedItemCatalog(
+                                                            comp.item_catalog_id,
+                                                        );
+                                                    const expenseClass =
+                                                        selectedItem?.expense_class;
+
+                                                    const lpCashRow =
+                                                        comp.costs.find(
+                                                            (c) =>
+                                                                c.fund_category ===
+                                                                    "LP" &&
+                                                                normalizeBp203FundMethod(
+                                                                    c.fund_method,
+                                                                ) === "cash",
+                                                        );
+                                                    const lpNonCashRow =
+                                                        comp.costs.find(
+                                                            (c) =>
+                                                                c.fund_category ===
+                                                                    "LP" &&
+                                                                normalizeBp203FundMethod(
+                                                                    c.fund_method,
+                                                                ) === "non_cash",
+                                                        );
+                                                    const gopRow =
+                                                        comp.costs.find(
+                                                            (c) =>
+                                                                c.fund_category ===
+                                                                "GOP",
+                                                        );
+
+                                                    const lpCash = Number(
+                                                        lpCashRow?.amount || 0,
                                                     );
-                                                const expenseClass =
-                                                    selectedItem?.expense_class;
-
-                                                const lpCashRow =
-                                                    comp.costs.find(
-                                                        (c) =>
-                                                            c.fund_category ===
-                                                                "LP" &&
-                                                            normalizeBp203FundMethod(
-                                                                c.fund_method,
-                                                            ) === "cash",
+                                                    const lpNonCash = Number(
+                                                        lpNonCashRow?.amount || 0,
                                                     );
-                                                const lpNonCashRow =
-                                                    comp.costs.find(
-                                                        (c) =>
-                                                            c.fund_category ===
-                                                                "LP" &&
-                                                            normalizeBp203FundMethod(
-                                                                c.fund_method,
-                                                            ) === "non_cash",
-                                                    );
-                                                const gopRow =
-                                                    comp.costs.find(
-                                                        (c) =>
-                                                            c.fund_category ===
-                                                            "GOP",
+                                                    const gop = Number(
+                                                        gopRow?.amount || 0,
                                                     );
 
-                                                const lpCash = Number(
-                                                    lpCashRow?.amount || 0,
-                                                );
-                                                const lpNonCash = Number(
-                                                    lpNonCashRow?.amount || 0,
-                                                );
-                                                const gop = Number(
-                                                    gopRow?.amount || 0,
-                                                );
+                                                    const storedCategory =
+                                                        gop > 0 &&
+                                                        lpCash === 0 &&
+                                                        lpNonCash === 0
+                                                            ? "GOP"
+                                                            : "LP";
+                                                    const storedMethod =
+                                                        lpNonCash > 0 &&
+                                                        lpCash === 0
+                                                            ? "non_cash"
+                                                            : "cash";
+                                                    const selectedCategory =
+                                                        bp203Selections[i]
+                                                            ?.category ??
+                                                        storedCategory;
+                                                    const selectedMethod =
+                                                        bp203Selections[i]
+                                                            ?.method ??
+                                                        storedMethod;
 
-                                                const storedCategory =
-                                                    gop > 0 &&
-                                                    lpCash === 0 &&
-                                                    lpNonCash === 0
-                                                        ? "GOP"
-                                                        : "LP";
-                                                const storedMethod =
-                                                    lpNonCash > 0 &&
-                                                    lpCash === 0
-                                                        ? "non_cash"
-                                                        : "cash";
-                                                const selectedCategory =
-                                                    bp203Selections[i]
-                                                        ?.category ??
-                                                    storedCategory;
-                                                const selectedMethod =
-                                                    bp203Selections[i]
-                                                        ?.method ??
-                                                    storedMethod;
+                                                    const activeValue =
+                                                        selectedCategory === "GOP"
+                                                            ? gop
+                                                            : selectedMethod ===
+                                                                "cash"
+                                                              ? lpCash
+                                                              : lpNonCash;
 
-                                                // Calculate dynamic total matching the user configuration
-                                                const rowTotal =
-                                                    selectedCategory === "GOP"
-                                                        ? gop
-                                                        : selectedMethod ===
-                                                            "cash"
-                                                          ? lpCash
-                                                          : lpNonCash;
-                                                const activeValue =
-                                                    selectedCategory === "GOP"
-                                                        ? gop
-                                                        : selectedMethod ===
-                                                            "cash"
-                                                          ? lpCash
-                                                          : lpNonCash;
-
-                                                return (
-                                                    <tr
-                                                        key={i}
-                                                        className="border-b border-muted-100 hover:bg-muted-50/50 transition-colors group"
-                                                    >
-                                                        {/* Item Catalog Column */}
-                                                        <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
-                                                            <SearchableComboboxField
-                                                                items={
-                                                                    itemCatalogOptions
-                                                                }
-                                                                value={
-                                                                    comp.item_catalog_id ??
-                                                                    ""
-                                                                }
-                                                                placeholder="Select item catalog"
-                                                                searchPlaceholder="Search line items"
-                                                                emptyText="No line items found."
-                                                                onValueChange={(
-                                                                    value,
-                                                                ) =>
-                                                                    updateCostComponentItem(
-                                                                        i,
-                                                                        value,
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-
-                                                        {/* Funding Source Column */}
-                                                        <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
-                                                            <SearchableComboboxField
-                                                                items={
-                                                                    fundingSourceOptions
-                                                                }
-                                                                value={
-                                                                    comp.fund_code ??
-                                                                    ""
-                                                                }
-                                                                placeholder="Select fund source"
-                                                                searchPlaceholder="Search fund sources"
-                                                                emptyText="No fund sources found."
-                                                                onValueChange={(
-                                                                    value,
-                                                                ) =>
-                                                                    updateRow(
-                                                                        "cost_by_components",
-                                                                        i,
-                                                                        {
-                                                                            fund_code:
-                                                                                value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-
-                                                        {/* Description Column */}
-                                                        <td className="px-4 py-4 align-top">
-                                                            <textarea
-                                                                className="min-h-[88px] w-full resize-none rounded-lg border border-muted-200 bg-background px-3 py-2 text-sm outline-none transition focus:border-secondary-foreground/40 focus:ring-2 focus:ring-secondary-foreground/10"
-                                                                placeholder="Optional description"
-                                                                value={
-                                                                    comp.specific_description ??
-                                                                    ""
-                                                                }
-                                                                onChange={(e) =>
-                                                                    updateRow(
-                                                                        "cost_by_components",
-                                                                        i,
-                                                                        {
-                                                                            specific_description:
-                                                                                e
-                                                                                    .target
-                                                                                    .value,
-                                                                        },
-                                                                    )
-                                                                }
-                                                            />
-                                                        </td>
-
-                                                        {/* Dynamic Funding Type Select Dropdowns Column */}
-                                                        <td className="px-3 py-4 align-top w-[160px]">
-                                                            <div className="flex flex-col gap-2">
-                                                                {/* Main Category Select */}
-                                                                <select
-                                                                    className="w-full rounded-lg border border-muted-200 bg-background px-2 py-1.5 text-sm outline-none transition focus:border-secondary-foreground/40"
-                                                                    value={
-                                                                        selectedCategory
+                                                    return (
+                                                        <tr
+                                                            key={i}
+                                                            className="border-b border-muted-100 hover:bg-muted-50/50 transition-colors group"
+                                                        >
+                                                            {/* Item Catalog Column */}
+                                                            <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
+                                                                <SearchableComboboxField
+                                                                    items={
+                                                                        itemCatalogOptions
                                                                     }
-                                                                    onChange={(
-                                                                        e,
-                                                                    ) => {
-                                                                        if (
-                                                                            !expenseClass
+                                                                    value={
+                                                                        comp.item_catalog_id ??
+                                                                        ""
+                                                                    }
+                                                                    placeholder="Select item catalog"
+                                                                    searchPlaceholder="Search line items"
+                                                                    emptyText="No line items found."
+                                                                    onValueChange={(
+                                                                        value,
+                                                                    ) =>
+                                                                        updateCostComponentItem(
+                                                                            i,
+                                                                            value,
                                                                         )
-                                                                            return;
+                                                                    }
+                                                                />
+                                                            </td>
+
+                                                            {/* Funding Source Column */}
+                                                            <td className="px-4 py-4 align-top w-[180px] max-w-[180px] overflow-hidden">
+                                                                <SearchableComboboxField
+                                                                    items={
+                                                                        fundingSourceOptions
+                                                                    }
+                                                                    value={
+                                                                        comp.fund_code ??
+                                                                        ""
+                                                                    }
+                                                                    placeholder="Select fund source"
+                                                                    searchPlaceholder="Search fund sources"
+                                                                    emptyText="No fund sources found."
+                                                                    onValueChange={(
+                                                                        value,
+                                                                    ) =>
+                                                                        updateRow(
+                                                                            "cost_by_components",
+                                                                            i,
+                                                                            {
+                                                                                fund_code:
+                                                                                    value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </td>
+
+                                                            {/* Description Column */}
+                                                            <td className="px-4 py-4 align-top">
+                                                                <textarea
+                                                                    className="min-h-[88px] w-full resize-none rounded-lg border border-muted-200 bg-background px-3 py-2 text-sm outline-none transition focus:border-secondary-foreground/40 focus:ring-2 focus:ring-secondary-foreground/10"
+                                                                    placeholder="Optional description"
+                                                                    value={
+                                                                        comp.specific_description ??
+                                                                        ""
+                                                                    }
+                                                                    onChange={(e) =>
+                                                                        updateRow(
+                                                                            "cost_by_components",
+                                                                            i,
+                                                                            {
+                                                                                specific_description:
+                                                                                    e
+                                                                                        .target
+                                                                                        .value,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                />
+                                                            </td>
+
+                                                            {/* Dynamic Funding Type Select Dropdowns Column */}
+                                                            <td className="px-3 py-4 align-top w-[160px]">
+                                                                <div className="flex flex-col gap-2">
+                                                                {/* Main Category Select */}
+                                                                <Select
+                                                                    value={selectedCategory}
+                                                                    onValueChange={(value) => {
                                                                         const nextCat =
-                                                                            e
-                                                                                .target
-                                                                                .value as Bp203FundCategory;
+                                                                            (value ?? "LP") as Bp203FundCategory;
                                                                         setBp203Selections(
                                                                             (
                                                                                 prev,
@@ -2137,6 +2125,11 @@ export default function ProposalForm({
                                                                                 },
                                                                             }),
                                                                         );
+
+                                                                        if (
+                                                                            !expenseClass
+                                                                        )
+                                                                            return;
 
                                                                         if (
                                                                             nextCat ===
@@ -2188,33 +2181,25 @@ export default function ProposalForm({
                                                                         }
                                                                     }}
                                                                 >
-                                                                    <option value="LP">
-                                                                        LP
-                                                                    </option>
-                                                                    <option value="GOP">
-                                                                        GOP
-                                                                    </option>
-                                                                </select>
+                                                                    <SelectTrigger className="h-auto min-h-12 w-full border-muted-200 bg-background px-3 py-3 text-sm">
+                                                                        <SelectValue placeholder="Select fund category">
+                                                                            {selectedCategory}
+                                                                        </SelectValue>
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        <SelectItem value="LP">LP</SelectItem>
+                                                                        <SelectItem value="GOP">GOP</SelectItem>
+                                                                    </SelectContent>
+                                                                </Select>
 
                                                                 {/* Secondary Method Select (Only rendered if Category is LP) */}
                                                                 {selectedCategory ===
                                                                     "LP" && (
-                                                                    <select
-                                                                        className="w-full rounded-lg border border-muted-200 bg-background px-2 py-1.5 text-xs font-medium text-muted-600 outline-none transition focus:border-secondary-foreground/40 state-anim"
-                                                                        value={
-                                                                            selectedMethod
-                                                                        }
-                                                                        onChange={(
-                                                                            e,
-                                                                        ) => {
-                                                                            if (
-                                                                                !expenseClass
-                                                                            )
-                                                                                return;
+                                                                    <Select
+                                                                        value={selectedMethod}
+                                                                        onValueChange={(value) => {
                                                                             const nextMethod =
-                                                                                e
-                                                                                    .target
-                                                                                    .value as Bp203FundMethod;
+                                                                                (value ?? "cash") as Bp203FundMethod;
                                                                             setBp203Selections(
                                                                                 (
                                                                                     prev,
@@ -2227,6 +2212,11 @@ export default function ProposalForm({
                                                                                     },
                                                                                 }),
                                                                             );
+
+                                                                            if (
+                                                                                !expenseClass
+                                                                            )
+                                                                                return;
                                                                             // Swap amounts between cash and non_cash variables safely
                                                                             handleMatrixChange203(
                                                                                 i,
@@ -2247,13 +2237,16 @@ export default function ProposalForm({
                                                                             );
                                                                         }}
                                                                     >
-                                                                        <option value="cash">
-                                                                            Cash
-                                                                        </option>
-                                                                        <option value="non_cash">
-                                                                            Non-Cash
-                                                                        </option>
-                                                                    </select>
+                                                                        <SelectTrigger className="h-auto min-h-12 w-full border-muted-200 bg-background px-3 py-3 text-sm font-medium text-muted-600">
+                                                                            <SelectValue placeholder="Select fund method">
+                                                                                {selectedMethod === "cash" ? "Cash" : "Non-Cash"}
+                                                                            </SelectValue>
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="cash">Cash</SelectItem>
+                                                                            <SelectItem value="non_cash">Non-Cash</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
                                                                 )}
                                                             </div>
                                                         </td>
@@ -2295,19 +2288,6 @@ export default function ProposalForm({
                                                             />
                                                         </td>
 
-                                                        {/* Row Total Display */}
-                                                        <td className="px-3 py-4 align-top text-center min-w-[120px]">
-                                                            <div className="text-sm font-bold text-secondary-foreground pt-2">
-                                                                {rowTotal.toLocaleString(
-                                                                    undefined,
-                                                                    {
-                                                                        minimumFractionDigits: 2,
-                                                                        maximumFractionDigits: 2,
-                                                                    },
-                                                                )}
-                                                            </div>
-                                                        </td>
-
                                                         {/* Action Delete Button */}
                                                         <td className="px-2 py-4 text-center align-top">
                                                             <button
@@ -2330,6 +2310,78 @@ export default function ProposalForm({
                                     </tbody>
                                 </table>
                             </div>
+
+                            {payload.cost_by_components.length > 0 && (
+                                <div className="border-t border-muted-200 bg-muted-50/70 px-5 py-4">
+                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                        <div>
+                                            <h4 className="text-sm font-bold text-muted-700">
+                                                Totals by Expense Class
+                                            </h4>
+                                            <p className="text-sm text-muted-500 mt-1">
+                                                Automatically calculated from all component allocations
+                                            </p>
+                                        </div>
+
+                                        <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:grid-cols-[repeat(4,130px)]">
+                                            {(["PS", "MOOE", "CO", "FINEX"] as const).map(
+                                                (ec) => {
+                                                    const total = componentExpenseClassTotals[
+                                                        ec
+                                                    ].toLocaleString(undefined, {
+                                                        minimumFractionDigits: 2,
+                                                    });
+
+                                                    return (
+                                                        <div
+                                                            key={ec}
+                                                            className="min-w-0 overflow-hidden rounded-lg border border-muted-200 bg-background px-4 py-3"
+                                                        >
+                                                            <div className="text-sm font-semibold text-muted-500">
+                                                                {ec}
+                                                            </div>
+                                                            <div
+                                                                className="mt-1 overflow-auto text-sm font-bold tabular-nums text-secondary-foreground"
+                                                                title={total}
+                                                            >
+                                                                {total}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                },
+                                            )}
+
+                                            <div className="col-span-2 min-w-0 overflow-hidden rounded-lg border border-secondary-foreground/20 bg-secondary-foreground/5 px-4 py-3 sm:col-span-4 lg:col-span-4">
+                                                <div className="text-sm font-semibold text-muted-600">
+                                                    GRAND TOTAL
+                                                </div>
+                                                {(() => {
+                                                    const total = componentGrandTotal.toLocaleString(undefined, {
+                                                        minimumFractionDigits: 2,
+                                                    });
+
+                                                    return (
+                                                        <div
+                                                            className="mt-1 overflow-auto text-sm font-bold tabular-nums text-secondary-foreground"
+                                                            title={total}
+                                                        >
+                                                            {total}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {payload.cost_by_components.length === 0 && (
+                                <div className="p-8 text-center text-muted-400 text-sm italic">
+                                    No component allocations added. Click &quot;+ ADD
+                                    ALLOCATION&quot; to begin.
+                                </div>
+                            )}
+                        </div>
                         )}
                     </CollapsibleTableSection>
                 </div>
