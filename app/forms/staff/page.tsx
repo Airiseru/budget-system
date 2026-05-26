@@ -124,7 +124,12 @@ export default async function StaffingPage({
                     ) : null}
                     createActions={canCreate ? (
                         <Link href="/forms/staff/new">
-                            <Button variant="outline">Create New Staffing Form</Button>
+                            <Button 
+                                variant="outline"
+                                className="rounded-lg hover:bg-secondary-foreground hover:text-white focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            >
+                                Create New Staffing Form
+                            </Button>
                         </Link>
                     ) : null}
                 />

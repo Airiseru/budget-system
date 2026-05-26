@@ -32,6 +32,8 @@ type ProposalSummary = {
     submission_date: Date | string | null
 }
 
+const buttonStyles = "rounded-lg hover:bg-secondary-foreground hover:text-white focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+
 function formatAmount(currency: string, amount: number) {
     return `${currency} ${Number(amount ?? 0).toLocaleString('en-PH')}`
 }
@@ -131,16 +133,16 @@ export default async function ProposalsPage({
                     createActions={canCreate ? (
                         <>
                             <Link href="/forms/proposals/new?type=202">
-                                <Button>New BP 202</Button>
+                                <Button variant="outline" className={buttonStyles}>New BP 202</Button>
                             </Link>
                             <Link href="/forms/proposals/new?type=203">
-                                <Button variant="secondary">New BP 203</Button>
+                                <Button variant="outline" className={buttonStyles}>New BP 203</Button>
                             </Link>
                         </>
                     ) : null}
                     secondaryActions={ canCreate && (
                         <Link href="/forms/proposals/rank">
-                            <Button variant="outline" className="hover:bg-primary-foreground hover:text-primary" disabled={!canCreate}>
+                            <Button variant="outline" className={buttonStyles} disabled={!canCreate}>
                                 Change Priority Ranks
                             </Button>
                         </Link>

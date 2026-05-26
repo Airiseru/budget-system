@@ -134,7 +134,12 @@ export default async function RetireesPage({
                     ]}
                     createActions={canCreate ? (
                         <Link href="/forms/retirees/new">
-                            <Button variant="outline">Create New Retiree Form</Button>
+                            <Button
+                                variant="outline"
+                                className="rounded-lg hover:bg-secondary-foreground hover:text-white focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            >
+                                Create New Retiree Form
+                            </Button>
                         </Link>
                     ) : null}
                 />
