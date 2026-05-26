@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
 import Link from "next/link";
-import { ArrowLeft, ArrowRightLeft, ExternalLink, FileText } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, ExternalLink } from "lucide-react";
 
 interface ProposalSummary {
     id: string;
@@ -751,11 +751,11 @@ export default function RankManager({
                     </div>
                 </div>
 
-                <aside
-                    className={`hidden min-w-0 overflow-hidden transition-all duration-300 ease-out lg:block ${previewProposal ? "opacity-100" : "pointer-events-none opacity-0"}`}
-                    aria-label="Proposal preview"
-                >
-                    {previewProposal ? (
+                {previewProposal ? (
+                    <aside
+                        className="hidden min-w-0 overflow-hidden opacity-100 transition-all duration-2000 ease-in-out lg:block"
+                        aria-label="Proposal preview"
+                    >
                         <div className="sticky top-24 h-[calc(100vh-7rem)] overflow-hidden rounded-lg border bg-background shadow-sm">
                             <div className="flex items-start justify-between gap-3 border-b bg-muted/40 px-4 py-3">
                                 <div>
@@ -804,23 +804,9 @@ export default function RankManager({
                                 />
                             </div>
                         </div>
-                    ) : (
-                        <div className="sticky top-24 flex h-[calc(100vh-7rem)] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
-                            <div className="text-center">
-                                <FileText className="mx-auto h-8 w-8 opacity-60" />
-                                <p className="mt-2 text-sm">Select a proposal to preview it.</p>
-                            </div>
-                        </div>
-                    )}
-                </aside>
+                    </aside>
+                ) : null}
             </div>
-
-            {activeScope === "dept" && (
-                <p className="text-xs text-slate-500 mt-2">
-                    Department-wide ranking across all entities. Changes affect
-                    all proposals in the department.
-                </p>
-            )}
         </div>
     );
 }
