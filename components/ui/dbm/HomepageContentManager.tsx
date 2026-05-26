@@ -1,6 +1,10 @@
+'use client'
+
+import { useEffect, useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import MarkdownContent from '@/components/ui/MarkdownContent'
+import { Plus, X } from 'lucide-react'
 import {
     createHomepageAnnouncementAction,
     createHomepageFaqAction,
@@ -22,6 +26,11 @@ const STATUS_CLASS: Record<HomepageContentStatus, string> = {
     published: 'border-emerald-200 bg-emerald-50 text-emerald-700',
     archived: 'border-slate-200 bg-slate-50 text-slate-700',
 }
+
+const buttonStyles = "rounded-lg hover:bg-secondary-foreground hover:text-white focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+
+type ActiveTab = 'announcements' | 'faqs'
+type CreateModal = null | 'announcement' | 'faq'
 
 function formatDateTimeLocal(value: Date | string | null) {
     if (!value) return ''
@@ -58,6 +67,7 @@ function StatusControls({
                         type="submit"
                         size="sm"
                         variant={nextStatus === 'published' ? 'default' : 'outline'}
+                        className={buttonStyles}
                     >
                         {nextStatus === 'published' ? 'Publish' : nextStatus === 'archived' ? 'Archive' : 'Move to Draft'}
                     </Button>
@@ -70,20 +80,28 @@ function StatusControls({
 function AnnouncementForm({ announcement }: { announcement?: HomepageAnnouncement }) {
     return (
         <form
-            action={announcement ? updateHomepageAnnouncementAction : createHomepageAnnouncementAction}
+            action={async (formData) => {
+                if (announcement) {
+                    await updateHomepageAnnouncementAction(formData)
+                    return
+                }
+
+                await createHomepageAnnouncementAction(formData)
+                window.dispatchEvent(new Event('homepage-content:create-complete'))
+            }}
             className="rounded-2xl border border-border bg-background p-4 shadow-sm"
         >
             {announcement ? <input type="hidden" name="id" value={announcement.id} /> : null}
-            <div className="grid gap-4 lg:grid-cols-[1fr_12rem_10rem]">
-                <label className="space-y-2">
-                    <span className="text-sm font-semibold">Title</span>
-                    <input
-                        name="title"
-                        defaultValue={announcement?.title ?? ''}
-                        className="min-h-11 w-full rounded-md border border-border bg-background px-3 py-2"
-                        required
-                    />
-                </label>
+            <label className="space-y-2">
+                <span className="text-sm font-semibold">Title</span>
+                <input
+                    name="title"
+                    defaultValue={announcement?.title ?? ''}
+                    className="min-h-11 w-full rounded-md border border-border bg-background px-3 py-2"
+                    required
+                />
+            </label>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_12rem_10rem]">
                 <label className="space-y-2">
                     <span className="text-sm font-semibold">Category</span>
                     <input
@@ -138,7 +156,13 @@ function AnnouncementForm({ announcement }: { announcement?: HomepageAnnouncemen
                 />
             </label>
             <div className="mt-4 flex justify-end">
-                <Button type="submit">{announcement ? 'Save Announcement' : 'Create Draft Announcement'}</Button>
+                <Button
+                    type="submit"
+                    variant="outline"
+                    className={buttonStyles}
+                >
+                    {announcement ? 'Save Announcement' : 'Create Draft Announcement'}
+                </Button>
             </div>
         </form>
     )
@@ -147,20 +171,28 @@ function AnnouncementForm({ announcement }: { announcement?: HomepageAnnouncemen
 function FaqForm({ faq }: { faq?: HomepageFaq }) {
     return (
         <form
-            action={faq ? updateHomepageFaqAction : createHomepageFaqAction}
+            action={async (formData) => {
+                if (faq) {
+                    await updateHomepageFaqAction(formData)
+                    return
+                }
+
+                await createHomepageFaqAction(formData)
+                window.dispatchEvent(new Event('homepage-content:create-complete'))
+            }}
             className="rounded-2xl border border-border bg-background p-4 shadow-sm"
         >
             {faq ? <input type="hidden" name="id" value={faq.id} /> : null}
-            <div className="grid gap-4 lg:grid-cols-[1fr_12rem_10rem]">
-                <label className="space-y-2">
-                    <span className="text-sm font-semibold">Question</span>
-                    <input
-                        name="question"
-                        defaultValue={faq?.question ?? ''}
-                        className="min-h-11 w-full rounded-md border border-border bg-background px-3 py-2"
-                        required
-                    />
-                </label>
+            <label className="space-y-2">
+                <span className="text-sm font-semibold">Question</span>
+                <input
+                    name="question"
+                    defaultValue={faq?.question ?? ''}
+                    className="min-h-11 w-full rounded-md border border-border bg-background px-3 py-2"
+                    required
+                />
+            </label>
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_12rem_10rem]">
                 <label className="space-y-2">
                     <span className="text-sm font-semibold">Category</span>
                     <input
@@ -191,25 +223,66 @@ function FaqForm({ faq }: { faq?: HomepageFaq }) {
                 />
             </label>
             <div className="mt-4 flex justify-end">
-                <Button type="submit">{faq ? 'Save FAQ' : 'Create Draft FAQ'}</Button>
+                <Button
+                    type="submit"
+                    variant="outline"
+                    className={buttonStyles}
+                >
+                    {faq ? 'Save FAQ' : 'Create Draft FAQ'}
+                </Button>
             </div>
         </form>
     )
 }
 
 export default function HomepageContentManager({ announcements, faqs, canPublish }: Props) {
+    const [activeTab, setActiveTab] = useState<ActiveTab>('announcements')
+    const [createModal, setCreateModal] = useState<CreateModal>(null)
+
+    useEffect(() => {
+        const handleCreateComplete = () => setCreateModal(null)
+        window.addEventListener('homepage-content:create-complete', handleCreateComplete)
+        return () => window.removeEventListener('homepage-content:create-complete', handleCreateComplete)
+    }, [])
+
     return (
         <div className="space-y-8">
-            <section className="rounded-3xl border border-border bg-muted/30 p-5">
-                <h2 className="text-xl font-bold text-secondary-foreground">Create Announcement</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    Content is saved as draft first. A DBM approver must publish it before it appears on the homepage.
-                </p>
-                <div className="mt-4">
-                    <AnnouncementForm />
+            <div className="flex flex-col gap-4 rounded-3xl border border-border bg-background p-5 shadow-sm md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-wrap gap-2">
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('announcements')}
+                        className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                            activeTab === 'announcements'
+                                ? 'bg-secondary-foreground text-accent'
+                                : 'bg-muted text-muted-foreground hover:text-secondary-foreground'
+                        }`}
+                    >
+                        Announcements
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setActiveTab('faqs')}
+                        className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+                            activeTab === 'faqs'
+                                ? 'bg-secondary-foreground text-accent'
+                                : 'bg-muted text-muted-foreground hover:text-secondary-foreground'
+                        }`}
+                    >
+                        FAQs
+                    </button>
                 </div>
-            </section>
+                <Button
+                    type="button"
+                    onClick={() => setCreateModal(activeTab === 'announcements' ? 'announcement' : 'faq')}
+                    className="gap-2 bg-accent-foreground text-white hover:bg-accent-foreground/90"
+                >
+                    <Plus className="h-4 w-4" />
+                    {activeTab === 'announcements' ? 'New Announcement' : 'New FAQ'}
+                </Button>
+            </div>
 
+            {activeTab === 'announcements' && (
             <section className="space-y-4">
                 <h2 className="text-xl font-bold text-secondary-foreground">Announcements</h2>
                 {announcements.length === 0 ? (
@@ -246,22 +319,14 @@ export default function HomepageContentManager({ announcements, faqs, canPublish
                         </details>
                         <details>
                             <summary className="cursor-pointer text-sm font-semibold text-secondary-foreground">Preview</summary>
-                            <MarkdownContent content={announcement.body_markdown} className="mt-3 rounded-xl bg-muted/40 p-4" />
+                                <MarkdownContent content={announcement.body_markdown} className="mt-3 border rounded-xl bg-muted/40 p-4" />
                         </details>
                     </article>
                 ))}
             </section>
+            )}
 
-            <section className="rounded-3xl border border-border bg-muted/30 p-5">
-                <h2 className="text-xl font-bold text-secondary-foreground">Create FAQ</h2>
-                <p className="mt-1 text-sm text-muted-foreground">
-                    FAQ answers support the same constrained Markdown format.
-                </p>
-                <div className="mt-4">
-                    <FaqForm />
-                </div>
-            </section>
-
+            {activeTab === 'faqs' && (
             <section className="space-y-4">
                 <h2 className="text-xl font-bold text-secondary-foreground">FAQs</h2>
                 {faqs.length === 0 ? (
@@ -297,11 +362,42 @@ export default function HomepageContentManager({ announcements, faqs, canPublish
                         </details>
                         <details>
                             <summary className="cursor-pointer text-sm font-semibold text-secondary-foreground">Preview</summary>
-                            <MarkdownContent content={faq.answer_markdown} className="mt-3 rounded-xl bg-muted/40 p-4" />
+                            <MarkdownContent content={faq.answer_markdown} className="mt-3 border rounded-xl bg-muted/40 p-4" />
                         </details>
                     </article>
                 ))}
             </section>
+            )}
+
+            {createModal && (
+                <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-4 sm:items-center">
+                    <div className="flex max-h-[90vh] w-full max-w-3xl flex-col rounded-xl border border-border bg-background shadow-2xl">
+                        <div className="flex shrink-0 items-center justify-between border-b border-border px-6 py-4">
+                            <div>
+                                <h2 className="text-lg font-bold">
+                                    {createModal === 'announcement' ? 'New Announcement' : 'New FAQ'}
+                                </h2>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                    {createModal === 'announcement'
+                                        ? 'Content is saved as draft first. A DBM approver must publish it before it appears on the homepage.'
+                                        : 'FAQ answers support the same constrained Markdown format.'}
+                                </p>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setCreateModal(null)}
+                                className="text-muted-foreground transition-colors hover:text-foreground"
+                                aria-label="Close create content dialog"
+                            >
+                                <X className="h-5 w-5" />
+                            </button>
+                        </div>
+                        <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                            {createModal === 'announcement' ? <AnnouncementForm /> : <FaqForm />}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

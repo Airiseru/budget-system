@@ -262,7 +262,7 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                             No published FAQs yet.
                         </p>
                     ) : faqs.map((faq) => (
-                        <details key={faq.id} className="group rounded-2xl border border-slate-900/10 bg-white/75 p-5 shadow-sm">
+                        <details key={faq.id} className="group rounded-2xl border border-slate-900/10 bg-white/75 p-6 shadow-sm">
                             <summary className="cursor-pointer list-none text-base font-black text-slate-950">
                                 <span className="inline-flex w-full items-center justify-between gap-4">
                                     {faq.question}
