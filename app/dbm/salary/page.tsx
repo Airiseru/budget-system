@@ -33,8 +33,8 @@ export default async function SalaryPage() {
     }
 
     return (
-        <main className="min-h-screen bg-background">
-            <div className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+        <main className="min-h-screen bg-background px-4 py-8">
+            <div className="mx-auto max-w-7xl space-y-8">
                 <div className="flex items-center justify-between">
                     <BackButton/>
                     <div className="text-center">

@@ -58,7 +58,8 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Ent
     }
 
     return (
-        <main className="m-6 space-y-6 max-w-7xl md:mx-auto md:my-12 max-h-screen">
+        <main className="min-h-screen bg-background px-4 py-8">
+            <div className="mx-auto max-w-7xl space-y-6">
             <div className="flex items-center justify-between">
                 <BackButton url="/dbm" />
 
@@ -91,6 +92,7 @@ export default async function EntitiesPage({ searchParams }: { searchParams: Ent
                 totalPages={totalPages}
                 getPageHref={getPageHref}
             />
+            </div>
         </main>
     )
 }

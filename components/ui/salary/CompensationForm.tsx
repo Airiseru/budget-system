@@ -1,10 +1,10 @@
 'use client'
 
-import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react'
 import { createCompensationRuleAction } from '@/src/actions/salary'
 import { VALID_COMPENSATION_NAMES, MAX_SG } from '@/src/lib/constants'
 import { Button } from '@/components/ui/button'
-import { X } from 'lucide-react'
+import { Info, X } from 'lucide-react'
 import {
     Select,
     SelectContent,
@@ -18,6 +18,8 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
     const [name, setName] = useState<string>(state?.values?.name ?? '')
     const [calcType, setCalcType] = useState<string>(state?.values?.calculation_type ?? 'fixed')
     const [frequency, setFrequency] = useState<string>(state?.values?.frequency ?? 'monthly')
+    const [calculationHelpOpen, setCalculationHelpOpen] = useState(false)
+    const calculationHelpRef = useRef<HTMLDivElement>(null)
     const todayDate = useMemo(() => {
         const d = new Date()
         const year = d.getFullYear()
@@ -30,6 +32,19 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
         // close on success
         if (state?.success) onClose()
     }, [state?.success, onClose])
+
+    useEffect(() => {
+        if (!calculationHelpOpen) return
+
+        const handlePointerDown = (event: PointerEvent) => {
+            if (!calculationHelpRef.current?.contains(event.target as Node)) {
+                setCalculationHelpOpen(false)
+            }
+        }
+
+        document.addEventListener('pointerdown', handlePointerDown)
+        return () => document.removeEventListener('pointerdown', handlePointerDown)
+    }, [calculationHelpOpen])
 
     return (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
@@ -93,8 +108,61 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
 
                     {/* calculation type, frequency, and value */}
                     <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1">
-                            <label className="text-sm font-medium">Calculation Type</label>
+                        <div ref={calculationHelpRef} className="relative space-y-1">
+                            <div className="flex items-center gap-1 align-center">
+                                <label className="text-sm font-medium">Calculation Type</label>
+                                <button
+                                    type="button"
+                                    onClick={() => setCalculationHelpOpen((open) => !open)}
+                                    className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-secondary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                    aria-label="Show calculation type help"
+                                    aria-expanded={calculationHelpOpen}
+                                >
+                                    <Info className="h-4 w-4" />
+                                </button>
+                            </div>
+                            {calculationHelpOpen && (
+                                <section
+                                    className="absolute left-0 top-8 z-20 w-[min(calc(100vw-3rem),26rem)] max-h-[25vh] rounded-2xl border border-border bg-background p-4 text-sm shadow-xl overflow-auto"
+                                    aria-label="Calculation type descriptions"
+                                >
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div>
+                                            <p className="text-xs font-bold uppercase tracking-[0.16em] text-muted-foreground">
+                                                Calculation Guide
+                                            </p>
+                                            <h3 className="mt-1 font-black text-secondary-foreground">Compensation Formulas</h3>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => setCalculationHelpOpen(false)}
+                                            className="rounded-full border border-border p-1.5 text-muted-foreground transition hover:bg-muted hover:text-secondary-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                            aria-label="Close calculation type help"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                    <div className="mt-3 space-y-3">
+                                        <div className="rounded-xl bg-muted p-3">
+                                            <p className="font-bold text-secondary-foreground">Fixed Amount</p>
+                                            <p className="mt-1 text-muted-foreground">Use for benefits with a fixed peso amount.</p>
+                                            <p className="mt-1 font-mono text-xs text-secondary-foreground">amount x number of months x quantity</p>
+                                        </div>
+                                        <div className="rounded-xl bg-muted p-3">
+                                            <p className="font-bold text-secondary-foreground">Salary Percentage</p>
+                                            <p className="mt-1 text-muted-foreground">Use when the benefit is a percentage of the salary amount.</p>
+                                            <p className="mt-1 font-mono text-xs text-secondary-foreground">salary amount x amount</p>
+                                            <p className="mt-1 text-xs text-muted-foreground">Enter amount as a decimal percentage, e.g. 0.12 for 12%.</p>
+                                        </div>
+                                        <div className="rounded-xl bg-muted p-3">
+                                            <p className="font-bold text-secondary-foreground">Salary Multiplier</p>
+                                            <p className="mt-1 text-muted-foreground">Use when the benefit is a multiple of the salary amount.</p>
+                                            <p className="mt-1 font-mono text-xs text-secondary-foreground">salary amount x amount</p>
+                                            <p className="mt-1 text-xs text-muted-foreground">Enter amount as a positive multiplier, e.g. 1 for one salary.</p>
+                                        </div>
+                                    </div>
+                                </section>
+                            )}
                             <input type="hidden" name="calculation_type" value={calcType} />
                             <Select value={calcType} onValueChange={(value) => setCalcType(value ?? 'fixed')}>
                                 <SelectTrigger className="w-full border border-border bg-background text-sm">
