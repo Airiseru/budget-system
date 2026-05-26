@@ -371,16 +371,17 @@ const PrerequisiteRow = ({
                 }
             />
         </td>
-        {index >= 13 && (
-            <td>
+        <td className="sticky right-0 z-10 w-12 min-w-12 bg-background px-1 text-center shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">
+            {index >= 13 && (
                 <button
+                    type="button"
                     onClick={() => removeRow("pap_prerequisites", index)}
-                    className="text-red-400 hover:text-red-600 transition-colors"
+                    className="inline-flex h-8 w-8 items-center justify-center text-lg text-red-400 hover:text-red-600 transition-colors"
                 >
                     ✕
                 </button>
-            </td>
-        )}
+            )}
+        </td>
     </tr>
 );
 
@@ -404,6 +405,26 @@ type CollapsibleSection =
     | "local_physical_targets"
     | "foreign_financial_targets"
     | "foreign_physical_targets";
+
+type ProposalSectionId =
+    | "proposal-basic-details"
+    | "proposal-prerequisites"
+    | "proposal-cost-components"
+    | "proposal-local-locations"
+    | "proposal-local-attributions"
+    | "proposal-infrastructure"
+    | "proposal-local-targets"
+    | "proposal-foreign-financial"
+    | "proposal-foreign-physical"
+    | "proposal-override"
+    | "proposal-submit";
+
+type ProposalSectionNavItem = {
+    id: ProposalSectionId;
+    label: string;
+    error?: boolean;
+    collapsible?: CollapsibleSection;
+};
 
 interface CollapsibleTableSectionProps {
     section: CollapsibleSection;
@@ -722,6 +743,151 @@ export default function ProposalForm({
             ...prev,
             [section]: !prev[section],
         }));
+    };
+
+    const [activeSection, setActiveSection] = useState<ProposalSectionId>(
+        "proposal-basic-details",
+    );
+
+    const hasAnyErrorForPath = (pathPrefix: string) =>
+        Object.keys(errors).some((key) => key.startsWith(pathPrefix));
+
+    const hasBasicDetailsError = [
+        "title",
+        "description",
+        "org_outcome_id",
+        "purpose",
+        "beneficiaries",
+        "priority_rank",
+    ].some((field) => Boolean(errors[field]));
+
+    const proposalSectionNavItems: ProposalSectionNavItem[] = [
+        {
+            id: "proposal-basic-details",
+            label: "Project Details",
+            error: hasBasicDetailsError,
+        },
+        {
+            id: "proposal-prerequisites",
+            label: "Prerequisites",
+            error: hasAnyErrorForPath("pap_prerequisites"),
+        },
+        {
+            id: "proposal-cost-components",
+            label: "Cost Components",
+            error: hasAnyErrorForPath("cost_by_components"),
+            collapsible: "cost_by_components",
+        },
+        ...(payload.type === "202"
+            ? ([
+                  {
+                      id: "proposal-local-locations",
+                      label: "Locations",
+                      error: hasAnyErrorForPath("local_locations"),
+                      collapsible: "local_locations",
+                  },
+                  {
+                      id: "proposal-local-attributions",
+                      label: "Financial Attributions",
+                      error: hasAnyErrorForPath(
+                          "local_financial_attributions",
+                      ),
+                      collapsible: "local_financial_attributions",
+                  },
+                  ...(payload.is_infrastructure
+                      ? ([
+                            {
+                                id: "proposal-infrastructure",
+                                label: "Infrastructure",
+                                error: hasAnyErrorForPath(
+                                    "local_infrastructure_requirements",
+                                ),
+                                collapsible:
+                                    "local_infrastructure_requirements" as const,
+                            },
+                        ] satisfies ProposalSectionNavItem[])
+                      : []),
+                  {
+                      id: "proposal-local-targets",
+                      label: "Physical Targets",
+                      error: hasAnyErrorForPath("local_physical_targets"),
+                      collapsible: "local_physical_targets",
+                  },
+              ] satisfies ProposalSectionNavItem[])
+            : ([
+                  {
+                      id: "proposal-foreign-financial",
+                      label: "Financial Targets",
+                      error: hasAnyErrorForPath("foreign_financial_targets"),
+                      collapsible: "foreign_financial_targets",
+                  },
+                  {
+                      id: "proposal-foreign-physical",
+                      label: "Physical Targets",
+                      error: hasAnyErrorForPath("foreign_physical_targets"),
+                      collapsible: "foreign_physical_targets",
+                  },
+              ] satisfies ProposalSectionNavItem[])),
+        ...(isDbmOverwrite
+            ? ([
+                  {
+                      id: "proposal-override",
+                      label: "DBM Remarks",
+                      error: !overrideRemarks.trim(),
+                  },
+              ] satisfies ProposalSectionNavItem[])
+            : []),
+        {
+            id: "proposal-submit",
+            label: "Review & Submit",
+        },
+    ];
+
+    useEffect(() => {
+        const sections = proposalSectionNavItems
+            .map((item) => document.getElementById(item.id))
+            .filter((section): section is HTMLElement => Boolean(section));
+
+        if (sections.length === 0) return;
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const visible = entries
+                    .filter((entry) => entry.isIntersecting)
+                    .sort(
+                        (a, b) =>
+                            Math.abs(a.boundingClientRect.top) -
+                            Math.abs(b.boundingClientRect.top),
+                    )[0];
+
+                if (visible?.target.id) {
+                    setActiveSection(visible.target.id as ProposalSectionId);
+                }
+            },
+            {
+                rootMargin: "-20% 0px -65% 0px",
+                threshold: [0, 0.1, 0.25],
+            },
+        );
+
+        sections.forEach((section) => observer.observe(section));
+        return () => observer.disconnect();
+    }, [payload.type, payload.is_infrastructure, isDbmOverwrite]);
+
+    const handleSectionNavClick = (item: ProposalSectionNavItem) => {
+        if (item.collapsible && collapsedSections[item.collapsible]) {
+            setCollapsedSections((prev) => ({
+                ...prev,
+                [item.collapsible!]: false,
+            }));
+        }
+
+        window.requestAnimationFrame(() => {
+            document.getElementById(item.id)?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+            });
+        });
     };
 
     const updateExpense = (
@@ -1307,10 +1473,10 @@ export default function ProposalForm({
                 {/* Totals Section */}
                 {payload.cost_by_components.length > 0 && (
                     <div className="border-t border-muted-200 bg-muted-50/70 px-5 py-4">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex flex-col gap-4">
                             {/* Label */}
                             <div>
-                                <h4 className="text-sm font-bold text-muted-700">
+                                <h4 className="text-md font-bold text-muted-700">
                                     Totals by Expense Class
                                 </h4>
 
@@ -1321,7 +1487,7 @@ export default function ProposalForm({
                             </div>
 
                             {/* Totals Cards */}
-                            <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:grid-cols-[repeat(4,130px)]">
+                            <div className="grid w-full grid-cols-[repeat(2,minmax(0,1fr))] gap-4">
                                 {(["PS", "MOOE", "CO", "FINEX"] as const).map(
                                     (ec) => {
                                         const total = componentExpenseClassTotals[
@@ -1342,6 +1508,7 @@ export default function ProposalForm({
                                             px-4
                                             py-3
                                             overflow-hidden
+                                            h-[78px]
                                             "
                                         >
                                             <div className="text-sm font-semibold text-muted-500">
@@ -1362,7 +1529,6 @@ export default function ProposalForm({
                                 {/* Grand Total */}
                                 <div
                                     className="
-                                    col-span-2
                                     min-w-0
                                     rounded-lg
                                     border
@@ -1371,8 +1537,8 @@ export default function ProposalForm({
                                     px-4
                                     py-3
                                     overflow-hidden
-                                    sm:col-span-4
-                                    lg:col-span-4
+                                    min-h-[78px]
+                                    col-span-2
                                 "
                                 >
                                     <div className="text-sm font-semibold text-muted-600">
@@ -1413,7 +1579,7 @@ export default function ProposalForm({
         <LoadingOverlay show={isLoading} label={submitAction === "draft" ? "Saving proposal..." : "Submitting proposal..."} />
         <form
             onSubmit={handleSubmit}
-            className="max-w-5xl mx-auto mt-8 px-4 space-y-8"
+            className="mx-auto mt-8 w-full max-w-7xl px-4 space-y-8"
         >
             {Object.keys(errors).length > 0 && (
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6 rounded shadow-sm">
@@ -1432,6 +1598,61 @@ export default function ProposalForm({
                     </ul>
                 </div>
             )}
+            <div className="grid gap-6 lg:grid-cols-[210px_minmax(0,1fr)]">
+                <aside className="lg:sticky lg:top-24 lg:self-start">
+                    <div className="rounded-xl border border-muted-200 bg-background p-3 shadow-sm">
+                        <div className="mb-3 px-2 text-xs font-black uppercase tracking-widest text-muted-500">
+                            Form Sections
+                        </div>
+                        <nav
+                            aria-label="Proposal form sections"
+                            className="flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0"
+                        >
+                            {proposalSectionNavItems.map((item, index) => {
+                                const isActive = activeSection === item.id;
+
+                                return (
+                                    <button
+                                        key={item.id}
+                                        type="button"
+                                        onClick={() =>
+                                            handleSectionNavClick(item)
+                                        }
+                                        className={`group flex min-w-[150px] items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition lg:min-w-0 ${
+                                            isActive
+                                                ? "bg-secondary-foreground text-background shadow-sm"
+                                                : "text-muted-600 hover:bg-muted-50 hover:text-secondary-foreground"
+                                        }`}
+                                    >
+                                        <span
+                                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-xs font-bold ${
+                                                isActive
+                                                    ? "border-background/70 bg-background/15"
+                                                    : "border-muted-200 bg-muted-50 text-muted-500 group-hover:border-secondary-foreground/30"
+                                            }`}
+                                        >
+                                            {index + 1}
+                                        </span>
+                                        <span className="min-w-0 flex-1 truncate">
+                                            {item.label}
+                                        </span>
+                                        {item.error && (
+                                            <span
+                                                aria-label="Section has validation errors"
+                                                className={`h-2 w-2 shrink-0 rounded-full ${
+                                                    isActive
+                                                        ? "bg-background"
+                                                        : "bg-red-500"
+                                                }`}
+                                            />
+                                        )}
+                                    </button>
+                                );
+                            })}
+                        </nav>
+                    </div>
+                </aside>
+                <div className="min-w-0 space-y-8">
             <div className="p-4 bg-muted-50 border-l-4 border-muted-600 rounded-r-lg">
                 <h2 className="text-lg font-bold text-muted-800">
                     BP Form {type}:{" "}
@@ -1439,7 +1660,7 @@ export default function ProposalForm({
                 </h2>
             </div>
 
-            <div className="grid grid-cols-2 gap-6 bg-background p-6 rounded-xl border shadow-sm">
+            <div id="proposal-basic-details" className="scroll-mt-24 grid grid-cols-2 gap-6 bg-background p-6 rounded-xl border shadow-sm">
                 <div className="flex flex-col gap-2">
                     <div className="md:col-span-2">
                         <label className="text-sm font-black uppercase text-muted-400">
@@ -1744,7 +1965,7 @@ export default function ProposalForm({
                 </div>
             </div>
 
-            <div className="bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
+            <div id="proposal-prerequisites" className="scroll-mt-24 bg-background rounded-xl border shadow-sm overflow-hidden mb-6">
                 <div className="bg-muted-50 px-4 py-3 border-b flex justify-between items-center">
                     <h3 className="text-sm font-black text-muted-500 uppercase tracking-widest">
                         PAP Prerequisites
@@ -1775,7 +1996,10 @@ export default function ProposalForm({
                                     >
                                         Remarks
                                     </th>
-                                    <th rowSpan={2}></th>
+                                    <th
+                                        rowSpan={2}
+                                        className="sticky right-0 z-30 w-12 min-w-12 bg-background px-1 py-4 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]"
+                                    ></th>
                                 </tr>
                                 <tr className="bg-background border-b">
                                     <th className="py-2 text-sm font-bold text-muted-500 uppercase text-center border-r w-20">
@@ -1794,29 +2018,26 @@ export default function ProposalForm({
                             <tbody>
                                 <tr className="border border-b">
                                     <td
-                                        colSpan={4}
+                                        colSpan={6}
                                         className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic"
                                     >
-                                        Approving Authorities
-                                    </td>
-                                    <td
-                                        className="flex flex-row-reverse"
-                                        colSpan={2}
-                                    >
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                addRow("pap_prerequisites", {
-                                                    name: "",
-                                                    type: "authority",
-                                                    status: "True",
-                                                    remarks: "",
-                                                })
-                                            }
-                                            className="text-secondary-foreground text-sm font-bold hover:underline py-2 px-4"
-                                        >
-                                            + ADD APPROVING AUTHORITY
-                                        </button>
+                                        <div className="flex items-center justify-between gap-4">
+                                            <span>Approving Authorities</span>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    addRow("pap_prerequisites", {
+                                                        name: "",
+                                                        type: "authority",
+                                                        status: "True",
+                                                        remarks: "",
+                                                    })
+                                                }
+                                                className="shrink-0 whitespace-nowrap text-secondary-foreground text-sm font-bold hover:underline"
+                                            >
+                                                + ADD APPROVING AUTHORITY
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                                 {payload.pap_prerequisites.map(
@@ -1838,26 +2059,26 @@ export default function ProposalForm({
                             <tbody>
                                 <tr className="bg-muted-50/50 border-b border-t">
                                     <td
-                                        colSpan={4}
+                                        colSpan={6}
                                         className="py-2 px-4 text-sm font-black text-muted-600 uppercase italic border-b border-t"
                                     >
-                                        Supporting Documents
-                                    </td>
-                                    <td className="flex flex-row-reverse">
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                addRow("pap_prerequisites", {
-                                                    name: "",
-                                                    type: "document",
-                                                    status: "True",
-                                                    remarks: "",
-                                                })
-                                            }
-                                            className="text-secondary-foreground text-sm font-bold hover:underline py-2 px-4"
-                                        >
-                                            + ADD SUPPORTING DOCUMENT
-                                        </button>
+                                        <div className="flex items-center justify-between gap-4">
+                                            <span>Supporting Documents</span>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    addRow("pap_prerequisites", {
+                                                        name: "",
+                                                        type: "document",
+                                                        status: "True",
+                                                        remarks: "",
+                                                    })
+                                                }
+                                                className="shrink-0 whitespace-nowrap text-secondary-foreground text-sm font-bold hover:underline"
+                                            >
+                                                + ADD SUPPORTING DOCUMENT
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                                 {payload.pap_prerequisites.map(
@@ -1878,7 +2099,7 @@ export default function ProposalForm({
                     </div>
                 </div>
             </div>
-            <div className="space-y-2">
+            <div id="proposal-cost-components" className="scroll-mt-24 space-y-2">
                 <div
                     className={`shadow-sm overflow-hidden bg-background ${
                         errors.cost_by_components
@@ -2313,9 +2534,9 @@ export default function ProposalForm({
 
                             {payload.cost_by_components.length > 0 && (
                                 <div className="border-t border-muted-200 bg-muted-50/70 px-5 py-4">
-                                    <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                    <div className="flex flex-col gap-4">
                                         <div>
-                                            <h4 className="text-sm font-bold text-muted-700">
+                                            <h4 className="text-md font-bold text-muted-700">
                                                 Totals by Expense Class
                                             </h4>
                                             <p className="text-sm text-muted-500 mt-1">
@@ -2323,7 +2544,7 @@ export default function ProposalForm({
                                             </p>
                                         </div>
 
-                                        <div className="grid w-full min-w-0 grid-cols-2 gap-2 sm:grid-cols-4 lg:w-auto lg:grid-cols-[repeat(4,130px)]">
+                                        <div className="grid w-full grid-cols-[repeat(2,minmax(0,1fr))] gap-4">
                                             {(["PS", "MOOE", "CO", "FINEX"] as const).map(
                                                 (ec) => {
                                                     const total = componentExpenseClassTotals[
@@ -2351,7 +2572,7 @@ export default function ProposalForm({
                                                 },
                                             )}
 
-                                            <div className="col-span-2 min-w-0 overflow-hidden rounded-lg border border-secondary-foreground/20 bg-secondary-foreground/5 px-4 py-3 sm:col-span-4 lg:col-span-4">
+                                            <div className="col-span-2 min-w-0 overflow-hidden rounded-lg border border-secondary-foreground/20 bg-secondary-foreground/5 p-4">
                                                 <div className="text-sm font-semibold text-muted-600">
                                                     GRAND TOTAL
                                                 </div>
@@ -2405,7 +2626,7 @@ export default function ProposalForm({
 
             {type === "202" && (
                 <div className="space-y-8">
-                    <div className="space-y-2">
+                    <div id="proposal-local-locations" className="scroll-mt-24 space-y-2">
                         <div
                             className={`bg-background shadow-sm overflow-hidden ${
                                 errors.local_locations
@@ -2598,7 +2819,7 @@ export default function ProposalForm({
                             </div>
                         )}
                     </div>
-                    <div className="space-y-2">
+                    <div id="proposal-local-attributions" className="scroll-mt-24 space-y-2">
                         <div
                             className={`bg-background shadow-sm overflow-hidden ${
                                 errors.local_financial_attributions
@@ -3147,7 +3368,7 @@ export default function ProposalForm({
                     </div>
 
                     {payload.is_infrastructure && (
-                        <div className="space-y-2">
+                        <div id="proposal-infrastructure" className="scroll-mt-24 space-y-2">
                             <div
                                 className={`bg-background shadow-sm overflow-hidden ${
                                     errors.local_infrastructure_requirements
@@ -3353,7 +3574,7 @@ export default function ProposalForm({
                         </div>
                     )}
 
-                    <div className="space-y-2">
+                    <div id="proposal-local-targets" className="scroll-mt-24 space-y-2">
                         <div
                             className={`bg-background shadow-sm overflow-hidden ${
                                 errors.local_physical_targets
@@ -3485,7 +3706,7 @@ export default function ProposalForm({
             {/* 5. FOREIGN ASSISTANCE (BP 203 ONLY) */}
             {type === "203" && (
                 <div className="space-y-6">
-                    <div className="space-y-2">
+                    <div id="proposal-foreign-financial" className="scroll-mt-24 space-y-2">
                         <div
                             className={`shadow-sm overflow-hidden  ${
                                 errors.foreign_financial_targets
@@ -3809,7 +4030,7 @@ export default function ProposalForm({
                         )}
                     </div>
 
-                    <div className="space-y-2">
+                    <div id="proposal-foreign-physical" className="scroll-mt-24 space-y-2">
                         <div
                             className={`shadow-sm overflow-hidden  ${
                                 errors.foreign_physical_targets
@@ -4151,7 +4372,7 @@ export default function ProposalForm({
             )}
 
             {isDbmOverwrite && (
-                <div className="rounded-lg border border-border bg-card p-4 space-y-2">
+                <div id="proposal-override" className="scroll-mt-24 rounded-lg border border-border bg-card p-4 space-y-2">
                     <label
                         htmlFor="override-remarks"
                         className="text-sm font-bold text-secondary-foreground"
@@ -4175,7 +4396,7 @@ export default function ProposalForm({
                 </div>
             )}
 
-            <div className="sticky bottom-0 z-40 mx-auto border-t bg-background/95 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
+            <div id="proposal-submit" className="scroll-mt-24 sticky bottom-0 z-40 mx-auto border-t bg-background/95 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
                 <div className="mx-auto flex max-w-5xl justify-end gap-3">
                     {!isDbmOverwrite && (
                         <button
@@ -4201,6 +4422,8 @@ export default function ProposalForm({
                     >
                         {isDbmOverwrite ? "Overwrite Form" : "Submit Proposal"}
                     </button>
+                </div>
+            </div>
                 </div>
             </div>
         </form>

@@ -38,7 +38,7 @@ export default function ProposalClientWrapper({
     const searchType = (searchParams.get("type") as "202" | "203") || "202";
 
     return (
-        <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-6">
+        <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-6">
                 <div>
                     <div className="flex items-center gap-2 text-muted-foreground mb-2">
