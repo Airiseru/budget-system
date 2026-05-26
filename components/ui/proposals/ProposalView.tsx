@@ -149,6 +149,7 @@ interface ProposalViewProps {
     updateAuthStatus: () => Promise<void>;
     deleteFormAction: (id: string) => Promise<void>;
     canVerifyIntegrity?: boolean;
+    embeddedPreview?: boolean;
 }
 
 const EXPENSE_CLASSES = ["PS", "MOOE", "CO", "FINEX"];
@@ -223,6 +224,7 @@ export default function ProposalView({
     updateAuthStatus,
     deleteFormAction,
     canVerifyIntegrity = false,
+    embeddedPreview = false,
 }: ProposalViewProps) {
     const budgetYear = Number(data.proposal_year);
     const forwardYear1 = budgetYear + 1;
@@ -252,12 +254,13 @@ export default function ProposalView({
             : undefined;
 
     return (
-        <div className="m-6 max-w-5xl mx-auto space-y-10 pb-20">
-            {budgetPrepClosedForEntityActions &&
+        <div className={`${embeddedPreview ? "mx-auto max-w-5xl space-y-8 p-4 pb-10" : "m-6 max-w-5xl mx-auto space-y-10 pb-20"}`}>
+            {!embeddedPreview && budgetPrepClosedForEntityActions &&
                 data.auth_status === "draft" && (
                     <BudgetPrepClosedBanner message="The budget preparation phase for this fiscal year is over. You can no longer edit, submit, or sign this form until DBM reopens the cycle for this fiscal year." />
                 )}
             {/* NAVIGATION & ACTIONS */}
+            {!embeddedPreview && (
             <div className="flex justify-between items-center mb-6">
                 <BackButton url={backUrl} label="Back" />
                 <div className="flex flex-row gap-2">
@@ -293,6 +296,7 @@ export default function ProposalView({
                         )}
                 </div>
             </div>
+            )}
 
             {/* HEADER SECTION */}
             <div className="text-center space-y-2 mb-8">
@@ -1285,6 +1289,7 @@ export default function ProposalView({
             )}
 
             {/* SIGN SECTION */}
+            {!embeddedPreview && (
             <SignSection
                 formId={data.id ?? ""}
                 tableName="project_proposals" // Fixed: Ensure this matches your DB table
@@ -1308,9 +1313,10 @@ export default function ProposalView({
                 allowClosedCycleAction={allowClosedCycleActions}
                 approvedRedirectHref={approvedRedirectHref}
             />
+            )}
 
             {/* DANGER ZONE */}
-            {data.auth_status === "draft" && !familyHasApprovedVersion && (
+            {!embeddedPreview && data.auth_status === "draft" && !familyHasApprovedVersion && (
                 <div className="pt-6 border-t mt-12 flex justify-between items-center">
                     <div>
                         <h3 className="text-sm font-bold text-gray-900">

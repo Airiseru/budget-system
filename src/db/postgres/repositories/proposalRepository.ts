@@ -646,7 +646,9 @@ export async function createProjectProposal(
                     project_type: getPapProjectTypeFromProposalType(payload.type),
                     project_status: "proposed",
                     category: payload.type === "202" ? "local" : "foreign",
-                    identifier_code: payload.type === "202" ? "2" : "3",
+                    // Proposal-created PAPs start as unassigned UACS/PREXC records.
+                    // DBM assigns the actual identifier/full code later in the PAP UACS editor.
+                    identifier_code: "0",
                 })
                 .returning("id")
                 .executeTakeFirstOrThrow();

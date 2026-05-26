@@ -4,7 +4,7 @@ import BackButton from '@/components/ui/BackButton'
 import PaginationControls from '@/components/ui/PaginationControls'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { type ReactNode, useState } from 'react'
+import { Fragment, type ReactNode, useState } from 'react'
 import { ChevronRight, FileText, Filter } from 'lucide-react'
 import {
     Select,
@@ -20,6 +20,8 @@ export type EntityFormListRow = {
     href: string
     title: string
     subtitle?: string
+    entityLabel?: string
+    groupLabel?: string
     fiscalYear: number
     status: string | null
     updatedAt: Date | string | null
@@ -43,9 +45,11 @@ type Props = {
     selectedYear?: number
     selectedStatus: string
     selectedType: string
+    selectedEntityId?: string
     selectedSearch: string
     availableYears: number[]
     typeOptions?: FilterOption[]
+    entityOptions?: FilterOption[]
     activeYear?: number
     phaseNotice?: ReactNode
     createActions?: ReactNode
@@ -62,9 +66,11 @@ export default function EntityFormListView({
     selectedYear,
     selectedStatus,
     selectedType,
+    selectedEntityId = '',
     selectedSearch,
     availableYears,
     typeOptions = [],
+    entityOptions = [],
     activeYear,
     phaseNotice,
     createActions,
@@ -74,6 +80,7 @@ export default function EntityFormListView({
     const [year, setYear] = useState(selectedYear?.toString() ?? '')
     const [status, setStatus] = useState(selectedStatus)
     const [type, setType] = useState(selectedType)
+    const [entityId, setEntityId] = useState(selectedEntityId)
     const [search, setSearch] = useState(selectedSearch)
 
     function buildHref(targetPage?: number) {
@@ -81,6 +88,7 @@ export default function EntityFormListView({
         if (!activeYear && year) params.set('year', year)
         if (status) params.set('status', status)
         if (type) params.set('type', type)
+        if (entityId) params.set('entity', entityId)
         if (search.trim()) params.set('search', search.trim())
         if (targetPage && targetPage > 1) params.set('page', String(targetPage))
         const query = params.toString()
@@ -128,7 +136,7 @@ export default function EntityFormListView({
                 </div>
 
                 <form onSubmit={handleFilter} className="flex flex-col gap-4">
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
                         <div className="space-y-1">
                             <label htmlFor="year" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Fiscal Year</label>
                             <Select
@@ -192,6 +200,27 @@ export default function EntityFormListView({
                             </div>
                         ) : null}
 
+                        {entityOptions.length > 0 ? (
+                            <div className="space-y-1">
+                                <label htmlFor="entity" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Entity</label>
+                                <Select value={entityId || 'all'} onValueChange={(value) => setEntityId(value === 'all' ? '' : value ?? '')}>
+                                    <SelectTrigger className="h-[38px] w-full border border-border/50 bg-accent text-secondary-foreground">
+                                        <SelectValue placeholder="All entities">
+                                            {entityOptions.find((option) => option.value === entityId)?.label ?? 'All entities'}
+                                        </SelectValue>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All entities</SelectItem>
+                                        {entityOptions.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        ) : null}
+
                         <div className="space-y-1">
                             <label htmlFor="search" className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Search</label>
                             <input
@@ -208,7 +237,7 @@ export default function EntityFormListView({
                         <button type="submit" className="flex h-[38px] items-center gap-2 rounded-md bg-secondary-foreground px-5 py-2 text-sm font-semibold text-accent transition-colors hover:bg-secondary-foreground/90">
                             <Filter size={16} /> Filter
                         </button>
-                        {selectedYear || selectedStatus || selectedType || selectedSearch ? (
+                        {selectedYear || selectedStatus || selectedType || selectedEntityId || selectedSearch ? (
                             <Link href={basePath} className="flex h-[38px] items-center px-2 text-sm text-muted-foreground underline underline-offset-2 hover:text-secondary-foreground">
                                 Clear
                             </Link>
@@ -241,12 +270,28 @@ export default function EntityFormListView({
                                     </td>
                                 </tr>
                             ) : (
-                                rows.map((row) => (
-                                    <tr key={row.id} className="group transition-colors hover:bg-secondary/20">
+                                rows.map((row, index) => {
+                                    const showGroupSeparator =
+                                        row.groupLabel &&
+                                        row.groupLabel !== rows[index - 1]?.groupLabel
+
+                                    return (
+                                    <Fragment key={row.id}>
+                                    {showGroupSeparator ? (
+                                        <tr className="bg-secondary/20">
+                                            <td colSpan={6} className="px-4 py-2 text-xs font-black uppercase tracking-wider text-secondary-foreground">
+                                                {row.groupLabel}
+                                            </td>
+                                        </tr>
+                                    ) : null}
+                                    <tr className="group transition-colors hover:bg-secondary/20">
                                         <td className="px-4 py-3">
                                             <p className="font-semibold text-secondary-foreground">{row.title}</p>
                                             {row.subtitle ? (
                                                 <p className="mt-0.5 text-sm text-muted-foreground">{row.subtitle}</p>
+                                            ) : null}
+                                            {row.entityLabel ? (
+                                                <p className="mt-0.5 text-sm font-medium text-muted-foreground">{row.entityLabel}</p>
                                             ) : null}
                                             {row.typeLabel ? (
                                                 <p className="mt-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">{row.typeLabel}</p>
@@ -284,7 +329,9 @@ export default function EntityFormListView({
                                             </Link>
                                         </td>
                                     </tr>
-                                ))
+                                    </Fragment>
+                                    )
+                                })
                             )}
                         </tbody>
                     </table>

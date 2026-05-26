@@ -151,14 +151,14 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                                         <div className="rounded-xl bg-muted p-3">
                                             <p className="font-bold text-secondary-foreground">Salary Percentage</p>
                                             <p className="mt-1 text-muted-foreground">Use when the benefit is a percentage of the salary amount.</p>
-                                            <p className="mt-1 font-mono text-xs text-secondary-foreground">salary amount x amount</p>
-                                            <p className="mt-1 text-xs text-muted-foreground">Enter amount as a decimal percentage, e.g. 0.12 for 12%.</p>
+                                            <p className="mt-1 font-mono text-xs text-secondary-foreground">salary x percentage</p>
+                                            <p className="mt-1 text-xs text-muted-foreground">Enter amount as a whole number percentage (e.g. 12%).</p>
                                         </div>
                                         <div className="rounded-xl bg-muted p-3">
                                             <p className="font-bold text-secondary-foreground">Salary Multiplier</p>
                                             <p className="mt-1 text-muted-foreground">Use when the benefit is a multiple of the salary amount.</p>
-                                            <p className="mt-1 font-mono text-xs text-secondary-foreground">salary amount x amount</p>
-                                            <p className="mt-1 text-xs text-muted-foreground">Enter amount as a positive multiplier, e.g. 1 for one salary.</p>
+                                            <p className="mt-1 font-mono text-xs text-secondary-foreground">salary x multiplier</p>
+                                            <p className="mt-1 text-xs text-muted-foreground">Enter amount as a positive multiplier (e.g. 1 for one salary).</p>
                                         </div>
                                     </div>
                                 </section>
@@ -214,7 +214,7 @@ export function NewCompensationRuleForm({ onClose }: { onClose: () => void }) {
                                 min={0}
                                 step={calcType !== 'fixed' ? 0.01 : 1}
                                 defaultValue={state?.values?.rule_value ?? ''}
-                                placeholder={calcType !== 'fixed' ? 'e.g. 10.5' : 'e.g. 2000'}
+                                placeholder={calcType === 'multiplier' ? 'e.g. 10.5' : (calcType === 'percentage' ? 'e.g. 12' : 'e.g. 2000')}
                                 className="border px-3 py-2 rounded bg-background w-full text-sm"
                                 required
                             />

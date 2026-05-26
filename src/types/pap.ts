@@ -24,7 +24,7 @@ export interface PapTable {
     organizational_outcome_code: string | null
     program_code: string | null
     subprogram_code: string | null
-    identifier_code: '1' | '2' | '3'
+    identifier_code: '0' | '1' | '2' | '3'
     project_title_code: string | null
     reserved_code: string | null
     actual_start_date: Date | null

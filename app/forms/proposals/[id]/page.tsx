@@ -18,6 +18,7 @@ import { revalidatePath } from "next/cache";
 import ProposalView from "@/components/ui/proposals/ProposalView";
 import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
 import { canViewFormIntegrity } from "@/src/lib/user-status";
+import EmbeddedPreviewChromeHider from "@/components/ui/EmbeddedPreviewChromeHider";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -39,10 +40,14 @@ async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
 
 export default async function ProposalDetailsPage({
     params,
+    searchParams,
 }: {
     params: Promise<{ id: string }>;
+    searchParams: Promise<{ embed?: string }>;
 }) {
     const { id } = await params
+    const { embed } = await searchParams
+    const embeddedPreview = embed === "1"
     const session = await sessionWithEntity()
     if (!session) redirect("/login")
 
@@ -147,6 +152,23 @@ export default async function ProposalDetailsPage({
     }
 
     return (
+        <>
+        {embeddedPreview ? (
+            <>
+                <style>{`
+                    [data-global-chrome],
+                    nextjs-portal,
+                    [data-nextjs-dev-tools-button],
+                    [data-nextjs-dev-tools-indicator],
+                    [data-nextjs-build-indicator],
+                    [data-nextjs-toast],
+                    [data-nextjs-react-dev-overlay] {
+                        display: none !important;
+                    }
+                `}</style>
+                <EmbeddedPreviewChromeHider />
+            </>
+        ) : null}
         <ProposalView
             data={data}
             session={session}
@@ -166,6 +188,8 @@ export default async function ProposalDetailsPage({
             updateAuthStatus={updateAuthStatus}
             deleteFormAction={deleteFormAction}
             canVerifyIntegrity={canVerifyIntegrity}
+            embeddedPreview={embeddedPreview}
         />
+        </>
     )
 }

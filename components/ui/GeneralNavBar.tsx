@@ -35,7 +35,7 @@ export default function GeneralNavBar() {
     }
 
     return (
-        <nav className="sticky top-0 z-40 border-b border-border bg-background/95 p-4 shadow-sm backdrop-blur sm:px-6 lg:px-8" aria-label="General navigation">
+        <nav data-global-chrome className="sticky top-0 z-40 border-b border-border bg-background/95 p-4 shadow-sm backdrop-blur sm:px-6 lg:px-8" aria-label="General navigation">
             <div className="mx-auto flex w-full flex-col gap-3">
                 <div className="flex items-center justify-between gap-4 md:hidden">
                     <span className="text-sm font-black uppercase tracking-[0.16em] text-secondary-foreground">

@@ -16,6 +16,7 @@ type ProposalsSearchParams = Promise<{
     year?: string
     status?: string
     type?: string
+    entity?: string
     search?: string
 }>
 
@@ -24,6 +25,9 @@ type ProposalSummary = {
     type: '202' | '203'
     proposal_year: number
     priority_rank: number
+    dept_priority_rank: number | null
+    entity_id: string
+    entity_name?: string | null
     auth_status: string | null
     title: string
     total_proposal_currency: string
@@ -57,6 +61,7 @@ export default async function ProposalsPage({
         const selectedYear = params.year ? Number(params.year) : undefined
         const selectedStatus = params.status ?? ''
         const selectedType = params.type ?? ''
+        const selectedEntityId = params.entity ?? ''
         const selectedSearch = params.search ?? ''
         const page = Math.max(Number(params.page) || 1, 1)
         const viewingYear = lockedYear ?? selectedYear
@@ -80,12 +85,52 @@ export default async function ProposalsPage({
             new Set(allYearsRows.map((proposal) => proposal.proposal_year)),
         ).sort((a, b) => b - a)
 
+        const entityOptions = Array.from(
+            new Map(
+                allRows
+                    .filter((proposal) => proposal.entity_id)
+                    .map((proposal) => [
+                        proposal.entity_id,
+                        {
+                            value: proposal.entity_id,
+                            label: proposal.entity_name ?? 'Unknown entity',
+                        },
+                    ]),
+            ).values(),
+        ).sort((a, b) => a.label.localeCompare(b.label))
+
+        const rankValue = (rank: number | null | undefined) => rank ?? Number.MAX_SAFE_INTEGER
+        const sortByProposalContext = (a: ProposalSummary, b: ProposalSummary) => {
+            if (session.user.role === 'department') {
+                return (
+                    rankValue(a.dept_priority_rank) - rankValue(b.dept_priority_rank) ||
+                    (a.entity_name ?? '').localeCompare(b.entity_name ?? '') ||
+                    a.priority_rank - b.priority_rank
+                )
+            }
+
+            if (session.user.role === 'agency') {
+                return (
+                    (a.entity_name ?? '').localeCompare(b.entity_name ?? '') ||
+                    a.priority_rank - b.priority_rank ||
+                    rankValue(a.dept_priority_rank) - rankValue(b.dept_priority_rank)
+                )
+            }
+
+            return (
+                a.priority_rank - b.priority_rank ||
+                rankValue(a.dept_priority_rank) - rankValue(b.dept_priority_rank) ||
+                (a.entity_name ?? '').localeCompare(b.entity_name ?? '')
+            )
+        }
+
         const filteredRows = allRows.filter((proposal) => {
             if (selectedStatus && proposal.auth_status !== selectedStatus) return false
             if (selectedType && proposal.type !== selectedType) return false
+            if (selectedEntityId && proposal.entity_id !== selectedEntityId) return false
             if (selectedSearch && !proposal.title.toLowerCase().includes(selectedSearch.toLowerCase())) return false
             return true
-        })
+        }).sort(sortByProposalContext)
 
         const totalPages = Math.max(Math.ceil(filteredRows.length / PAGE_SIZE), 1)
         const safePage = Math.min(page, totalPages)
@@ -93,7 +138,13 @@ export default async function ProposalsPage({
             id: proposal.id,
             href: `/forms/proposals/${proposal.id}`,
             title: proposal.title,
-            subtitle: `Priority Rank #${proposal.priority_rank}`,
+            subtitle: `Entity Rank #${proposal.priority_rank} • Department Rank ${
+                proposal.dept_priority_rank ? `#${proposal.dept_priority_rank}` : 'Not set'
+            }`,
+            entityLabel: proposal.entity_name ? `Entity: ${proposal.entity_name}` : undefined,
+            groupLabel: session.user.role === 'agency'
+                ? proposal.entity_name ?? 'Unknown entity'
+                : undefined,
             fiscalYear: proposal.proposal_year,
             status: proposal.auth_status ?? 'draft',
             updatedAt: proposal.submission_date,
@@ -105,6 +156,7 @@ export default async function ProposalsPage({
         const canCreate =
             session.user.access_level === 'encode' &&
             activeCycle?.current_phase === 'preparation'
+        const canChangePriorityRanks = canCreate || session.user.role === 'department'
         const shouldShowBudgetPrepBanner =
             session.user.access_level === 'encode' && !canCreate
 
@@ -120,8 +172,10 @@ export default async function ProposalsPage({
                     selectedYear={selectedYear}
                     selectedStatus={selectedStatus}
                     selectedType={selectedType}
+                    selectedEntityId={selectedEntityId}
                     selectedSearch={selectedSearch}
                     availableYears={availableYears}
+                    entityOptions={entityOptions}
                     activeYear={lockedYear}
                     phaseNotice={shouldShowBudgetPrepBanner ? (
                         <span>The phase to create new proposals is closed. Please wait for further announcements from DBM.</span>
@@ -140,13 +194,13 @@ export default async function ProposalsPage({
                             </Link>
                         </>
                     ) : null}
-                    secondaryActions={ canCreate && (
+                    secondaryActions={canChangePriorityRanks ? (
                         <Link href="/forms/proposals/rank">
-                            <Button variant="outline" className={buttonStyles} disabled={!canCreate}>
+                            <Button variant="outline" className={buttonStyles}>
                                 Change Priority Ranks
                             </Button>
                         </Link>
-                    )}
+                    ) : null}
                 />
             </>
         )

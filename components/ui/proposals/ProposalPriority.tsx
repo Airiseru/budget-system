@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
 import Link from "next/link";
-import { ArrowLeft, ArrowRightLeft } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, ExternalLink, FileText } from "lucide-react";
 
 interface ProposalSummary {
     id: string;
@@ -50,6 +50,8 @@ export default function RankManager({
     const [activeScope, setActiveScope] = useState<Scope>("entity");
 
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
+    const [previewProposalId, setPreviewProposalId] = useState<string | null>(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
     const [targetRank, setTargetRank] = useState("");
 
     const [pendingRanks, setPendingRanks] = useState<Record<string, string>>(
@@ -59,11 +61,13 @@ export default function RankManager({
     // Department users can only edit dept priority ranks.
     // Entity scope is read-only for them — they can see all entity rankings
     // across related operating units/agencies but cannot change them.
-    const isReadOnly = isDepartmentUser && activeScope === "entity";
+    const isReadOnly = isDepartmentUser && activeScope === "entity"
 
     useEffect(() => {
         setProposals(initialProposals || []);
         setSelectedIds([]);
+        setPreviewProposalId(null);
+        setPreviewLoading(false);
         setTargetRank("");
         setError(null);
     }, [initialProposals, viewingYear]);
@@ -72,6 +76,8 @@ export default function RankManager({
     const handleScopeChange = (scope: Scope) => {
         setActiveScope(scope);
         setSelectedIds([]);
+        setPreviewProposalId(null);
+        setPreviewLoading(false);
         setTargetRank("");
         setError(null);
     };
@@ -94,6 +100,49 @@ export default function RankManager({
     const selectedProposals = selectedIds
         .map((id) => proposals.find((p) => p.id === id))
         .filter((p): p is ProposalSummary => Boolean(p));
+    const previewProposal = previewProposalId
+        ? proposals.find((proposal) => proposal.id === previewProposalId)
+        : null;
+
+    const getProposalHref = (proposalId: string, embed = false) =>
+        `/forms/proposals/${proposalId}${embed ? "?embed=1" : ""}`;
+
+    const handleOpenProposal = (proposal: ProposalSummary) => {
+        const href = getProposalHref(proposal.id);
+
+        if (window.matchMedia("(max-width: 1023px)").matches) {
+            window.open(href, "_blank", "noopener,noreferrer");
+            return;
+        }
+
+        setPreviewLoading(proposal.id !== previewProposalId);
+        setPreviewProposalId(proposal.id);
+    };
+
+    const getAffectedIds = () => {
+        const affected = new Set(selectedIds);
+        const parsedTargetRank = Number(targetRank);
+
+        if (
+            selectedProposals.length === 1 &&
+            Number.isInteger(parsedTargetRank) &&
+            parsedTargetRank >= 1
+        ) {
+            const [proposal] = selectedProposals;
+            const currentRank = Number(getRank(proposal, activeScope));
+            const minRank = Math.min(currentRank, parsedTargetRank);
+            const maxRank = Math.max(currentRank, parsedTargetRank);
+
+            sortedProposals.forEach((item) => {
+                const rank = Number(getRank(item, activeScope));
+                if (rank >= minRank && rank <= maxRank) {
+                    affected.add(item.id);
+                }
+            });
+        }
+
+        return affected;
+    };
 
     const refreshProposals = async () => {
         const params = new URLSearchParams();
@@ -155,8 +204,9 @@ export default function RankManager({
             });
 
             if (res.ok) {
-                setSelectedIds([]);
+                setSelectedIds([propA.id, propB.id]);
                 await refreshProposals();
+                window.setTimeout(() => setSelectedIds([]), 1200);
             } else {
                 const payload = await res.json();
                 setError(payload.error || "Failed to swap ranks.");
@@ -200,9 +250,11 @@ export default function RankManager({
             });
 
             if (res.ok) {
+                const affectedBeforeRefresh = getAffectedIds();
                 await refreshProposals();
-                setSelectedIds([]);
+                setSelectedIds([...affectedBeforeRefresh]);
                 setTargetRank("");
+                window.setTimeout(() => setSelectedIds([]), 1200);
             } else {
                 const payload = await res.json();
                 setError(payload.error || "Failed to move proposal rank.");
@@ -292,8 +344,9 @@ export default function RankManager({
             });
 
             if (res.ok) {
+                setSelectedIds([propA.id, propB.id]);
                 await refreshProposals();
-                setSelectedIds([]);
+                window.setTimeout(() => setSelectedIds([]), 1200);
             } else {
                 const payload = await res.json();
                 setError(payload.error || "Failed to swap ranks.");
@@ -305,6 +358,7 @@ export default function RankManager({
             setLoading(false);
         }
     };
+    const affectedIds = getAffectedIds();
 
     return (
         <div className="space-y-4 p-4">
@@ -348,7 +402,7 @@ export default function RankManager({
 
             {/* Dept user viewing entity scope: show read-only notice */}
             {isReadOnly && (
-                <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+                <div className="rounded-md border border-border bg-primary-foreground/15 px-3 py-2 text-sm text-secondary-foreground">
                     Entity rankings are read-only. Switch to{" "}
                     <button
                         className="underline font-medium"
@@ -394,96 +448,98 @@ export default function RankManager({
                 </div>
             )}
 
-            {/* Swap / Move controls — hidden entirely when read-only */}
-            {!isReadOnly && (
-                <div className="rounded-lg border bg-card p-4 shadow-sm">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <div className="text-sm font-semibold">
-                                Select two draft proposals to swap ranks
+            <div className={`grid transition-all duration-300 ease-out ${previewProposal ? "gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)]" : "grid-cols-1 gap-0"}`}>
+                <div className="min-w-0 space-y-4">
+                    {/* Swap / Move controls — hidden entirely when read-only */}
+                    {!isReadOnly && (
+                        <div className="sticky top-24 z-10 rounded-lg border bg-card p-4 shadow-sm">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                <div>
+                                    <div className="text-sm font-semibold">
+                                        Select two draft proposals to swap ranks
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        {selectedProposals.length === 0
+                                            ? "No proposal selected."
+                                            : selectedProposals
+                                                .map(
+                                                    (p) =>
+                                                        `#${getRank(p, activeScope)} ${p.title}`,
+                                                )
+                                                .join(" ↔ ")}
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        disabled={loading || selectedIds.length === 0}
+                                        onClick={() => {
+                                            setSelectedIds([]);
+                                            setTargetRank("");
+                                            setError(null);
+                                        }}
+                                    >
+                                        Clear
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        disabled={
+                                            loading || selectedProposals.length !== 2
+                                        }
+                                        onClick={handleSwapSelected}
+                                        className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
+                                    >
+                                        <ArrowRightLeft size={16} />
+                                        {loading
+                                            ? "Swapping..."
+                                            : "Swap Selected Ranks"}
+                                    </Button>
+                                </div>
                             </div>
-                            <div className="text-xs text-muted-foreground">
-                                {selectedProposals.length === 0
-                                    ? "No proposal selected."
-                                    : selectedProposals
-                                          .map(
-                                              (p) =>
-                                                  `#${getRank(p, activeScope)} ${p.title}`,
-                                          )
-                                          .join(" ↔ ")}
+                            <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+                                <div>
+                                    <label
+                                        htmlFor="target-rank"
+                                        className="text-sm font-semibold"
+                                    >
+                                        Bring selected proposal to rank
+                                    </label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Select one draft proposal, enter a rank, and the
+                                        draft proposals in between shift automatically.
+                                    </p>
+                                </div>
+                                <input
+                                    id="target-rank"
+                                    type="number"
+                                    min={1}
+                                    max={sortedProposals.length}
+                                    value={targetRank}
+                                    onChange={(e) => setTargetRank(e.target.value)}
+                                    placeholder="Rank"
+                                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm md:w-32"
+                                    disabled={loading}
+                                />
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    disabled={
+                                        loading ||
+                                        selectedProposals.length !== 1 ||
+                                        targetRank.trim() === ""
+                                    }
+                                    className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
+                                    onClick={handleMoveSelectedToRank}
+                                >
+                                    Move to Rank
+                                </Button>
                             </div>
                         </div>
-                        <div className="flex gap-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                disabled={loading || selectedIds.length === 0}
-                                onClick={() => {
-                                    setSelectedIds([]);
-                                    setTargetRank("");
-                                    setError(null);
-                                }}
-                            >
-                                Clear
-                            </Button>
-                            <Button
-                                type="button"
-                                disabled={
-                                    loading || selectedProposals.length !== 2
-                                }
-                                onClick={handleSwapSelected}
-                                className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
-                            >
-                                <ArrowRightLeft size={16} />
-                                {loading
-                                    ? "Swapping..."
-                                    : "Swap Selected Ranks"}
-                            </Button>
-                        </div>
-                    </div>
-                    <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[1fr_auto_auto] md:items-end">
-                        <div>
-                            <label
-                                htmlFor="target-rank"
-                                className="text-sm font-semibold"
-                            >
-                                Bring selected proposal to rank
-                            </label>
-                            <p className="text-xs text-muted-foreground">
-                                Select one draft proposal, enter a rank, and the
-                                draft proposals in between shift automatically.
-                            </p>
-                        </div>
-                        <input
-                            id="target-rank"
-                            type="number"
-                            min={1}
-                            max={sortedProposals.length}
-                            value={targetRank}
-                            onChange={(e) => setTargetRank(e.target.value)}
-                            placeholder="Rank"
-                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm md:w-32"
-                            disabled={loading}
-                        />
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            disabled={
-                                loading ||
-                                selectedProposals.length !== 1 ||
-                                targetRank.trim() === ""
-                            }
-                            className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
-                            onClick={handleMoveSelectedToRank}
-                        >
-                            Move to Rank
-                        </Button>
-                    </div>
-                </div>
-            )}
+                    )}
 
-            {/* Table */}
-            <div className="border rounded-lg overflow-hidden">
+                    {/* Table */}
+                    <div className="border rounded-lg overflow-hidden">
                 <table className="w-full text-sm">
                     <thead className="bg-slate-50 border-b">
                         <tr>
@@ -517,12 +573,25 @@ export default function RankManager({
                                 pendingRanks[p.id] ?? String(rank);
                             const isDraft = p.auth_status === "draft";
                             const isSelected = selectedIds.includes(p.id);
+                            const isAffected = affectedIds.has(p.id);
+                            const isPreviewed = previewProposalId === p.id;
 
                             return (
                                 <tr
                                     key={p.id}
-                                    className={`border-b last:border-0 hover:bg-slate-50 transition-colors ${
-                                        isSelected ? "bg-primary/10" : ""
+                                    onClick={(event) => {
+                                        const target = event.target as HTMLElement;
+                                        if (target.closest("button,input,a")) return;
+                                        handleOpenProposal(p);
+                                    }}
+                                    className={`cursor-pointer border-b transition-colors last:border-0 ${
+                                        isSelected
+                                            ? "bg-primary-foreground text-white ring-2 ring-inset ring-primary-foreground/70 hover:bg-primary-foreground/90"
+                                            : isAffected
+                                                ? "bg-amber-50 hover:bg-amber-100"
+                                                : isPreviewed
+                                                    ? "bg-blue-50 hover:bg-blue-100"
+                                                    : "hover:bg-muted/50"
                                     } ${!isDraft ? "opacity-70" : ""}`}
                                 >
                                     {/* Select button — hidden when read-only */}
@@ -562,7 +631,7 @@ export default function RankManager({
                                                 max={sortedProposals.length}
                                                 value={pendingVal}
                                                 disabled={loading || !isDraft}
-                                                className="w-20 text-center font-bold text-blue-600"
+                                                className={`w-20 text-center font-bold ${isSelected ? "border-white/50 bg-white text-primary-foreground" : "text-blue-600"}`}
                                                 onChange={(e) =>
                                                     handleRankInputChange(
                                                         p.id,
@@ -591,17 +660,25 @@ export default function RankManager({
                                         )}
 
                                     <td className="p-3">
-                                        <div className="font-medium">
+                                        <button
+                                            type="button"
+                                            onClick={() => handleOpenProposal(p)}
+                                            className={`text-left font-medium hover:underline ${isSelected ? "text-white" : "text-secondary-foreground"}`}
+                                        >
                                             {p.title}
+                                        </button>
+                                        <div className={`mt-1 flex flex-wrap items-center gap-2 text-xs ${isSelected ? "text-white/80" : "text-muted-foreground"}`}>
+                                            <span>Click to preview</span>
+                                            <ExternalLink className="h-3 w-3 lg:hidden" />
                                         </div>
                                         {!isDraft && (
-                                            <div className="text-xs text-muted-foreground">
+                                            <div className={`text-xs ${isSelected ? "text-white/80" : "text-muted-foreground"}`}>
                                                 Submitted ranks are locked.
                                             </div>
                                         )}
                                     </td>
 
-                                    <td className="p-3 capitalize text-muted-foreground">
+                                    <td className={`p-3 capitalize ${isSelected ? "text-white/80" : "text-muted-foreground"}`}>
                                         {p.auth_status?.replace(/_/g, " ") ??
                                             "Unknown"}
                                     </td>
@@ -612,6 +689,7 @@ export default function RankManager({
                                             <Button
                                                 size="sm"
                                                 variant="outline"
+                                                className={isSelected ? "border-white/70 bg-white/10 text-white hover:bg-white/20 hover:text-white" : ""}
                                                 disabled={
                                                     i === 0 ||
                                                     loading ||
@@ -628,6 +706,7 @@ export default function RankManager({
                                             <Button
                                                 size="sm"
                                                 variant="outline"
+                                                className={isSelected ? "border-white/70 bg-white/10 text-white hover:bg-white/20 hover:text-white" : ""}
                                                 disabled={
                                                     i ===
                                                         sortedProposals.length -
@@ -669,6 +748,71 @@ export default function RankManager({
                         )}
                     </tbody>
                 </table>
+                    </div>
+                </div>
+
+                <aside
+                    className={`hidden min-w-0 overflow-hidden transition-all duration-300 ease-out lg:block ${previewProposal ? "opacity-100" : "pointer-events-none opacity-0"}`}
+                    aria-label="Proposal preview"
+                >
+                    {previewProposal ? (
+                        <div className="sticky top-24 h-[calc(100vh-7rem)] overflow-hidden rounded-lg border bg-background shadow-sm">
+                            <div className="flex items-start justify-between gap-3 border-b bg-muted/40 px-4 py-3">
+                                <div>
+                                    <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                                        Proposal Preview
+                                    </p>
+                                    <h3 className="line-clamp-2 text-sm font-bold text-secondary-foreground">
+                                        {previewProposal.title}
+                                    </h3>
+                                </div>
+                                <div className="flex shrink-0 gap-2">
+                                    <Link
+                                        href={getProposalHref(previewProposal.id)}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex h-9 items-center gap-1 rounded-md border border-border px-2 text-xs font-semibold transition hover:bg-muted"
+                                    >
+                                        Open
+                                        <ExternalLink className="h-3 w-3" />
+                                    </Link>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            setPreviewProposalId(null);
+                                            setPreviewLoading(false);
+                                        }}
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </div>
+                            <div className="relative h-full">
+                                <LoadingOverlay
+                                    show={previewLoading}
+                                    label="Loading proposal preview..."
+                                    fullScreen={false}
+                                />
+                                <iframe
+                                    key={previewProposal.id}
+                                    src={getProposalHref(previewProposal.id, true)}
+                                    title={`Preview of ${previewProposal.title}`}
+                                    className="h-full w-full bg-background p-4 pb-12"
+                                    onLoad={() => setPreviewLoading(false)}
+                                />
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="sticky top-24 flex h-[calc(100vh-7rem)] items-center justify-center rounded-lg border border-dashed text-muted-foreground">
+                            <div className="text-center">
+                                <FileText className="mx-auto h-8 w-8 opacity-60" />
+                                <p className="mt-2 text-sm">Select a proposal to preview it.</p>
+                            </div>
+                        </div>
+                    )}
+                </aside>
             </div>
 
             {activeScope === "dept" && (

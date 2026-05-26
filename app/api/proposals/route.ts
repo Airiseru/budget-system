@@ -10,7 +10,7 @@ import {
 import { sessionWithEntity } from "@/src/actions/auth";
 
 const repo = createProposalRepository(process.env.DATABASE_TYPE || "postgres");
-type PgError = Error & { code?: string; detail?: string };
+type PgError = Error & { code?: string; constraint?: string; detail?: string };
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +84,21 @@ export async function POST(req: Request) {
         const pgError = error as PgError;
 
         // If it's a unique constraint violation, send a specific response
+        if (
+            pgError.code === "23505" &&
+            pgError.constraint === "idx_paps_unique_assigned_full_prexc_uacs_code"
+        ) {
+            return NextResponse.json(
+                {
+                    code: "23505",
+                    error: "Another PAP already uses this full PREXC/UACS code.",
+                    message: "Duplicate PAP UACS code detected.",
+                    detail: pgError.detail,
+                },
+                { status: 409 },
+            );
+        }
+
         if (
             pgError.code === "23505" ||
             (error instanceof Error && error.message === "unique_entity_rank")

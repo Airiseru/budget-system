@@ -27,7 +27,7 @@ export default function FloatingUserInfo({ name, position, entity }: FloatingUse
     }, [open])
 
     return (
-        <div ref={containerRef} className="fixed bottom-6 right-6 z-40 flex flex-col items-end">
+        <div data-global-chrome ref={containerRef} className="fixed bottom-6 right-6 z-40 flex flex-col items-end">
             {open && (
                 <section
                     className="mb-3 w-[min(calc(100vw-3rem),22rem)] rounded-3xl border border-border bg-background p-5 drop-shadow-primary-foreground/70 drop-shadow-md"
