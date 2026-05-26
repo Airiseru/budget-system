@@ -40,6 +40,7 @@ type PapOption = {
     entity_id: string | null
     entity_name: string | null
     project_status: string
+    full_pap_code?: string | null
 }
 
 type ItemOption = {
@@ -200,7 +201,15 @@ export function TierOneAllocationManager({
     const operatingUnits = entities
         .filter((entity) => entity.entity_type === 'operating_unit')
         .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
-    const availablePaps = paps.filter((pap) => pap.entity_id == null || pap.entity_id === entityId)
+    const sortPapsByFullCode = (papList: PapOption[]) =>
+        [...papList].sort((a, b) => {
+            const codeComparison = (a.full_pap_code || '').localeCompare(b.full_pap_code || '')
+            return codeComparison || a.title.localeCompare(b.title)
+        })
+
+    const availablePaps = sortPapsByFullCode(
+        paps.filter((pap) => pap.entity_id == null || pap.entity_id === entityId)
+    )
 
     const availableItems = items.filter((item) => {
         if (item.scope === 'global') return true
@@ -214,7 +223,7 @@ export function TierOneAllocationManager({
     const [selectedFilterPapCode, setSelectedFilterPapCode] = useState(selectedPapCode || 'all')
     const [filtersOpen, setFiltersOpen] = useState(true)
     const readOnlyMode = mode === 'create' && isViewingOnly
-    const sortedPapFilters = [...paps].sort((a, b) => a.title.localeCompare(b.title))
+    const sortedPapFilters = sortPapsByFullCode(paps)
 
     const entityOptions = buildHierarchicalEntityOptions(departments, agencies, operatingUnits)
 
@@ -277,13 +286,13 @@ export function TierOneAllocationManager({
         { value: 'all', label: 'All PAPs' },
         ...filteredPapOptions.map((pap) => ({
             value: pap.id,
-            label: pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`,
+            label: `${pap.full_pap_code || 'Unassigned'} • ${pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`}`,
         })),
     ]
 
     const availablePapOptions: SearchableComboboxOption[] = availablePaps.map((pap) => ({
         value: pap.id,
-        label: pap.entity_id == null ? `${pap.title} (All entities)` : pap.title,
+        label: `${pap.full_pap_code || 'Unassigned'} • ${pap.entity_id == null ? `${pap.title} (All entities)` : pap.title}`,
     }))
 
     const availableItemOptions: SearchableComboboxOption[] = availableItems.map((item) => ({

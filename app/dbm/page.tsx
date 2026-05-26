@@ -1,6 +1,8 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { sessionDetails } from "@/src/actions/auth"
+import DashboardHeader from "@/components/ui/DashboardHeader"
+import FloatingUserInfo from "@/components/ui/FloatingUserInfo"
+import { sessionWithEntity } from "@/src/actions/auth"
 import { createBudgetSettingsRepository, createFormRepository } from "@/src/db/factory"
 import { BUDGET_PHASE_LABELS, FORM_NAMES, STATUS_LABELS } from "@/src/lib/constants"
 import { isActiveUser, isDbmUser, isUnverifiedUser } from "@/src/lib/user-status"
@@ -9,61 +11,102 @@ const BudgetSettingsRepository = createBudgetSettingsRepository(process.env.DATA
 const FormRepository = createFormRepository(process.env.DATABASE_TYPE || "postgres")
 const APPROVAL_PREVIEW_LIMIT = 8
 
-const moduleLinks = [
-    {
-        href: "/dbm/forms",
-        title: "View All Forms",
-        description: "Review submitted budget forms and version histories.",
-    },
-    {
-        href: "/dbm/proposals",
-        title: "Review Project Proposals",
-        description: "Review and evaluate new and expanded project proposals.",
-    },
-    {
-        href: "/dbm/tier-one",
-        title: "Tier One Allocations",
-        description: "Create and update Tier One allocations.",
-    },
-    {
+const moduleLinksByKey = {
+    allocations: {
         href: "/dbm/allocations",
         title: "NEP and GAA Dashboard",
         description: "Manage DBM recommended, NEP, and GAA amounts.",
     },
-    {
-        href: "/dbm/paps",
-        title: "Manage PAPs",
-        description: "Maintain PAP details and assign UACS segments.",
+    forms: {
+        href: "/dbm/forms",
+        title: "View All Forms",
+        description: "Review submitted budget forms and version histories.",
     },
-    {
-        href: "/dbm/items",
-        title: "Manage Line Items",
-        description: "Create, update, and inactivate item catalog entries.",
+    homepageContent: {
+        href: "/dbm/homepage-content",
+        title: "Homepage Content",
+        description: "Draft, edit, publish, and archive FAQs and announcements.",
     },
-    {
+    entities: {
         href: "/dbm/entities",
         title: "Manage Entities",
         description: "Update departments, agencies, and operating units.",
     },
-    {
+    entityRequests: {
         href: "/dbm/entity-requests",
         title: "Entity Requests",
         description: "Review requested entity additions and changes.",
     },
-    {
-        href: "/dbm/uacs",
-        title: "Manage UACS Codes",
-        description: "Maintain funding, object, and other relevant UACS codes.",
+    budgetCycles: {
+        href: "/dbm/settings/cycles",
+        title: "Budget Cycles",
+        description: "Start cycles and advance the current phase with DBM approval.",
     },
-    {
+    salary: {
         href: "/dbm/salary",
         title: "Salary Schedules and Compensations",
         description: "Manage salary schedules and compensation data.",
     },
+    uacs: {
+        href: "/dbm/uacs",
+        title: "Manage UACS Codes",
+        description: "Maintain funding, object, and other relevant UACS codes.",
+    },
+    items: {
+        href: "/dbm/items",
+        title: "Manage Line Items",
+        description: "Create, update, and inactivate item catalog entries.",
+    },
+    paps: {
+        href: "/dbm/paps",
+        title: "Manage PAPs",
+        description: "Maintain PAP details and assign UACS segments.",
+    },
+    tierOne: {
+        href: "/dbm/tier-one",
+        title: "Tier One Allocations",
+        description: "Create and update Tier One allocations.",
+    },
+    proposals: {
+        href: "/dbm/proposals",
+        title: "Review Project Proposals",
+        description: "Review and evaluate new and expanded project proposals.",
+    },
+} as const
+
+const moduleGroups = [
     {
-        href: "/dbm/homepage-content",
-        title: "Homepage Content",
-        description: "Draft, edit, publish, and archive FAQs and announcements.",
+        title: "General",
+        modules: [
+            moduleLinksByKey.homepageContent,
+            moduleLinksByKey.forms,
+            moduleLinksByKey.allocations,
+        ],
+    },
+    {
+        title: "Authorization",
+        modules: [
+            moduleLinksByKey.entities,
+            moduleLinksByKey.entityRequests,
+        ],
+    },
+    {
+        title: "Budget Set Up",
+        modules: [
+            moduleLinksByKey.budgetCycles,
+            moduleLinksByKey.salary,
+            moduleLinksByKey.uacs,
+            moduleLinksByKey.items,
+            moduleLinksByKey.paps,
+        ],
+        approverOnlyModules: [moduleLinksByKey.budgetCycles],
+    },
+    {
+        title: "Budget Preparation",
+        modules: [
+            moduleLinksByKey.tierOne,
+            moduleLinksByKey.proposals,
+        ],
     },
 ]
 
@@ -78,7 +121,7 @@ function formatDate(value: Date | string) {
 }
 
 export default async function HomePage() {
-    const session = await sessionDetails()
+    const session = await sessionWithEntity()
 
     if (!session) {
         return redirect("/login")
@@ -104,41 +147,27 @@ export default async function HomePage() {
     ])
     const pendingForms = pendingFormsResult.forms
     const pendingCount = pendingFormsResult.totalCount
-    const visibleModuleLinks = isApprover
-        ? [
-            ...moduleLinks,
-            {
-                href: "/dbm/settings/cycles",
-                title: "Budget Cycles",
-                description: "Start cycles and advance the current phase with DBM approval.",
-            },
-        ]
-        : moduleLinks
+    const userEntityLabel = session.user_entity.entity_full_name
+        ?? session.user_entity.entity_name
+        ?? "No entity assigned"
+    const visibleModuleGroups = moduleGroups
+        .map((group) => ({
+            ...group,
+            modules: group.modules.filter((module) => (
+                isApprover || !(group.approverOnlyModules ?? []).some((approverOnly) => approverOnly.href === module.href)
+            )),
+        }))
+        .filter((group) => group.modules.length > 0)
 
     return (
         <main className="min-h-screen bg-background">
-            <div className="mx-auto flex w-full max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
-                <header className="rounded-3xl border border-border bg-accent p-6 shadow-sm sm:p-8">
-                    <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
-                        <div className="max-w-3xl">
-                            <p className="text-sm font-bold uppercase tracking-[0.2em] text-muted-foreground">
-                                Department of Budget and Management
-                            </p>
-                            <h1 className="mt-3 text-3xl font-black tracking-tight text-secondary-foreground sm:text-4xl">
-                                DBM Workspace
-                            </h1>
-                            <p className="mt-3 text-base leading-7 text-muted-foreground">
-                                Monitor the active budget phase, jump to DBM modules, and review the latest forms waiting for action.
-                            </p>
-                        </div>
-                        <Link
-                            href="/home"
-                            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-border bg-background px-4 py-2 text-sm font-bold text-secondary-foreground shadow-sm transition hover:bg-secondary focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                        >
-                            Go to Home
-                        </Link>
-                    </div>
-                </header>
+            <div className="mx-auto flex w-full flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+                <DashboardHeader
+                    eyebrow="Department of Budget and Management"
+                    title="DBM Workspace"
+                    description="Monitor the active budget phase, jump to DBM modules, and review the latest forms waiting for action."
+                    actions={[{ href: "/home", label: "Go to Home" }]}
+                />
 
                 <section aria-labelledby="dbm-overview-heading" className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
                     <h2 id="dbm-overview-heading" className="sr-only">
@@ -241,7 +270,7 @@ export default async function HomePage() {
                     </article>
                 </section>
 
-                <section aria-labelledby="dbm-modules-heading" className="space-y-4">
+                <section aria-labelledby="dbm-modules-heading" className="space-y-4 rounded-3xl border border-border p-6">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                         <div>
                             <p className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
@@ -252,24 +281,36 @@ export default async function HomePage() {
                             </h2>
                         </div>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                        {visibleModuleLinks.map((module) => (
-                            <Link
-                                key={module.href}
-                                href={module.href}
-                                className="group rounded-2xl border border-border bg-background p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-secondary-foreground/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                            >
-                                <span className="text-lg font-black text-secondary-foreground group-hover:underline">
-                                    {module.title}
-                                </span>
-                                <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                                    {module.description}
-                                </p>
-                            </Link>
+                    <div className="space-y-6">
+                        {visibleModuleGroups.map((group) => (
+                            <section key={group.title} className="space-y-3">
+                                <h3 className="text-lg font-black text-secondary-foreground">{group.title}</h3>
+                                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                                    {group.modules.map((module) => (
+                                        <Link
+                                            key={module.href}
+                                            href={module.href}
+                                            className="group rounded-2xl border border-border bg-background p-5 shadow-sm transition hover:-translate-y-0.5 hover:border-secondary-foreground/40 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                        >
+                                            <span className="text-lg font-black text-secondary-foreground group-hover:underline">
+                                                {module.title}
+                                            </span>
+                                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                                                {module.description}
+                                            </p>
+                                        </Link>
+                                    ))}
+                                </div>
+                            </section>
                         ))}
                     </div>
                 </section>
             </div>
+            <FloatingUserInfo
+                name={session.user.name}
+                position={session.user.position || "No position set"}
+                entity={userEntityLabel}
+            />
         </main>
     )
 }

@@ -15,6 +15,7 @@ export type PapListFilters = {
     entity_id?: string
     entity_ids?: string[]
     category?: 'local' | 'foreign'
+    project_status?: PAP_PROJECT_STATUS_TYPES
     search?: string
     limit?: number
     offset?: number
@@ -48,6 +49,7 @@ export type PapOption = {
     entity_id: string | null
     entity_name: string | null
     project_status: PAP_PROJECT_STATUS_TYPES
+    full_pap_code: string
 }
 
 type PapOptionFilters = {
@@ -214,6 +216,10 @@ export async function getPaginatedPaps(filters: PapListFilters = {}) {
         query = query.where('paps.category', '=', filters.category)
     }
 
+    if (filters.project_status) {
+        query = query.where('paps.project_status', '=', filters.project_status)
+    }
+
     if (filters.search?.trim()) {
         const search = `%${filters.search.trim()}%`
 
@@ -306,6 +312,15 @@ export async function getPapOptions(filters: PapOptionFilters = {}): Promise<Pap
             'paps.entity_id as entity_id',
             'paps.project_status as project_status',
             sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+            sql<string>`CONCAT(
+                COALESCE(paps.cost_structure_code, ''),
+                COALESCE(paps.organizational_outcome_code, ''),
+                COALESCE(paps.program_code, ''),
+                COALESCE(paps.subprogram_code, ''),
+                COALESCE(paps.identifier_code, ''),
+                COALESCE(paps.project_title_code, ''),
+                COALESCE(paps.reserved_code, '')
+            )`.as('full_pap_code'),
         ])
 
     if (filters.projectStatuses?.length) {
@@ -334,7 +349,10 @@ export async function getPapOptions(filters: PapOptionFilters = {}): Promise<Pap
         `)
     }
 
-    return await query.orderBy('paps.title', 'asc').execute()
+    return await query
+        .orderBy('full_pap_code', 'asc')
+        .orderBy('paps.title', 'asc')
+        .execute()
 }
 
 export async function getPapOptionsForEntityHierarchy(
@@ -374,6 +392,15 @@ export async function getPapOptionsForEntityHierarchy(
             'paps.entity_id as entity_id',
             'paps.project_status as project_status',
             sql<string | null>`COALESCE(departments.name, agencies.name, operating_units.name)`.as('entity_name'),
+            sql<string>`CONCAT(
+                COALESCE(paps.cost_structure_code, ''),
+                COALESCE(paps.organizational_outcome_code, ''),
+                COALESCE(paps.program_code, ''),
+                COALESCE(paps.subprogram_code, ''),
+                COALESCE(paps.identifier_code, ''),
+                COALESCE(paps.project_title_code, ''),
+                COALESCE(paps.reserved_code, '')
+            )`.as('full_pap_code'),
         ])
 
     if (accessibleEntityIds.length > 0) {
@@ -394,6 +421,7 @@ export async function getPapOptionsForEntityHierarchy(
     }
 
     return await query
+        .orderBy('full_pap_code', 'asc')
         .orderBy('paps.title', 'asc')
         .execute()
 }

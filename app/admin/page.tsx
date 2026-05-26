@@ -1,7 +1,9 @@
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { LogoutButton } from "@/components/ui/LogoutButton"
 import { Badge } from "@/components/ui/badge"
+import DashboardHeader from "@/components/ui/DashboardHeader"
+import FloatingUserInfo from "@/components/ui/FloatingUserInfo"
+import { sessionWithEntity } from "@/src/actions/auth"
 import { getPendingUsers } from "@/src/actions/admin"
 import { loadAdminEntities } from "@/src/actions/entities"
 import { ENTITY_TYPE_LABELS } from "@/src/lib/constants"
@@ -27,7 +29,7 @@ const navigation = [
     {
         href: "/home",
         title: "Home",
-        description: "Return to your main workspace.",
+        description: "Return to your main workspace as a user.",
     },
 ]
 
@@ -132,10 +134,14 @@ function buildEntityPreviewRows(result: Awaited<ReturnType<typeof loadAdminEntit
 }
 
 export default async function AdminPage() {
-    const [pendingUsers, entitiesResult] = await Promise.all([
+    const [session, pendingUsers, entitiesResult] = await Promise.all([
+        sessionWithEntity(),
         getPendingUsers(),
         loadAdminEntities(),
     ])
+    const userEntityLabel = session?.user_entity.entity_full_name
+        ?? session?.user_entity.entity_name
+        ?? "No entity assigned"
 
     const latestApprovals = [...pendingUsers]
         .sort((a, b) => new Date(b.user_created_at).getTime() - new Date(a.user_created_at).getTime())
@@ -144,36 +150,16 @@ export default async function AdminPage() {
 
     return (
         <main className="min-h-screen bg-background">
-            <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
-                <header className="rounded-3xl border border-border bg-accent p-6 shadow-sm">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                        <div>
-                            <p className="text-sm font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                                Administration
-                            </p>
-                            <h1 className="mt-2 text-3xl font-black tracking-tight text-secondary-foreground sm:text-4xl">
-                                Admin Dashboard
-                            </h1>
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                                Manage user access and inspect the entity hierarchy within your administrative scope.
-                            </p>
-                        </div>
-                        <LogoutButton />
-                    </div>
-
-                    <nav aria-label="Admin modules" className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        {navigation.map((item) => (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className="rounded-2xl border border-border bg-background p-4 transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                            >
-                                <p className="font-black text-secondary-foreground">{item.title}</p>
-                                <p className="mt-1 text-sm leading-5 text-muted-foreground">{item.description}</p>
-                            </Link>
-                        ))}
-                    </nav>
-                </header>
+            <div className="mx-auto flex w-full flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+                <DashboardHeader
+                    eyebrow="Administration"
+                    title="Admin Dashboard"
+                    description="Manage user access and inspect the entity hierarchy within your administrative scope."
+                    navigation={navigation}
+                    navLabel="Admin modules"
+                    showLogout
+                    detailedNavigation
+                />
 
                 <section className="grid gap-6 lg:grid-cols-2">
                     <article className="rounded-3xl border border-border bg-background shadow-sm">
@@ -260,6 +246,13 @@ export default async function AdminPage() {
                     </article>
                 </section>
             </div>
+            {session && (
+                <FloatingUserInfo
+                    name={session.user.name}
+                    position={session.user.position || "No position set"}
+                    entity={userEntityLabel}
+                />
+            )}
         </main>
     )
 }

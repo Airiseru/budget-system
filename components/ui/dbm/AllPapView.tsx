@@ -14,7 +14,11 @@ import {
 } from '@/components/ui/select'
 import { ChevronRight, FileText, Filter, Plus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { PAP_PROJECT_TYPE_LABELS } from '@/src/lib/constants'
+import {
+    PAP_PROJECT_STATUS_LABELS,
+    PAP_PROJECT_TYPE_LABELS,
+    type PAP_PROJECT_STATUS_TYPES,
+} from '@/src/lib/constants'
 
 type PapListItem = {
     id: string
@@ -25,6 +29,7 @@ type PapListItem = {
     department_name?: string | null
     entity_abbr: string | null
     entity_type: string | null
+    project_status: PAP_PROJECT_STATUS_TYPES
     updated_at: string | Date
     full_pap_code?: string | null
 }
@@ -47,7 +52,14 @@ type AllPapViewProps = {
     page: number
     totalPages: number
     selectedEntityId: string
+    selectedStatus: PAP_PROJECT_STATUS_TYPES
 }
+
+const STATUS_FILTER_OPTIONS: { value: PAP_PROJECT_STATUS_TYPES; label: string }[] = [
+    { value: 'approved', label: 'Approved' },
+    { value: 'proposed', label: 'Proposed' },
+    { value: 'rejected', label: 'Rejected' },
+]
 
 export default function AllPapView({
     paps,
@@ -55,21 +67,25 @@ export default function AllPapView({
     page,
     totalPages,
     selectedEntityId,
+    selectedStatus,
 }: AllPapViewProps) {
     const router = useRouter()
     const [entityId, setEntityId] = useState(selectedEntityId || 'all')
+    const [status, setStatus] = useState<PAP_PROJECT_STATUS_TYPES>(selectedStatus)
 
     const handleFilter = (event: React.SyntheticEvent<HTMLFormElement>) => {
         event.preventDefault()
 
         const params = new URLSearchParams()
         if (entityId && entityId !== 'all') params.set('entityId', entityId)
+        if (status !== 'approved') params.set('status', status)
         router.push(`/dbm/paps?${params.toString()}`)
     }
 
     const getPaginationLink = (targetPage: number) => {
         const params = new URLSearchParams()
         if (selectedEntityId) params.set('entityId', selectedEntityId)
+        if (selectedStatus !== 'approved') params.set('status', selectedStatus)
         params.set('page', targetPage.toString())
         return `/dbm/paps?${params.toString()}`
     }
@@ -114,11 +130,32 @@ export default function AllPapView({
                         </Select>
                     </div>
 
+                    <div className="space-y-1 w-full sm:w-[220px]">
+                        <label className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Project Status</label>
+                        <Select
+                            value={status}
+                            onValueChange={(value) => setStatus((value ?? 'approved') as PAP_PROJECT_STATUS_TYPES)}
+                        >
+                            <SelectTrigger className="w-full border border-border/50 bg-accent text-secondary-foreground mt-1 mb-0">
+                                <SelectValue placeholder="Filter by status">
+                                    {PAP_PROJECT_STATUS_LABELS[status]}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {STATUS_FILTER_OPTIONS.map((option) => (
+                                    <SelectItem key={option.value} value={option.value}>
+                                        {option.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
                     <button type="submit" className="flex items-center gap-2 bg-secondary-foreground text-accent px-5 py-2 rounded-md text-sm font-semibold hover:bg-secondary-foreground/90 transition-colors h-[38px]">
                         <Filter size={16} /> Filter
                     </button>
 
-                    {selectedEntityId && (
+                    {(selectedEntityId || selectedStatus !== 'approved') && (
                         <Link href="/dbm/paps" className="text-sm text-muted-foreground hover:text-secondary-foreground underline underline-offset-2 px-2 h-[38px] flex items-center">
                             Clear
                         </Link>
@@ -134,6 +171,7 @@ export default function AllPapView({
                                 <th className="px-4 py-3">PAP</th>
                                 <th className="px-4 py-3">Applicable Entity</th>
                                 <th className="px-4 py-3">Type</th>
+                                <th className="px-4 py-3">Status</th>
                                 <th className="px-4 py-3">Full Code</th>
                                 <th className="px-4 py-3">Last Updated</th>
                                 <th className="px-4 py-3 text-right">Action</th>
@@ -142,7 +180,7 @@ export default function AllPapView({
                         <tbody className="divide-y divide-border/20">
                             {paps.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                                    <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                                         <div className="flex flex-col items-center gap-2">
                                             <FileText size={32} className="text-muted-foreground/50" />
                                             <p className="text-sm">No PAPs found matching your criteria.</p>
@@ -166,6 +204,11 @@ export default function AllPapView({
                                         </td>
                                         <td className="px-4 py-3 text-secondary-foreground max-w-md whitespace-normal break-words">
                                             {formatProjectType(pap.project_type)}
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className="inline-flex rounded-full border border-border/60 bg-secondary/20 px-2.5 py-1 text-xs font-semibold text-secondary-foreground">
+                                                {PAP_PROJECT_STATUS_LABELS[pap.project_status] ?? pap.project_status}
+                                            </span>
                                         </td>
                                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground break-all">
                                             {pap.full_pap_code || 'Not set'}

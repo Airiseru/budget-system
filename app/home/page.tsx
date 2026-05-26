@@ -1,7 +1,8 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
-import { LogoutButton } from "@/components/ui/LogoutButton"
 import { Badge } from "@/components/ui/badge"
+import DashboardHeader from "@/components/ui/DashboardHeader"
+import FloatingUserInfo from "@/components/ui/FloatingUserInfo"
 import {
     createEntityRepository,
     createFormRepository,
@@ -64,6 +65,9 @@ export default async function HomePage() {
     const visibleNavigation = session.user.is_admin
         ? [{ href: "/admin", label: "Admin" }, ...navigation]
         : navigation
+    const userEntityLabel = session.user_entity.entity_full_name
+        ?? session.user_entity.entity_name
+        ?? "No entity assigned"
 
     const [projectRows, formRowsResult] = await Promise.all([
         entityId
@@ -112,37 +116,17 @@ export default async function HomePage() {
 
     return (
         <main className="min-h-screen bg-background">
-            <div className="mx-auto flex max-w-7xl flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
-                <header className="rounded-3xl border border-border bg-accent p-6 shadow-sm">
-                    <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                        <div>
-                            <p className="text-sm font-bold uppercase tracking-[0.18em] text-muted-foreground">
-                                Budget System
-                            </p>
-                            <h1 className="mt-2 text-3xl font-black tracking-tight text-secondary-foreground sm:text-4xl">
-                                Home
-                            </h1>
-                            <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                                Quick access to your modules, recent projects, and forms waiting for your approval.
-                            </p>
-                        </div>
-                        <LogoutButton />
-                    </div>
+            <div className="mx-auto flex w-full flex-col gap-8 px-4 py-8 sm:px-6 lg:px-8">
+                <DashboardHeader
+                    eyebrow="Budget System"
+                    title="Home"
+                    description="Quick access to your modules, recent projects, and forms waiting for your approval."
+                    navigation={visibleNavigation}
+                    navLabel="Primary modules"
+                    showLogout
+                />
 
-                    <nav aria-label="Primary modules" className="mt-6 flex flex-wrap gap-2">
-                        {visibleNavigation.map((item) => (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                className="inline-flex min-h-10 items-center rounded-full border border-border bg-background px-4 py-2 text-sm font-bold text-secondary-foreground transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
-                            >
-                                {item.label}
-                            </Link>
-                        ))}
-                    </nav>
-                </header>
-
-                <section className="grid gap-6 lg:grid-cols-2">
+                <section className="space-y-6">
                     <article className="rounded-3xl border border-border bg-background shadow-sm">
                         <div className="border-b border-border p-5">
                             <h2 className="text-xl font-black text-secondary-foreground">Latest Projects</h2>
@@ -216,6 +200,11 @@ export default async function HomePage() {
                     </article>
                 </section>
             </div>
+            <FloatingUserInfo
+                name={session.user.name}
+                position={session.user.position || "No position set"}
+                entity={userEntityLabel}
+            />
         </main>
     )
 }
