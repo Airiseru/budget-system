@@ -2,8 +2,6 @@ import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import DashboardHeader from "@/components/ui/DashboardHeader"
-import FloatingUserInfo from "@/components/ui/FloatingUserInfo"
-import { sessionWithEntity } from "@/src/actions/auth"
 import { getPendingUsers } from "@/src/actions/admin"
 import { loadAdminEntities } from "@/src/actions/entities"
 import { ENTITY_TYPE_LABELS } from "@/src/lib/constants"
@@ -134,14 +132,10 @@ function buildEntityPreviewRows(result: Awaited<ReturnType<typeof loadAdminEntit
 }
 
 export default async function AdminPage() {
-    const [session, pendingUsers, entitiesResult] = await Promise.all([
-        sessionWithEntity(),
+    const [pendingUsers, entitiesResult] = await Promise.all([
         getPendingUsers(),
         loadAdminEntities(),
     ])
-    const userEntityLabel = session?.user_entity.entity_full_name
-        ?? session?.user_entity.entity_name
-        ?? "No entity assigned"
 
     const latestApprovals = [...pendingUsers]
         .sort((a, b) => new Date(b.user_created_at).getTime() - new Date(a.user_created_at).getTime())
@@ -246,13 +240,6 @@ export default async function AdminPage() {
                     </article>
                 </section>
             </div>
-            {session && (
-                <FloatingUserInfo
-                    name={session.user.name}
-                    position={session.user.position || "No position set"}
-                    entity={userEntityLabel}
-                />
-            )}
         </main>
     )
 }

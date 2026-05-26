@@ -4123,7 +4123,7 @@ export default function ProposalForm({
                 </div>
             )}
 
-            <div className="sticky bottom-0 z-40 -mx-[calc((100vw-100%)/2)] border-t bg-background/95 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
+            <div className="sticky bottom-0 z-40 mx-auto border-t bg-background/95 px-4 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] backdrop-blur">
                 <div className="mx-auto flex max-w-5xl justify-end gap-3">
                     {!isDbmOverwrite && (
                         <button

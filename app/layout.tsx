@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { Noto_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
+import GeneralNavBar from "@/components/ui/GeneralNavBar";
+import GlobalFloatingUserInfo from "@/components/ui/GlobalFloatingUserInfo";
 
 const notoSans = Noto_Sans({
   variable: "--font-noto-sans",
@@ -22,7 +24,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={notoSans.className} suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+          <GeneralNavBar />
           {children}
+          <GlobalFloatingUserInfo />
         </ThemeProvider>
       </body>
     </html>

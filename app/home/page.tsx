@@ -2,7 +2,6 @@ import Link from "next/link"
 import { redirect } from "next/navigation"
 import { Badge } from "@/components/ui/badge"
 import DashboardHeader from "@/components/ui/DashboardHeader"
-import FloatingUserInfo from "@/components/ui/FloatingUserInfo"
 import {
     createEntityRepository,
     createFormRepository,
@@ -65,10 +64,6 @@ export default async function HomePage() {
     const visibleNavigation = session.user.is_admin
         ? [{ href: "/admin", label: "Admin" }, ...navigation]
         : navigation
-    const userEntityLabel = session.user_entity.entity_full_name
-        ?? session.user_entity.entity_name
-        ?? "No entity assigned"
-
     const [projectRows, formRowsResult] = await Promise.all([
         entityId
             ? ProposalRepository.getAllProposalSummaries(
@@ -200,11 +195,6 @@ export default async function HomePage() {
                     </article>
                 </section>
             </div>
-            <FloatingUserInfo
-                name={session.user.name}
-                position={session.user.position || "No position set"}
-                entity={userEntityLabel}
-            />
         </main>
     )
 }

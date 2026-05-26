@@ -1,7 +1,6 @@
 import Link from "next/link"
 import { redirect } from "next/navigation"
 import DashboardHeader from "@/components/ui/DashboardHeader"
-import FloatingUserInfo from "@/components/ui/FloatingUserInfo"
 import { sessionWithEntity } from "@/src/actions/auth"
 import { createBudgetSettingsRepository, createFormRepository } from "@/src/db/factory"
 import { BUDGET_PHASE_LABELS, FORM_NAMES, STATUS_LABELS } from "@/src/lib/constants"
@@ -147,9 +146,6 @@ export default async function HomePage() {
     ])
     const pendingForms = pendingFormsResult.forms
     const pendingCount = pendingFormsResult.totalCount
-    const userEntityLabel = session.user_entity.entity_full_name
-        ?? session.user_entity.entity_name
-        ?? "No entity assigned"
     const visibleModuleGroups = moduleGroups
         .map((group) => ({
             ...group,
@@ -306,11 +302,6 @@ export default async function HomePage() {
                     </div>
                 </section>
             </div>
-            <FloatingUserInfo
-                name={session.user.name}
-                position={session.user.position || "No position set"}
-                entity={userEntityLabel}
-            />
         </main>
     )
 }
