@@ -138,7 +138,9 @@ export default function AllocationTable({
                             const shouldShowDivider = currentGroupKey !== previousGroupKey
                             const shouldShowSubtotal = currentGroupKey !== nextGroupKey
                             const activeAmount =
-                                canEditNep
+                                canEditDbmReview
+                                    ? getNumericInputValue(inputValues, row, 'dbm_rec_amt')
+                                    : canEditNep
                                     ? Number(row.nep_amt)
                                     : canEditGaa
                                         ? Number(row.gaa_amt)
