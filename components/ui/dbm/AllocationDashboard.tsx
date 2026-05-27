@@ -414,6 +414,19 @@ export default function AllocationDashboard({
                 }}
             />
 
+            {canEditGaa ? (
+                <BulkValidityPanel
+                    open={bulkValidityOpen}
+                    onToggle={() => setBulkValidityOpen((open) => !open)}
+                    value={bulkValidity}
+                    onChange={setBulkValidity}
+                    loading={bulkValidityLoading}
+                    status={bulkValidityStatus}
+                    error={bulkValidityError}
+                    onApply={handleBulkValidityUpdate}
+                />
+            ) : null}
+
             <div className="flex flex-wrap gap-2 rounded-2xl border border-border bg-background p-2 shadow-sm">
                 <Button
                     type="button"
@@ -442,19 +455,6 @@ export default function AllocationDashboard({
                 />
             ) : null}
 
-            {activeView === 'line_items' && canEditGaa ? (
-                <BulkValidityPanel
-                    open={bulkValidityOpen}
-                    onToggle={() => setBulkValidityOpen((open) => !open)}
-                    value={bulkValidity}
-                    onChange={setBulkValidity}
-                    loading={bulkValidityLoading}
-                    status={bulkValidityStatus}
-                    error={bulkValidityError}
-                    onApply={handleBulkValidityUpdate}
-                />
-            ) : null}
-
             {activeView === 'line_items' ? (
                 <>
                     <AllocationFiltersPanel
@@ -476,15 +476,15 @@ export default function AllocationDashboard({
                         onSearchValueChange={setSearchValue}
                         showUacs={showUacs}
                         onShowUacsChange={setShowUacs}
-                showDbmRejectedLineItems={showDbmRejectedLineItems}
-                onShowDbmRejectedLineItemsChange={(checked) => {
-                    setShowDbmRejectedLineItems(checked)
-                    router.push(getFilterLink({
-                        includeDbmRejectedLineItems: checked ? 'true' : 'false',
-                        page: '1',
-                    }))
-                }}
-                onSubmit={() => router.push(getFilterLink({ page: '1' }))}
+                        showDbmRejectedLineItems={showDbmRejectedLineItems}
+                        onShowDbmRejectedLineItemsChange={(checked) => {
+                            setShowDbmRejectedLineItems(checked)
+                            router.push(getFilterLink({
+                                includeDbmRejectedLineItems: checked ? 'true' : 'false',
+                                page: '1',
+                            }))
+                        }}
+                        onSubmit={() => router.push(getFilterLink({ page: '1' }))}
                         clearHref={`/dbm/allocations${yearLockedToActivePreparation && selectedYear ? `?year=${selectedYear}` : ''}`}
                     />
 
