@@ -169,8 +169,8 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
                     <div>
                         <p className="text-md font-black uppercase tracking-[0.3em] text-primary-foreground">About</p>
                         <h2 className="mt-3 text-3xl font-black tracking-tight">About the Project</h2>
-                        <p className="mt-3 max-w-3xl text-md leading-7 text-slate-600">
-                            BUDGET is an acronym for the system&apos;s design principles: fiscal balance, unified records, digitized workflows, government expenditure modeling, data-driven controls, and transparency.
+                        <p className="mt-3 text-md text-wrap text-slate-600">
+                            BUDGET is an acronym for the system's design principles: fiscal balance, unified records, digitized workflows, government expenditure modeling, data-driven controls, and transparency.
                         </p>
                     </div>
                     <div className="space-y-4">
