@@ -15,6 +15,7 @@ import type {
     AllocationDashboardTotals,
 } from '@/src/db/postgres/repositories/budgetAllocationRepository'
 import type { SaveState } from './shared'
+import { PAP_PROJECT_TYPE, PAP_PROJECT_TYPE_LABELS } from '@/src/lib/constants'
 import {
     formatAmount,
     getAllocationGroupKey,
@@ -191,7 +192,7 @@ export default function AllocationTable({
                                         <tr className="bg-primary-foreground/80">
                                             <td colSpan={columnCount} className="px-4 py-3">
                                                 <div className="font-semibold text-white">
-                                                    {(row.pap_project_type ?? 'Unclassified Project').toUpperCase()} • {row.pap_title ?? 'No PAP'}
+                                                    {(PAP_PROJECT_TYPE_LABELS[row.pap_project_type as PAP_PROJECT_TYPE] ?? 'Unclassified Project').toUpperCase()} • {row.pap_title ?? 'No PAP'}
                                                 </div>
                                                 {showUacs && row.pap_uacs_code ? (
                                                     <div className="mt-1 text-xs text-white/70">
