@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import SearchableComboboxField, { type SearchableComboboxOption } from '@/components/ui/dbm/SearchableComboboxField'
+import { PAP_PROJECT_STATUS_LABELS, type PAP_PROJECT_STATUS_TYPES } from '@/src/lib/constants'
 
 const FORM_TYPE_OPTIONS: SearchableComboboxOption[] = [
     { value: 'all', label: 'All form types' },
@@ -13,17 +14,27 @@ const FORM_TYPE_OPTIONS: SearchableComboboxOption[] = [
     { value: '203', label: 'BP Form 203 (Foreign)' },
 ]
 
+const PROJECT_STATUS_OPTIONS: SearchableComboboxOption[] = [
+    { value: 'all', label: 'All project statuses' },
+    ...Object.entries(PAP_PROJECT_STATUS_LABELS).map(([value, label]) => ({
+        value,
+        label,
+    })),
+]
+
 type Props = {
     search: string
     formType: string
+    status: PAP_PROJECT_STATUS_TYPES | 'all'
 }
 
-export default function PapFilters({ search, formType }: Props) {
+export default function PapFilters({ search, formType, status }: Props) {
     const router = useRouter()
     const [open, setOpen] = useState(true)
     const [searchValue, setSearchValue] = useState(search)
     const [selectedFormType, setSelectedFormType] = useState(formType || 'all')
-    const hasFilters = Boolean(search || formType)
+    const [selectedStatus, setSelectedStatus] = useState<PAP_PROJECT_STATUS_TYPES | 'all'>(status)
+    const hasFilters = Boolean(search || formType || status !== 'approved')
 
     const applyFilters = () => {
         const next = new URLSearchParams()
@@ -31,6 +42,7 @@ export default function PapFilters({ search, formType }: Props) {
 
         if (cleanSearch) next.set('search', cleanSearch)
         if (selectedFormType !== 'all') next.set('formType', selectedFormType)
+        if (selectedStatus !== 'approved') next.set('status', selectedStatus)
 
         const query = next.toString()
         router.push(query ? `/paps?${query}` : '/paps')
@@ -63,7 +75,7 @@ export default function PapFilters({ search, formType }: Props) {
                     }}
                     className="flex flex-col gap-4 px-4 py-4"
                 >
-                    <div className="grid gap-4 xl:grid-cols-[minmax(260px,1fr)_260px]">
+                    <div className="grid gap-4 xl:grid-cols-[minmax(260px,1fr)_260px_260px]">
                         <div className="space-y-2">
                             <p className="font-medium">Search PAP</p>
                             <input
@@ -82,6 +94,17 @@ export default function PapFilters({ search, formType }: Props) {
                                 placeholder="All form types"
                                 searchPlaceholder="Search form type"
                                 emptyText="No form types found."
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <p className="font-medium">Project Status</p>
+                            <SearchableComboboxField
+                                items={PROJECT_STATUS_OPTIONS}
+                                value={selectedStatus}
+                                onValueChange={(value) => setSelectedStatus((value || 'approved') as PAP_PROJECT_STATUS_TYPES | 'all')}
+                                placeholder="Approved"
+                                searchPlaceholder="Search project status"
+                                emptyText="No statuses found."
                             />
                         </div>
                     </div>

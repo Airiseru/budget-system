@@ -7,7 +7,7 @@ import PaginationControls from '@/components/ui/PaginationControls'
 import Link from "next/link"
 import { sessionDetails } from '@/src/actions/auth'
 import { redirect } from 'next/navigation'
-import { PAP_PROJECT_TYPE_LABELS } from '@/src/lib/constants'
+import { PAP_PROJECT_STATUS_TYPES, PAP_PROJECT_TYPE_LABELS } from '@/src/lib/constants'
 
 export const dynamic = 'force-dynamic'
 
@@ -43,8 +43,22 @@ const getProjectStatusClassName = (status: string | null | undefined) => {
 type PapsSearchParams = Promise<{
     page?: string
     formType?: string
+    status?: string
     search?: string
 }>
+
+const PAP_STATUS_FILTERS = new Set<PAP_PROJECT_STATUS_TYPES | 'all'>([
+    'all',
+    'draft',
+    'proposed',
+    'approved',
+    'for_release',
+    'terminating',
+    'on_going',
+    'completed',
+    'rejected',
+    'cancelled',
+])
 
 export default async function PapPage({
     searchParams,
@@ -62,6 +76,9 @@ export default async function PapPage({
     const formType = params.formType === '202' || params.formType === '203'
         ? params.formType
         : ''
+    const selectedStatus = PAP_STATUS_FILTERS.has(params.status as PAP_PROJECT_STATUS_TYPES | 'all')
+        ? params.status as PAP_PROJECT_STATUS_TYPES | 'all'
+        : 'approved'
     const search = params.search?.trim() ?? ''
     const category = formType === '202'
         ? 'local'
@@ -76,6 +93,7 @@ export default async function PapPage({
     const { paps, totalPages } = await PapRepository.getPaginatedPaps({
         entity_ids: accessibleEntityIds,
         category,
+        project_status: selectedStatus === 'all' ? undefined : selectedStatus,
         search,
         limit: PAGE_SIZE,
         offset: (page - 1) * PAGE_SIZE,
@@ -84,6 +102,7 @@ export default async function PapPage({
     const getPageHref = (targetPage: number) => {
         const next = new URLSearchParams()
         if (formType) next.set('formType', formType)
+        if (selectedStatus !== 'approved') next.set('status', selectedStatus)
         if (search) next.set('search', search)
         next.set('page', String(targetPage))
         return `/paps?${next.toString()}`
@@ -106,7 +125,7 @@ export default async function PapPage({
                 <div className="w-[92px]" />
             </div>
 
-            <PapFilters search={search} formType={formType} />
+            <PapFilters search={search} formType={formType} status={selectedStatus} />
 
             {paps.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
