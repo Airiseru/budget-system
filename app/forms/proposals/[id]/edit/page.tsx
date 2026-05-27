@@ -12,6 +12,7 @@ import {
     isBudgetPrepActiveForYear,
     isDbmFormActionPhaseForYear,
 } from "@/src/lib/budget-cycle";
+import { EXISTING_PROJECT_PAP_STATUSES } from "@/src/lib/constants";
 
 const ProposalRepo = createProposalRepository(
     process.env.DATABASE_TYPE || "postgres",
@@ -73,6 +74,7 @@ export default async function EditProposalPage({
         PapRepo.getPapOptionsForEntityHierarchy(project.entity_id, {
             includeGlobal: false,
             category: project.type === "203" ? "foreign" : "local",
+            projectStatuses: EXISTING_PROJECT_PAP_STATUSES,
         }),
     ]);
 

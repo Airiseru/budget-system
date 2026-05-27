@@ -61,6 +61,7 @@ type PapOptionFilters = {
 type EntityHierarchyPapOptionFilters = {
     includeGlobal?: boolean
     category?: 'local' | 'foreign'
+    projectStatuses?: PAP_PROJECT_STATUS_TYPES[]
 }
 
 export type PapRelatedForm = {
@@ -418,6 +419,10 @@ export async function getPapOptionsForEntityHierarchy(
 
     if (filters.category) {
         query = query.where('paps.category', '=', filters.category)
+    }
+
+    if (filters.projectStatuses?.length) {
+        query = query.where('paps.project_status', 'in', filters.projectStatuses)
     }
 
     return await query

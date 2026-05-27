@@ -8,6 +8,7 @@ import {
     createPapRepository,
     createUacsRepository,
 } from "@/src/db/factory";
+import { EXISTING_PROJECT_PAP_STATUSES } from "@/src/lib/constants";
 
 const ItemRepo = createItemRepository(process.env.DATABASE_TYPE || "postgres");
 const PapRepo = createPapRepository(process.env.DATABASE_TYPE || "postgres");
@@ -53,6 +54,7 @@ export default async function NewProposalPage({
         PapRepo.getPapOptionsForEntityHierarchy(session.user.entity_id, {
             includeGlobal: false,
             category: papCategory,
+            projectStatuses: EXISTING_PROJECT_PAP_STATUSES,
         }),
     ]);
 

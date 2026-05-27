@@ -47,6 +47,12 @@ export const PAP_PROJECT_STATUS_LABELS: Record<PAP_PROJECT_STATUS_TYPES, string>
     cancelled: 'Cancelled',
 }
 
+export const EXISTING_PROJECT_PAP_STATUSES: PAP_PROJECT_STATUS_TYPES[] = [
+    "approved",
+    "for_release",
+    "on_going",
+]
+
 export type PAP_PROJECT_TYPE =
     | 'local'
     | 'foreign'
