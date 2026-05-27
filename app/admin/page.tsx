@@ -232,7 +232,7 @@ export default async function AdminPage() {
                                 <Link
                                     key={user.user_id}
                                     href="/admin/pending"
-                                    className="block p-5 transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+                                    className="block p-5 transition hover:bg-primary-foreground/20 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
                                 >
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div>
@@ -273,7 +273,7 @@ export default async function AdminPage() {
                                 <Link
                                     key={entity.id}
                                     href="/admin/entities"
-                                    className="block p-5 transition focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+                                    className="block p-5 transition focus:outline-none hover:bg-primary-foreground/20 focus:ring-2 focus:ring-inset focus:ring-ring"
                                 >
                                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                         <div>

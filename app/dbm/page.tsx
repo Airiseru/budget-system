@@ -165,11 +165,11 @@ export default async function HomePage() {
                     actions={[{ href: "/home", label: "Go to Home" }]}
                 />
 
-                <section aria-labelledby="dbm-overview-heading" className="grid gap-4 lg:grid-cols-[1fr_1.4fr]">
+                <section aria-labelledby="dbm-overview-heading" className="grid gap-4 lg:grid-cols-[1fr_3fr]">
                     <h2 id="dbm-overview-heading" className="sr-only">
                         DBM overview
                     </h2>
-                    <article className="rounded-3xl border border-border bg-background p-6 shadow-sm">
+                    <article className="flex h-full flex-col rounded-3xl border border-border bg-background p-6 shadow-sm">
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-sm font-bold uppercase tracking-[0.16em] text-muted-foreground">
@@ -183,7 +183,7 @@ export default async function HomePage() {
                                 {activeCycle?.prep_status ?? "closed"}
                             </span>
                         </div>
-                        <dl className="mt-6 grid gap-4 text-sm">
+                        <dl className="my-4 grid gap-2 text-sm">
                             <div className="rounded-2xl bg-muted p-4">
                                 <dt className="font-semibold text-muted-foreground">Fiscal Year</dt>
                                 <dd className="mt-1 text-xl font-black text-secondary-foreground">
@@ -200,7 +200,7 @@ export default async function HomePage() {
                         {isApprover && (
                             <Link
                                 href="/dbm/settings/cycles"
-                                className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-secondary-foreground px-4 py-2 text-sm font-bold text-accent transition hover:bg-secondary-foreground/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                                className="mt-auto inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-secondary-foreground px-4 py-2 text-sm font-bold text-accent transition hover:bg-secondary-foreground/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
                             >
                                 Manage Budget Cycle
                             </Link>
@@ -231,7 +231,7 @@ export default async function HomePage() {
                                     <Link
                                         key={form.id}
                                         href={`/dbm/forms/${form.id}`}
-                                        className="block p-5 transition hover:bg-muted focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
+                                        className="block p-5 transition hover:bg-primary-foreground/20 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ring"
                                     >
                                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                             <div>
