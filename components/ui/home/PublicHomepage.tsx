@@ -54,13 +54,13 @@ export default function PublicHomepage({ announcements, faqs }: Props) {
         },
         {
             letter: 'G',
-            title: 'Government Expenditure',
-            description: 'Accurately models the government budget process from proposal preparation through NEP and GAA stages.',
+            title: 'Government',
+            description: 'Guides every proposal through a clear, secure approval process so the right people sign off at the right time.',
         },
         {
             letter: 'E',
-            title: 'Everything in Data',
-            description: 'Enforces constitutional budget logic in data, including controls such as preventing GAA from exceeding NEP.',
+            title: 'Expenditure',
+            description: 'Tracks every peso spent to ensure public funds are used strictly as intended by the Constitution.',
         },
         {
             letter: 'T',
