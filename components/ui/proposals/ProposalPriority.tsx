@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import LoadingOverlay from "@/components/ui/LoadingOverlay";
 import Link from "next/link";
-import { ArrowLeft, ArrowRightLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, ExternalLink, X } from "lucide-react";
 
 interface ProposalSummary {
     id: string;
@@ -33,6 +33,8 @@ interface ProposalPriorityProps {
 }
 
 type Scope = "entity" | "dept";
+const buttonStyles =
+    "rounded-lg hover:bg-secondary-foreground hover:text-white focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2";
 
 export default function RankManager({
     initialProposals,
@@ -361,38 +363,41 @@ export default function RankManager({
     const affectedIds = getAffectedIds();
 
     return (
-        <div className="space-y-4 p-4">
+        <main className="mx-auto w-full max-w-[1900px] space-y-6 px-4 py-10">
             <LoadingOverlay show={loading} label="Updating proposal ranks..." />
-            <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center justify-between gap-4">
                 <Link
                     href="/forms/proposals"
-                    className="flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                    className="flex w-[110px] items-center gap-2 text-sm font-medium text-muted-foreground transition-colors hover:text-secondary-foreground"
                 >
                     <ArrowLeft size={16} />
-                    Back to List
+                    Go Back
                 </Link>
+                <div className="text-center">
+                    <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">
+                        Proposal Priority Ranking
+                    </h1>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Submitted proposals are locked. Only draft proposals can be moved.
+                    </p>
+                </div>
+                <div className="w-[110px]" />
             </div>
-
-            <h2 className="text-lg font-bold">Proposal Priority Ranking</h2>
-            <p className="text-sm text-muted-foreground">
-                Submitted proposals are locked. Only draft proposals can be
-                moved.
-            </p>
 
             {isDepartmentUser && (
                 <div className="flex gap-2">
                     <Button
-                        size="sm"
                         variant={
                             activeScope === "entity" ? "default" : "outline"
                         }
+                        className={buttonStyles}
                         onClick={() => handleScopeChange("entity")}
                     >
                         Entity Ranking
                     </Button>
                     <Button
-                        size="sm"
                         variant={activeScope === "dept" ? "default" : "outline"}
+                        className={buttonStyles}
                         onClick={() => handleScopeChange("dept")}
                     >
                         Department Ranking
@@ -436,7 +441,7 @@ export default function RankManager({
                             </option>
                         ))}
                     </select>
-                    <Button type="submit" variant="outline">
+                    <Button type="submit" variant="outline" className={buttonStyles}>
                         Filter
                     </Button>
                 </form>
@@ -448,119 +453,127 @@ export default function RankManager({
                 </div>
             )}
 
-            <div className={`grid transition-all duration-300 ease-out ${previewProposal ? "gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)]" : "grid-cols-1 gap-0"}`}>
-                <div className="min-w-0 space-y-4">
-                    {/* Swap / Move controls — hidden entirely when read-only */}
-                    {!isReadOnly && (
-                        <div className="sticky top-24 z-10 rounded-lg border bg-card p-4 shadow-sm">
-                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                <div>
-                                    <div className="text-sm font-semibold">
-                                        Select two draft proposals to swap ranks
-                                    </div>
-                                    <div className="text-xs text-muted-foreground">
-                                        {selectedProposals.length === 0
-                                            ? "No proposal selected."
-                                            : selectedProposals
-                                                .map(
-                                                    (p) =>
-                                                        `#${getRank(p, activeScope)} ${p.title}`,
-                                                )
-                                                .join(" ↔ ")}
-                                    </div>
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        disabled={loading || selectedIds.length === 0}
-                                        onClick={() => {
-                                            setSelectedIds([]);
-                                            setTargetRank("");
-                                            setError(null);
-                                        }}
-                                    >
-                                        Clear
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        disabled={
-                                            loading || selectedProposals.length !== 2
-                                        }
-                                        onClick={handleSwapSelected}
-                                        className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
-                                    >
-                                        <ArrowRightLeft size={16} />
-                                        {loading
-                                            ? "Swapping..."
-                                            : "Swap Selected Ranks"}
-                                    </Button>
-                                </div>
+            {/* Swap / Move controls — hidden entirely when read-only */}
+            {!isReadOnly && (
+                <div className="sticky top-24 z-10 rounded-lg border bg-card p-4 shadow-sm">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                            <div className="text-sm font-semibold">
+                                Select two draft proposals to swap ranks
                             </div>
-                            <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[1fr_auto_auto] md:items-end">
-                                <div>
-                                    <label
-                                        htmlFor="target-rank"
-                                        className="text-sm font-semibold"
-                                    >
-                                        Bring selected proposal to rank
-                                    </label>
-                                    <p className="text-xs text-muted-foreground">
-                                        Select one draft proposal, enter a rank, and the
-                                        draft proposals in between shift automatically.
-                                    </p>
-                                </div>
-                                <input
-                                    id="target-rank"
-                                    type="number"
-                                    min={1}
-                                    max={sortedProposals.length}
-                                    value={targetRank}
-                                    onChange={(e) => setTargetRank(e.target.value)}
-                                    placeholder="Rank"
-                                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm md:w-32"
-                                    disabled={loading}
-                                />
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    disabled={
-                                        loading ||
-                                        selectedProposals.length !== 1 ||
-                                        targetRank.trim() === ""
-                                    }
-                                    className="flex-1 bg-primary-foreground text-white hover:bg-primary-foreground/80"
-                                    onClick={handleMoveSelectedToRank}
-                                >
-                                    Move to Rank
-                                </Button>
+                            <div className="text-xs text-muted-foreground">
+                                {selectedProposals.length === 0
+                                    ? "No proposal selected."
+                                    : selectedProposals
+                                        .map(
+                                            (p) =>
+                                                `#${getRank(p, activeScope)} ${p.title}`,
+                                        )
+                                        .join(" ↔ ")}
                             </div>
                         </div>
-                    )}
+                        <div className="flex gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className={buttonStyles}
+                                disabled={loading || selectedIds.length === 0}
+                                onClick={() => {
+                                    setSelectedIds([]);
+                                    setTargetRank("");
+                                    setError(null);
+                                }}
+                            >
+                                Clear
+                            </Button>
+                            <Button
+                                type="button"
+                                disabled={
+                                    loading || selectedProposals.length !== 2
+                                }
+                                onClick={handleSwapSelected}
+                                className="flex-1 rounded-lg bg-secondary-foreground text-white hover:bg-secondary-foreground/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            >
+                                <ArrowRightLeft size={16} />
+                                {loading
+                                    ? "Swapping..."
+                                    : "Swap Selected Ranks"}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="mt-4 grid gap-3 border-t pt-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+                        <div>
+                            <label
+                                htmlFor="target-rank"
+                                className="text-sm font-semibold"
+                            >
+                                Bring selected proposal to rank
+                            </label>
+                            <p className="text-xs text-muted-foreground">
+                                Select one draft proposal, enter a rank, and the
+                                draft proposals in between shift automatically.
+                            </p>
+                        </div>
+                        <input
+                            id="target-rank"
+                            type="number"
+                            min={1}
+                            max={sortedProposals.length}
+                            value={targetRank}
+                            onChange={(e) => setTargetRank(e.target.value)}
+                            placeholder="Rank"
+                            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm md:w-32"
+                            disabled={loading}
+                        />
+                        <Button
+                            type="button"
+                            variant="secondary"
+                            disabled={
+                                loading ||
+                                selectedProposals.length !== 1 ||
+                                targetRank.trim() === ""
+                            }
+                            className="flex-1 rounded-lg bg-secondary-foreground text-white hover:bg-secondary-foreground/90 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                            onClick={handleMoveSelectedToRank}
+                        >
+                            Move to Rank
+                        </Button>
+                    </div>
+                </div>
+            )}
+
+            <div className={`grid items-start transition-all duration-300 ease-out ${previewProposal ? "gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(420px,0.95fr)]" : "grid-cols-1 gap-0"}`}>
+                <div className="min-w-0 space-y-4">
 
                     {/* Table */}
-                    <div className="border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
+                    <div className={`rounded-lg border overflow-auto ${previewProposal ? "lg:h-[calc(100vh-12rem)]" : ""}`}>
+                    <div className={`min-w-full ${previewProposal ? "w-[980px]" : "w-[1120px]"}`}>
+                <table className="w-full table-fixed text-sm">
                     <thead className="bg-slate-50 border-b">
                         <tr>
                             {/* Select column hidden when read-only */}
                             {!isReadOnly && (
-                                <th className="p-3 text-left w-28">Select</th>
+                                <th className="w-24 p-3 text-center">Select</th>
                             )}
-                            <th className="p-3 text-left w-32">
+                            <th className="w-24 p-3 text-center">
                                 {activeScope === "entity"
                                     ? "Entity Rank"
                                     : "Dept Rank"}
                             </th>
-                            {/* Entity name column only shown for dept users in entity scope */}
-                            {isDepartmentUser && activeScope === "entity" && (
-                                <th className="p-3 text-left w-48">Entity</th>
+                            {isDepartmentUser && activeScope === "dept" && (
+                                <th className="w-24 p-3 text-center">
+                                    Entity Rank
+                                </th>
                             )}
-                            <th className="p-3 text-left">Project Title</th>
-                            <th className="p-3 text-left w-32">Status</th>
+                            {/* Entity name column shown for department users in both ranking scopes */}
+                            {isDepartmentUser && (
+                                <th className={`p-3 text-left ${previewProposal ? "w-32" : "w-64"}`}>Entity</th>
+                            )}
+                            <th className="w-auto p-3 text-left">Project Title</th>
+                            <th className="w-28 p-3 text-left">Status</th>
                             {/* Actions column hidden when read-only */}
                             {!isReadOnly && (
-                                <th className="p-3 text-center w-40">
+                                <th className="w-36 p-3 text-center">
                                     Actions
                                 </th>
                             )}
@@ -596,7 +609,7 @@ export default function RankManager({
                                 >
                                     {/* Select button — hidden when read-only */}
                                     {!isReadOnly && (
-                                        <td className="p-3">
+                                        <td className="p-3 text-center">
                                             <Button
                                                 type="button"
                                                 size="sm"
@@ -619,7 +632,7 @@ export default function RankManager({
 
                                     {/* Rank cell: read-only badge for dept users in entity scope,
                                         editable input otherwise */}
-                                    <td className="p-3">
+                                    <td className="p-3 text-center">
                                         {isReadOnly ? (
                                             <span className="inline-flex items-center justify-center w-20 h-8 rounded-md border border-slate-200 bg-slate-50 text-center font-bold text-slate-600 text-sm">
                                                 {rank}
@@ -651,19 +664,27 @@ export default function RankManager({
                                         )}
                                     </td>
 
-                                    {/* Entity name — only for dept users viewing entity scope */}
-                                    {isDepartmentUser &&
-                                        activeScope === "entity" && (
-                                            <td className="p-3 text-sm text-muted-foreground">
-                                                {p.entity_name ?? "—"}
-                                            </td>
-                                        )}
+                                    {isDepartmentUser && activeScope === "dept" && (
+                                        <td className={`p-3 text-sm text-center font-bold ${isSelected ? "text-white/90" : "text-secondary-foreground"}`}>
+                                            #{p.priority_rank}
+                                        </td>
+                                    )}
 
-                                    <td className="p-3">
+                                    {/* Entity name — shown for department users */}
+                                    {isDepartmentUser && (
+                                        <td className={`p-3 text-sm ${isSelected ? "text-white/80" : "text-muted-foreground"}`}>
+                                            <span className={previewProposal ? "line-clamp-2" : "block truncate"}>
+                                                {p.entity_name ?? "—"}
+                                            </span>
+                                        </td>
+                                    )}
+
+                                    <td className="min-w-0 p-3">
                                         <button
                                             type="button"
                                             onClick={() => handleOpenProposal(p)}
-                                            className={`text-left font-medium hover:underline ${isSelected ? "text-white" : "text-secondary-foreground"}`}
+                                            className={`block max-w-full truncate text-left font-medium hover:underline ${isSelected ? "text-white" : "text-secondary-foreground"}`}
+                                            title={p.title}
                                         >
                                             {p.title}
                                         </button>
@@ -685,11 +706,11 @@ export default function RankManager({
 
                                     {/* ↑↓ buttons — hidden when read-only */}
                                     {!isReadOnly && (
-                                        <td className="p-3 flex justify-center gap-2">
+                                        <td className="p-3 text-center">
                                             <Button
                                                 size="sm"
                                                 variant="outline"
-                                                className={isSelected ? "border-white/70 bg-white/10 text-white hover:bg-white/20 hover:text-white" : ""}
+                                                className={isSelected ? "border-white/70 bg-white/10 text-white hover:bg-white/20 hover:text-white mr-2" : "mr-2"}
                                                 disabled={
                                                     i === 0 ||
                                                     loading ||
@@ -733,12 +754,12 @@ export default function RankManager({
                                 <td
                                     colSpan={
                                         // account for variable column count
-                                        (isReadOnly ? 0 : 2) +
-                                        (isDepartmentUser &&
-                                        activeScope === "entity"
-                                            ? 1
-                                            : 0) +
-                                        2
+                                        (isReadOnly ? 0 : 1) +
+                                        1 +
+                                        (isDepartmentUser && activeScope === "dept" ? 1 : 0) +
+                                        (isDepartmentUser ? 1 : 0) +
+                                        2 +
+                                        (isReadOnly ? 0 : 1)
                                     }
                                     className="p-6 text-center text-muted-foreground"
                                 >
@@ -749,15 +770,16 @@ export default function RankManager({
                     </tbody>
                 </table>
                     </div>
+                    </div>
                 </div>
 
                 {previewProposal ? (
                     <aside
-                        className="hidden min-w-0 overflow-hidden opacity-100 transition-all duration-2000 ease-in-out lg:block"
+                        className="hidden min-w-0 overflow-hidden opacity-100 transition-all duration-300 ease-in-out lg:block"
                         aria-label="Proposal preview"
                     >
-                        <div className="sticky top-24 h-[calc(100vh-7rem)] overflow-hidden rounded-lg border bg-background shadow-sm">
-                            <div className="flex items-start justify-between gap-3 border-b bg-muted/40 px-4 py-3">
+                        <div className="sticky top-24 h-[calc(100vh-12rem)] overflow-hidden rounded-lg border bg-background shadow-sm">
+                            <div className="flex items-center justify-between gap-3 border-b bg-muted/40 px-4 py-3">
                                 <div>
                                     <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground">
                                         Proposal Preview
@@ -765,6 +787,11 @@ export default function RankManager({
                                     <h3 className="line-clamp-2 text-sm font-bold text-secondary-foreground">
                                         {previewProposal.title}
                                     </h3>
+                                    {previewProposal.entity_name ? (
+                                        <p className="mt-1 text-wrap text-xs font-medium text-muted-foreground">
+                                            Owned by {previewProposal.entity_name}
+                                        </p>
+                                    ) : null}
                                 </div>
                                 <div className="flex shrink-0 gap-2">
                                     <Link
@@ -780,16 +807,18 @@ export default function RankManager({
                                         type="button"
                                         variant="outline"
                                         size="sm"
+                                        className="inline-flex h-9 items-center gap-1 px-2 text-xs font-semibold"
                                         onClick={() => {
                                             setPreviewProposalId(null);
                                             setPreviewLoading(false);
                                         }}
                                     >
                                         Close
+                                        <X className="h-3 w-3" />
                                     </Button>
                                 </div>
                             </div>
-                            <div className="relative h-full">
+                            <div className="relative h-[calc(100%-4.25rem)]">
                                 <LoadingOverlay
                                     show={previewLoading}
                                     label="Loading proposal preview..."
@@ -799,7 +828,7 @@ export default function RankManager({
                                     key={previewProposal.id}
                                     src={getProposalHref(previewProposal.id, true)}
                                     title={`Preview of ${previewProposal.title}`}
-                                    className="h-full w-full bg-background p-4 pb-16"
+                                    className="h-full w-full bg-background p-4"
                                     onLoad={() => setPreviewLoading(false)}
                                 />
                             </div>
@@ -807,6 +836,6 @@ export default function RankManager({
                     </aside>
                 ) : null}
             </div>
-        </div>
+        </main>
     );
 }
