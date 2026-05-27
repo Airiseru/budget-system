@@ -1294,6 +1294,8 @@ export async function updateProjectProposal(
                 SELECT lir.cost_source_id FROM local_infrastructure_requirements AS lir WHERE lir.proposal_id = ${proposalId}
                 UNION 
                 SELECT ll.cost_source_id FROM local_locations AS ll WHERE ll.proposal_id = ${proposalId}
+                UNION
+                SELECT fpt.cost_source_id FROM foreign_physical_targets AS fpt WHERE fpt.proposal_id = ${proposalId}
             )
         `.execute(trx);
 

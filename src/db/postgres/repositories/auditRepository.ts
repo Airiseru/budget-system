@@ -655,7 +655,7 @@ export async function verifyFormIntegrity(tableName: string, recordId: string) {
             if (log.event_type === 'CREATE_FORM') {
                 reconstructedState = JSON.parse(JSON.stringify(payload))
             }
-            else if (log.event_type === 'EDIT_FORM') {
+            else if (log.event_type === 'EDIT_FORM' || log.event_type === 'OVERWRITE_FORM') {
                 if (reconstructedState) {
                     reconstructedState = replayDiffs(reconstructedState, [payload as Diff])
                 }
