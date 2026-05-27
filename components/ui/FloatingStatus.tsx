@@ -13,6 +13,8 @@ type Props = {
     status: FloatingStatusMessage
     onClear: () => void
     durationMs?: number
+    top?: string
+    placement?: 'fixed' | 'sticky'
     className?: string
 }
 
@@ -20,6 +22,8 @@ export default function FloatingStatus({
     status,
     onClear,
     durationMs = 3500,
+    top,
+    placement = 'fixed',
     className,
 }: Props) {
     useEffect(() => {
@@ -34,13 +38,19 @@ export default function FloatingStatus({
 
     const isSuccess = status.type === 'success'
     const Icon = isSuccess ? CheckCircle2 : XCircle
+    const placementClass =
+        placement === 'sticky'
+            ? 'sticky z-30 mx-auto mb-4 w-full max-w-md'
+            : 'fixed left-1/2 top-4 z-[70] w-[calc(100vw-2rem)] max-w-md -translate-x-1/2'
 
     return (
         <div
             role="status"
             aria-live="polite"
+            style={top ? { top } : undefined}
             className={cn(
-                'fixed left-1/2 top-4 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 rounded-xl border px-4 py-3 text-sm font-semibold shadow-lg backdrop-blur',
+                placementClass,
+                'rounded-xl border px-4 py-3 text-sm font-semibold shadow-lg backdrop-blur',
                 isSuccess
                     ? 'border-emerald-200 bg-emerald-50/95 text-emerald-800'
                     : 'border-red-200 bg-red-50/95 text-red-800',

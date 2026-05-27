@@ -344,9 +344,14 @@ export default function AllocationDashboard({
 
     return (
         <main className="mx-auto max-w-[1900px] space-y-5 px-4 py-8 pb-24">
+            {canEditGaa ? (
+                <style>{`[data-floating-user-info]{display:none!important}`}</style>
+            ) : null}
             <FloatingStatus
                 status={floatingStatus}
                 onClear={() => setFloatingStatus(null)}
+                placement="sticky"
+                top="6rem"
             />
             <div className="flex items-center justify-between">
                 <BackButton url="/dbm" />

@@ -27,7 +27,7 @@ export default function StickySummaryHeader({
     const gaaExceedsNep = variance > 0
 
     return (
-        <section className="sticky top-4 z-20 overflow-hidden rounded-2xl border border-secondary-foreground/20 bg-primary-foreground text-secondary shadow-sm backdrop-blur supports-[backdrop-filter]:bg-primary-foreground/70">
+        <section className="sticky top-20 z-20 overflow-hidden rounded-2xl border border-secondary-foreground/20 bg-primary-foreground text-secondary shadow-sm backdrop-blur supports-[backdrop-filter]:bg-primary-foreground/70">
             <button
                 type="button"
                 onClick={() => setCollapsed((value) => !value)}
