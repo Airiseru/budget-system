@@ -476,9 +476,15 @@ export default function AllocationDashboard({
                         onSearchValueChange={setSearchValue}
                         showUacs={showUacs}
                         onShowUacsChange={setShowUacs}
-                        showDbmRejectedLineItems={showDbmRejectedLineItems}
-                        onShowDbmRejectedLineItemsChange={setShowDbmRejectedLineItems}
-                        onSubmit={() => router.push(getFilterLink({ page: '1' }))}
+                showDbmRejectedLineItems={showDbmRejectedLineItems}
+                onShowDbmRejectedLineItemsChange={(checked) => {
+                    setShowDbmRejectedLineItems(checked)
+                    router.push(getFilterLink({
+                        includeDbmRejectedLineItems: checked ? 'true' : 'false',
+                        page: '1',
+                    }))
+                }}
+                onSubmit={() => router.push(getFilterLink({ page: '1' }))}
                         clearHref={`/dbm/allocations${yearLockedToActivePreparation && selectedYear ? `?year=${selectedYear}` : ''}`}
                     />
 
