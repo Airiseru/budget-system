@@ -33,5 +33,20 @@ services:
       db:
         condition: service_healthy
 
+  # Service 3: The Cron Job
+  cron:
+    build: 
+      context: .
+      dockerfile: cron.Dockerfile
+    restart: unless-stopped
+    container_name: budget_cron
+    env_file:
+      - .env.production
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+
 volumes:
   postgres_data:

@@ -34,5 +34,5 @@ function createDb() {
 export const db = globalThis.db ?? createDb()
 
 if (process.env.NODE_ENV !== 'production') {
-  globalThis.db = db
+    globalThis.db = db
 }

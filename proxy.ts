@@ -28,7 +28,9 @@ export const config = {
     matcher: [
         /* Match all request paths */
         '/paps/:path*',
+        '/forms/:path*',
         '/home/:path*',
+        '/dbm/:path*',
         '/admin/:path*',
     ],
 };

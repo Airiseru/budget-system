@@ -3,37 +3,62 @@
 import { useState } from 'react'
 import { useRouter } from "next/navigation"
 import { Pap, NewPap } from "@/src/types/pap"
+import LoadingOverlay from '@/components/ui/LoadingOverlay'
+import { PAP_PROJECT_TYPE, PAP_PROJECT_TYPE_LABELS, PAP_PROJECT_TYPE_OPTIONS } from '@/src/lib/constants'
 
 interface PapFormProps {
     pap?: Pap
-    entityId: string;  
-    entityName: string; 
+    entityId?: string | null
+    entityName: string
+    successBasePath?: string
+    cancelHref?: string
+    defaultProjectStatus?: Pap['project_status']
+    defaultProjectType?: string
+    entityLockedLabel?: string
 }
 
-export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
+export default function PapForm({
+    pap,
+    entityId = null,
+    entityName,
+    successBasePath = '/paps',
+    cancelHref = '/paps',
+    defaultProjectStatus = 'draft',
+    defaultProjectType = 'local',
+    entityLockedLabel = 'Entity ID (Locked)',
+}: PapFormProps) {
     const router = useRouter()
     const isEditing = !!pap
+    const normalizedDefaultProjectType = normalizeProjectType(defaultProjectType)
+    const initialProjectType = normalizeProjectType(pap?.project_type ?? normalizedDefaultProjectType)
 
     const [formData, setFormData] = useState<NewPap>({
-        // If editing, use existing. If new, use the session's entityId automatically.
         entity_id: pap?.entity_id || entityId,
         org_outcome_id: pap?.org_outcome_id || '',
         pip_code: pap?.pip_code || '',
-        tier: pap?.tier || 1,
-        category: pap?.category || 'local',
+        category: pap?.category || (initialProjectType === 'foreign' ? 'foreign' : 'local'),
         title: pap?.title || '',
         description: pap?.description || '',
         purpose: pap?.purpose || '',
         beneficiaries: pap?.beneficiaries || '',
-        project_type: pap?.project_type || '',
-        uacs_pap_code: pap?.uacs_pap_code || '',
+        project_type: initialProjectType,
+        identifier_code: pap?.identifier_code || getIdentifierCode(initialProjectType),
         actual_start_date: pap?.actual_start_date || null,
-        project_status: pap?.project_status || 'draft',
-        auth_status: pap?.auth_status || '',
+        project_status: pap?.project_status || defaultProjectStatus,
     })
 
     function handleChange(e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) {
         setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }))
+    }
+
+    function handleProjectTypeChange(e: React.ChangeEvent<HTMLSelectElement>) {
+        const projectType = normalizeProjectType(e.target.value)
+        setFormData(prev => ({
+            ...prev,
+            project_type: projectType,
+            category: projectType === 'foreign' ? 'foreign' : 'local',
+            identifier_code: getIdentifierCode(projectType),
+        }))
     }
 
     const [isLoading, setIsLoading] = useState(false)
@@ -59,11 +84,12 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
             if (response.ok) {
                 const data = await response.json()
                 router.refresh()
-                router.push(`/paps/${data.id}`)
+                router.push(`${successBasePath}/${data.id}`)
             } else {
-                setError('Something went wrong')
+                const data = await response.json().catch(() => null)
+                setError(data?.error ?? 'Something went wrong')
             }
-        } catch (error) {
+        } catch {
             setError('An error occurred while creating PAP')
         } finally {
             setIsLoading(false)
@@ -72,8 +98,9 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
 
     return (
         <div className="max-w-lg mx-auto mt-8">
+            <LoadingOverlay show={isLoading} label="Saving PAP..." />
             <div className="mb-6 p-4 bg-gray-50 border rounded-lg shadow-sm">
-                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Agency Context</span>
+                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Entity Context</span>
                 <p className="text-md font-semibold text-gray-700">{entityName}</p>
             </div>
             <h1 className="text-2xl font-bold mb-6">
@@ -87,12 +114,11 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
-                {/* TURN INTO SELECT COMPONENT */}
                 <div>
-                    <label className="block text-sm font-medium mb-1 text-gray-600">Entity ID (Locked)</label>
+                    <label className="block text-sm font-medium mb-1 text-gray-600">{entityLockedLabel}</label>
                     <input
                         type="text"
-                        value={formData.entity_id}
+                        value={formData.entity_id ?? 'null'}
                         disabled
                         className="bg-gray-100 border p-2 w-full rounded text-gray-500 cursor-not-allowed"
                     />
@@ -113,24 +139,6 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
                 </div>
 
                 <div>
-                    <label className="block text-sm font-medium mb-1">Tier</label>
-                    <select
-                        name="tier"
-                        value={formData.tier}
-                        onChange={(e) => {
-                            const val = Number(e.target.value) as 1 | 2; // Cast the type here
-                            setFormData(prev => ({ ...prev, tier: val }));
-                        }}
-                        className="border p-2 w-full rounded bg-white"
-                        required
-                        disabled={isLoading}
-                        >
-                        <option value={1}>Tier 1 (Ongoing PAPs)</option>
-                        <option value={2}>Tier 2 (New Proposals)</option>
-                    </select>
-                </div>
-
-                <div>
                     <label className="block text-sm font-medium mb-1">Title</label>
                     <input
                         name="title"
@@ -142,6 +150,23 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
                         required
                         disabled={isLoading}
                     />
+                </div>
+
+                <div>
+                    <label className="block text-sm font-medium mb-1">Project Type</label>
+                    <select
+                        name="project_type"
+                        value={formData.project_type ?? ''}
+                        onChange={handleProjectTypeChange}
+                        className="border p-2 w-full rounded"
+                        disabled={isLoading}
+                    >
+                        {PAP_PROJECT_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                                {option.label}
+                            </option>
+                        ))}
+                    </select>
                 </div>
 
                 <div>
@@ -194,7 +219,7 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
 
                     <button
                         type="button"
-                        onClick={() => router.push('/paps')}
+                        onClick={() => router.push(cancelHref)}
                         disabled={isLoading}
                         className="bg-gray-200 text-gray-700 px-4 py-2 rounded disabled:opacity-50"
                     >
@@ -204,4 +229,17 @@ export default function PapForm({ pap, entityId, entityName }: PapFormProps) {
             </form>
         </div>
     )
+}
+
+function normalizeProjectType(value?: string | null): PAP_PROJECT_TYPE {
+    if (!value) return 'local'
+    const normalized = value.trim().toLowerCase().replaceAll(' ', '_')
+    if (normalized in PAP_PROJECT_TYPE_LABELS) return normalized as PAP_PROJECT_TYPE
+    return 'local'
+}
+
+function getIdentifierCode(projectType: PAP_PROJECT_TYPE): '1' | '2' | '3' {
+    if (projectType === 'local') return '2'
+    if (projectType === 'foreign') return '3'
+    return '1'
 }

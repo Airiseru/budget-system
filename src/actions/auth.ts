@@ -3,9 +3,12 @@
 import { auth } from "@/src/lib/auth"
 import { headers } from "next/headers"
 import { createEntityRepository } from "../db/factory"
-import { SignupFormSchema, UserFormState, LoginFormSchema } from "../lib/validations/user"
+import { logUserSignUp, logUserLogout } from "./audit"
+import { SignupFormSchema, UserFormState } from "../lib/validations/user"
 import { redirect } from "next/navigation"
 import * as z from 'zod'
+import { ACCESS_LEVELS_HIERARCHY } from "../lib/constants"
+import { isActiveUser, isAdminUser, isUnverifiedUser } from "../lib/user-status"
 
 export async function sessionDetails() {
     return await auth.api.getSession({
@@ -27,13 +30,69 @@ export async function sessionWithEntity() {
         entity?.entity_type === 'operating_unit' ? entity.operating_unit_name :
         null
 
+    const entityFullUacs = await EntityRepository.getFullUacsCodeByEntityId(session.user.entity_id || '')
+
     return {
         ...session,
         user_entity: {
             entity_type: entity?.entity_type,
             entity_name: entityName,
+            entity_full_uacs: entityFullUacs?.fullCode,
+            entity_full_name: entityFullUacs?.entityName
         }
     }
+}
+
+export async function requireVerifiedUser() {
+    const session = await sessionDetails()
+    if (!session) {
+        redirect('/login')
+    }
+    if (isUnverifiedUser(session.user)) {
+        redirect('/pending-approval')
+    }
+    if (!isActiveUser(session.user)) {
+        redirect('/login')
+    }
+}
+
+export async function redirectBasedOnRole() {
+    const session = await sessionDetails()
+    if (!session) {
+        redirect('/login')
+    }
+    else if (isUnverifiedUser(session.user)) {
+        redirect('/pending-approval')
+    }
+    else if (isAdminUser(session.user)) {
+        redirect('/admin')
+    }
+    else {
+        redirect('/home')
+    }
+}
+
+export async function requireAccessLevel(level: string) {
+    const session = await sessionDetails()
+    if (!session) redirect('/login')
+    if (session.user.access_level !== level) redirect('/home/settings')
+    return session
+}
+
+export async function requireMinAccessLevel(minimumLevel: string, returnSession: boolean = false) {
+    const session = await sessionWithEntity()
+    if (!session) redirect('/login')
+
+    const userLevelIndex = ACCESS_LEVELS_HIERARCHY.indexOf(session.user.access_level)
+    const requiredLevelIndex = ACCESS_LEVELS_HIERARCHY.indexOf(minimumLevel)
+
+    if (userLevelIndex < requiredLevelIndex) {
+        if (returnSession) redirect('/home')
+        else return false
+    }
+    
+    if (returnSession) return session
+    else return true
 }
 
 export async function signup(state: UserFormState, formData: FormData): Promise<UserFormState> {
@@ -55,6 +114,38 @@ export async function signup(state: UserFormState, formData: FormData): Promise<
         }
     }
 
+    if (!entity_id) {
+        return {
+            fieldErrors: {
+                entity_id: ['Please select your government entity.'],
+            },
+            values: submittedValues,
+        }
+    }
+
+    const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
+    const selectedEntity = await EntityRepository.getEntityById(entity_id).catch(() => null)
+    if (!selectedEntity) {
+        return {
+            fieldErrors: {
+                entity_id: ['Please select a valid government entity.'],
+            },
+            values: submittedValues,
+        }
+    }
+
+    if (selectedEntity.type === 'operating_unit') {
+        const childOperatingUnitIds = await EntityRepository.getOperatingUnitDescendantIds(entity_id)
+        if (childOperatingUnitIds.length > 0) {
+            return {
+                fieldErrors: {
+                    entity_id: ['Please select the lowest operating unit under this hierarchy.'],
+                },
+                values: submittedValues,
+            }
+        }
+    }
+
     const response = await auth.api.signUpEmail({
         body: {
             email: email,
@@ -73,11 +164,39 @@ export async function signup(state: UserFormState, formData: FormData): Promise<
         }
     }
 
+    const responseData = await response.json()
+
+    // Log user signup
+    try {
+        if (!responseData.user.id || !responseData.user.entity_id) return
+
+        const userData = {
+            name: responseData.user.name,
+            email: responseData.user.email,
+            position: responseData.user.position
+        }
+
+        logUserSignUp(responseData.user.id, responseData.user.entity_id, userData, responseData.user.created_at)
+    } catch (error) {
+        console.error("Failed to create audit log for user signup", error)
+    }
+
     // Redirect to login page
     redirect('/login')
 }
 
 export async function logout() {
+    const session = await sessionDetails()
+
+    // Log user logout
+    if (session?.user) {
+        try {
+            logUserLogout(session.user.id, session.user.entity_id)
+        } catch (error) {
+            console.error("Failed to create audit log for user logout", error)
+        }
+    }
+
     await auth.api.signOut({
         headers: await headers() 
     })

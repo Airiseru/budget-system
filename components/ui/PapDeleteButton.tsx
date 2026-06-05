@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation'
 import { useState } from 'react'
+import LoadingOverlay from '@/components/ui/LoadingOverlay'
 
 export default function PapDeleteButton({ id }: { id: string }) {
     const router = useRouter()
@@ -16,7 +17,7 @@ export default function PapDeleteButton({ id }: { id: string }) {
             const res = await fetch(`/api/paps/${id}`, { method: 'DELETE' })
             if (!res.ok) throw new Error('Failed to delete')
             router.push('/paps')
-        } catch (err) {
+        } catch {
             alert('Failed to delete PAP')
         } finally {
             setIsLoading(false)
@@ -24,12 +25,15 @@ export default function PapDeleteButton({ id }: { id: string }) {
     }
 
     return (
-        <button
-            onClick={handleDelete}
-            disabled={isLoading}
-            className="bg-destructive text-white px-4 py-2 rounded disabled:opacity-50"
-        >
-            {isLoading ? 'Deleting...' : 'Delete'}
-        </button>
+        <>
+            <LoadingOverlay show={isLoading} label="Deleting PAP..." />
+            <button
+                onClick={handleDelete}
+                disabled={isLoading}
+                className="bg-destructive text-white px-4 py-2 rounded-md hover:bg-destructive/90 disabled:opacity-50"
+            >
+                {isLoading ? 'Deleting...' : 'Delete'}
+            </button>
+        </>
     )
 }

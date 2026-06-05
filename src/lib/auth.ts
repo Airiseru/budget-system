@@ -29,9 +29,9 @@ export const auth = betterAuth({
                 input: true,
             },
             role: {
-                type: ['unverified', 'admin', 'dbm', 'agency'],
+                type: ['dbm', 'department', 'agency', 'ou', 'others'],
                 required: true,
-                defaultValue: 'unverified',
+                defaultValue: 'others',
                 input: false,
             },
             access_level: {
@@ -40,12 +40,33 @@ export const auth = betterAuth({
                 defaultValue: 'none',
                 input: false,
             },
-            entity_id: {
+            workflow_role: {
                 type: "string",
                 required: false,
+                input: false
+            },
+            is_admin: {
+                type: "boolean",
+                required: false,
+                input: false
+            },
+            signing_pin_hash: {
+                type: "string",
+                required: false,
+                input: false
+            },
+            entity_id: {
+                type: "string",
+                required: true,
                 input: true
             },
-            public_key: {
+            status: {
+                type: ['unverified', 'active', 'archived', 'suspended'],
+                required: false,
+                input: false,
+                defaultValue: 'unverified'
+            },
+            archived_at: {
                 type: "string",
                 required: false,
                 input: false
@@ -86,4 +107,9 @@ export const auth = betterAuth({
             updatedAt: "updated_at"
         },
     },
+    advanced: {
+        database: {
+            generateId: () => crypto.randomUUID(),
+        }
+    }
 })

@@ -3,9 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { authClient } from "@/src/lib/auth-client";
+import { logUserLogin } from "@/src/actions/audit";
 import BackButton from "@/components/ui/BackButton";
 import { Button } from "@/components/ui/button"
 import { Eye, EyeOff } from 'lucide-react'
+import LoadingOverlay from "@/components/ui/LoadingOverlay";
+import { queueWelcomeStatus } from "@/components/ui/GlobalWelcomeStatus";
 
 export default function LoginPage() {
     const router = useRouter()
@@ -35,9 +38,26 @@ export default function LoginPage() {
             return
         }
 
+        // Log user login
+        if (data?.user?.id && data?.user?.entity_id) {
+            const auditLog = await logUserLogin(data.user.id, data.user.entity_id)
+
+            if (!auditLog?.success) {
+                setError("Login succeeded, but the security audit log failed. Please contact IT.");
+                setIsLoading(false);
+                return; // Block entry if the black box is broken
+            }
+        }
+
+        if (data?.user?.name) {
+            queueWelcomeStatus(data.user.name)
+        }
+
         // Route the user based on the role
-        if (data?.user?.role === 'admin') {
+        if (data?.user?.is_admin) {
             router.push('/admin')
+        } else if (data?.user?.status === 'unverified') {
+            router.push('/pending-approval')
         } else {
             router.push('/home')
         }
@@ -45,6 +65,7 @@ export default function LoginPage() {
 
     return (
         <div className="max-w-full p-8 flex h-screen items-center justify-center flex-col">
+            <LoadingOverlay show={isLoading} label="Logging in..." />
             <div className="max-w-lg w-full">
                 <h1 className="text-2xl font-bold mb-4">Login</h1>
             </div>

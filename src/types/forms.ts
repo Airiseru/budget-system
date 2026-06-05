@@ -10,6 +10,9 @@ export interface FormTable {
     id: Generated<string>
     entity_id: string
     type: string
+    fiscal_year: number
+    parent_form_id : string | null
+    version: number
     codename: string
     auth_status: string | null
     created_at: Generated<Date>
@@ -21,8 +24,8 @@ export type NewForm = Insertable<FormTable>
 export type FormUpdate = Updateable<FormTable>
 
 export interface FormPapsTable {
-  form_id: string;
-  pap_id: string;
+    form_id: string;
+    pap_id: string;
 }
 
 export type NewFormPap = Insertable<FormPapsTable>;

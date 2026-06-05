@@ -6,6 +6,8 @@ import {
     Updateable
 } from 'kysely'
 
+import { ACCESS_LEVEL_LABELS, WORKFLOW_ROLE_LABELS } from '../lib/constants'
+
 export interface EntitiesTable {
     id: Generated<string>,
     type: string
@@ -14,6 +16,11 @@ export interface EntitiesTable {
 export type Entity = Selectable<EntitiesTable>
 export type NewEntity = Insertable<EntitiesTable>
 
+export type UserRole = 'dbm' | 'department' | 'agency' | 'ou' | 'others' | 'unverified'
+export type UserStatus = 'unverified' | 'active' | 'archived' | 'suspended'
+export type UserAccessLevel = keyof typeof ACCESS_LEVEL_LABELS | 'none'
+export type UserWorkflowRole = keyof typeof WORKFLOW_ROLE_LABELS
+
 export interface UserTable {
     id: string
     name: string
@@ -21,18 +28,21 @@ export interface UserTable {
     email_verified: boolean
     image: string | null
     position: string
-    role: 'unverified' | 'admin' | 'dbm' | 'agency'
-    access_level: 'none' | 'view' | 'encode' | 'review' | 'approve'
+    role: UserRole
+    is_admin: boolean
+    status: UserStatus
+    archived_at: Date | null
+    workflow_role: UserWorkflowRole | null
+    access_level: UserAccessLevel
+    signing_pin_hash: string | null
     entity_id: string | null
-    public_key: string | null
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
+    deleted_at: Date | null
 }
 
 export type User = Selectable<UserTable>
 export type UserUpdate = Updateable<UserTable>
-export type UserRole = 'unverified' | 'admin' | 'dbm' | 'agency';
-export type UserAccessLevel = 'none' | 'view' | 'encode' | 'review' | 'approve';
 
 export interface SessionTable {
     id: string
@@ -70,11 +80,14 @@ export interface VerificationTable {
     updated_at: ColumnType<Date, never, Date>
 }
 
+export type EntityStatus = 'active' | 'inactive'
+
 export interface DepartmentsTable {
     id: string
     name: string
     abbr: string
     uacs_code: string
+    status: EntityStatus
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
@@ -90,6 +103,7 @@ export interface AgenciesTable {
     abbr: string | null
     type: 'bureau' | 'attached_agency'
     uacs_code: string
+    status: EntityStatus
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
@@ -105,6 +119,8 @@ export interface OperatingUnitsTable {
     name: string
     abbr: string | null
     uacs_code: string
+    parent_ou_id: string | null
+    status: EntityStatus
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
 }
@@ -112,6 +128,31 @@ export interface OperatingUnitsTable {
 export type OperatingUnit = Selectable<OperatingUnitsTable>
 export type NewOperatingUnit = Insertable<OperatingUnitsTable>
 export type OperatingUnitUpdate = Updateable<OperatingUnitsTable>
+
+export type EntityRequestStatus = 'pending' | 'approved' | 'rejected'
+
+export interface EntityRequestsTable {
+    id: Generated<string>
+    requested_by_id: string
+    requested_by_type: string
+    requested_by_user_id: string
+    proposed_name: string
+    proposed_abbr: string | null
+    proposed_classification: 'department' | 'agency' | 'operating_unit'
+    proposed_agency_type: 'bureau' | 'attached_agency' | null
+    proposed_parent_department_id: string | null
+    proposed_parent_agency_id: string | null
+    proposed_parent_ou_id: string | null
+    legal_basis: string
+    status: EntityRequestStatus
+    dbm_remarks: string | null
+    resulting_id: string | null
+    created_at: Generated<Date>
+}
+
+export type EntityRequest = Selectable<EntityRequestsTable>
+export type NewEntityRequest = Insertable<EntityRequestsTable>
+export type EntityRequestUpdate = Updateable<EntityRequestsTable>
 
 export type EntitySegments = {
     entity_id: string
@@ -128,13 +169,18 @@ export type EntitySegments = {
 
 export type UserEntity = {
     user_id: string
+    entity_id?: string | null
     user_name: string
     user_email: string
     position: string
     role: UserRole
+    is_admin?: boolean
+    status?: UserStatus
+    workflow_role: UserWorkflowRole | null
     access_level: UserAccessLevel
     entity_type: string
     entity_name: string
+    parent_entity_name?: string
     user_created_at: Date
     user_updated_at: Date
 }

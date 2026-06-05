@@ -4,10 +4,9 @@ import SignUpForm from "./SignUpForm"
 export default async function SignUpPage() {
     const EntityRepository = createEntityRepository(process.env.DATABASE_TYPE || 'postgres')
     
-    // Fetch departments and agencies
-    const departments = await EntityRepository.getAllDepartments()
-    const agencies = await EntityRepository.getAllAgencies()
+    const departments = (await EntityRepository.getAllDepartments()).filter(entity => entity.status === 'active')
+    const agencies = (await EntityRepository.getAllAgencies()).filter(entity => entity.status === 'active')
+    const operatingUnits = (await EntityRepository.getAllOperatingUnits()).filter(entity => entity.status === 'active')
 
-    // Pass departments and agencies to form
-    return <SignUpForm departments={departments} agencies={agencies} />
+    return <SignUpForm departments={departments} agencies={agencies} operatingUnits={operatingUnits} />
 }

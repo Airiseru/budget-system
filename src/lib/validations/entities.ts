@@ -3,14 +3,14 @@ import { AgencyTypes } from '@/src/types/entities'
 
 export const DepartmentSchema = z.object({
     name: z.string().min(1, { error: "Name is required" }).max(128, { error: "Name must be less than 128 characters" }),
-    uacs_code: z.coerce.number().min(1, { error: "UACS Code is required" }).max(99, { error: "UACS Code must be between 1 and 99" }),
+    uacs_code: z.string().regex(/^\d{2}$/, { error: "Department UACS Code must be exactly 2 digits" }),
     abbr: z.string().min(1, { error: "Abbreviation is required" }).max(16, { error: "Abbreviation must be less than 16 characters" })
 })
 
 export const AgencySchema = z.object({
     name: z.string().min(1, { error: "Name is required" }).max(128, { error: "Name must be less than 128 characters" }),
     abbr: z.string().max(16, { error: "Abbreviation must be less than 16 characters" }).nullable().optional(),
-    uacs_code: z.coerce.number().min(0, { error: "UACS Code is required" }).max(999, { error: "UACS Code must be between 1 and 999" }),
+    uacs_code: z.string().regex(/^\d{3}$/, { error: "Agency UACS Code must be exactly 3 digits" }),
     type: z.enum(AgencyTypes).default('bureau'),
     department_id: z.string().nullable().optional(),
 })
@@ -18,8 +18,30 @@ export const AgencySchema = z.object({
 export const OperatingUnitSchema = z.object({
     name: z.string().min(1, { error: "Name is required" }).max(256, { error: "Name must be less than 256 characters" }),
     abbr: z.string().max(16, { error: "Abbreviation must be less than 16 characters" }).nullable().optional(),
-    uacs_code: z.coerce.number().min(1, { error: "UACS Code is required" }).max(99, { error: "UACS Code must be between 1 and 99" }),
-    agency_id: z.string().min(1, { error: "Agency is required" })
+    uacs_code: z.string().min(1, { error: "UACS Code is required" }),
+    agency_id: z.string().min(1, { error: "Agency is required" }),
+    parent_ou_id: z.string().nullable().optional(),
+}).superRefine((data, ctx) => {
+    const isLowerLevelOu = !!data.parent_ou_id
+
+    if (isLowerLevelOu) {
+        if (!/^\d{5}$/.test(data.uacs_code)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['uacs_code'],
+                message: 'Lower-level operating unit UACS Code must be exactly 5 digits',
+            })
+        }
+        return
+    }
+
+    if (!/^\d{2}$/.test(data.uacs_code)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['uacs_code'],
+            message: 'Operating unit UACS Code must be exactly 2 digits',
+        })
+    }
 })
 
 export type NewEntityFormState = {
@@ -31,6 +53,7 @@ export type NewEntityFormState = {
         type?: string[]
         department_id?: string[]
         agency_id?: string[]
+        parent_ou_id?: string[]
     }
     values?: {
         name?: string
@@ -39,6 +62,7 @@ export type NewEntityFormState = {
         type?: string
         department_id?: string
         agency_id?: string
+        parent_ou_id?: string
     }
 } | undefined
 
@@ -53,6 +77,7 @@ export type EditEntityFormState = {
         type?: string[]
         department_id?: string[]
         agency_id?: string[]
+        parent_ou_id?: string[]
     }
     values?: {
         entity_id?: string
@@ -63,6 +88,7 @@ export type EditEntityFormState = {
         type?: string
         department_id?: string
         agency_id?: string
+        parent_ou_id?: string
     }
 } | undefined
 

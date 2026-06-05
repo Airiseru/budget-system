@@ -1,19 +1,10 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter, Noto_Sans } from "next/font/google";
+import { Noto_Sans } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
-
-const inter = Inter({subsets:['latin'],variable:'--font-sans'});
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+import GeneralNavBar from "@/components/ui/GeneralNavBar";
+import GlobalFloatingUserInfo from "@/components/ui/GlobalFloatingUserInfo";
+import GlobalWelcomeStatus from "@/components/ui/GlobalWelcomeStatus";
 
 const notoSans = Noto_Sans({
   variable: "--font-noto-sans",
@@ -34,7 +25,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={notoSans.className} suppressHydrationWarning>
         <ThemeProvider attribute="class" defaultTheme="light" disableTransitionOnChange>
+          <GeneralNavBar />
           {children}
+          <GlobalWelcomeStatus />
+          <GlobalFloatingUserInfo />
         </ThemeProvider>
       </body>
     </html>

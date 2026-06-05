@@ -2,26 +2,21 @@
 
 import { signup } from "@/src/actions/auth"
 import { useActionState, useState } from "react"
-import { Department, Agency } from "@/src/types/entities"
+import { Department, Agency, OperatingUnit } from "@/src/types/entities"
 import BackButton from "@/components/ui/BackButton"
 import { Button } from "@/components/ui/button"
-import {
-    Select,
-    SelectContent,
-    SelectGroup,
-    SelectItem,
-    SelectLabel,
-    SelectTrigger,
-    SelectValue,
-} from "@/components/ui/select"
+import SearchableComboboxField, {
+    type SearchableComboboxOption,
+} from "@/components/ui/dbm/SearchableComboboxField"
 import { Eye, EyeOff } from 'lucide-react'
 
 type Props = {
     departments: Department[];
     agencies: Agency[];
+    operatingUnits: OperatingUnit[];
 }
 
-export default function SignUpForm({ departments, agencies }: Props) {
+export default function SignUpForm({ departments, agencies, operatingUnits }: Props) {
     const [state, action, pending] = useActionState(signup, undefined)
     const [selectedEntityId, setSelectedEntityId] = useState<string>(state?.values?.entity_id || '')
     const [showPassword, setShowPassword] = useState(false)
@@ -32,12 +27,80 @@ export default function SignUpForm({ departments, agencies }: Props) {
         setSelectedEntityId(value ?? '')
     }
 
-    const getEntityName = (id: string) => {
-        const dept = departments.find(d => d.id === id)
-        if (dept) return `${dept.name} (Central Office)`
-        const agency = agencies.find(a => a.id === id)
-        if (agency) return agency.name
-        return ''
+    const orderedDepartments = [...departments].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
+    const orderedAgencies = [...agencies].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
+    const orderedOperatingUnits = [...operatingUnits].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))
+    const parentOperatingUnitIds = new Set(
+        orderedOperatingUnits
+            .map((operatingUnit) => operatingUnit.parent_ou_id)
+            .filter((id): id is string => Boolean(id))
+    )
+
+    const entityOptions: SearchableComboboxOption[] = []
+    const getEntitySearchText = (
+        entity: { name: string; uacs_code?: string | null },
+        ancestors: Array<{ name: string; uacs_code?: string | null }> = []
+    ) =>
+        [...ancestors, entity]
+            .flatMap((item) => [item.name, item.uacs_code ?? ''])
+            .filter(Boolean)
+            .join(' ')
+
+    const pushOperatingUnits = (
+        agencyId: string,
+        parentOuId: string | null = null,
+        ancestors: Array<{ name: string; uacs_code?: string | null }> = []
+    ) => {
+        const matches = orderedOperatingUnits.filter(
+            (operatingUnit) =>
+                operatingUnit.agency_id === agencyId &&
+                (operatingUnit.parent_ou_id ?? null) === parentOuId
+        )
+
+        for (const operatingUnit of matches) {
+            const nextAncestors = [...ancestors, operatingUnit]
+            if (!parentOperatingUnitIds.has(operatingUnit.id)) {
+                entityOptions.push({
+                    value: operatingUnit.id,
+                    label: `${operatingUnit.uacs_code} • ${operatingUnit.name}`,
+                    searchText: getEntitySearchText(operatingUnit, ancestors),
+                    indentLevel: Math.max(ancestors.length, 1),
+                })
+            }
+            pushOperatingUnits(agencyId, operatingUnit.id, nextAncestors)
+        }
+    }
+
+    for (const department of orderedDepartments) {
+        entityOptions.push({
+            value: department.id,
+            label: `${department.uacs_code} • ${department.name}`,
+            searchText: getEntitySearchText(department),
+            indentLevel: 0,
+        })
+
+        const childAgencies = orderedAgencies.filter((agency) => agency.department_id === department.id)
+        for (const agency of childAgencies) {
+            entityOptions.push({
+                value: agency.id,
+                label: `${agency.uacs_code} • ${agency.name}`,
+                searchText: getEntitySearchText(agency, [department]),
+                indentLevel: 1,
+            })
+            pushOperatingUnits(agency.id, null, [department, agency])
+        }
+    }
+
+    if (independentAgencies.length > 0) {
+        for (const agency of [...independentAgencies].sort((a, b) => a.uacs_code.localeCompare(b.uacs_code))) {
+            entityOptions.push({
+                value: agency.id,
+                label: `${agency.uacs_code} • ${agency.name}`,
+                searchText: getEntitySearchText(agency),
+                indentLevel: 0,
+            })
+            pushOperatingUnits(agency.id, null, [agency])
+        }
     }
 
     return (
@@ -60,56 +123,14 @@ export default function SignUpForm({ departments, agencies }: Props) {
                     {/* hidden input carries the actual UUID to the server action */}
                     <input id="entity_id" type="hidden" name="entity_id" value={selectedEntityId} required />
 
-                    <Select 
+                    <SearchableComboboxField
+                        items={entityOptions}
                         value={selectedEntityId}
-                        onValueChange={handleEntityChange}
-                    >
-                        <SelectTrigger className="border px-3 py-5 w-full rounded my-1 border-border text-base">
-                            <SelectValue placeholder="Select your Department or Agency">
-                                {selectedEntityId 
-                                    ? getEntityName(selectedEntityId) 
-                                    : <span className="text-gray-400">Select your Department or Agency</span>
-                                }
-                        </SelectValue>
-
-                        </SelectTrigger>
-                        
-                        <SelectContent>
-                            {/* Standard Departments and Agencies */}
-                            {departments.map((dept) => {
-                                const childAgencies = agencies.filter(a => a.department_id === dept.id)
-                                
-                                return (
-                                    <SelectGroup key={dept.id}>
-                                        {/* SelectLabel replaces optgroup label */}
-                                        <SelectLabel className="bg-muted/50">{dept.name}</SelectLabel>
-                                        
-                                        <SelectItem value={dept.id}>
-                                            {dept.name} (Central Office)
-                                        </SelectItem>
-                                        
-                                        {childAgencies.map((agency) => (
-                                            <SelectItem key={agency.id} value={agency.id}>
-                                                {agency.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectGroup>
-                                )
-                            })}
-
-                            {/* Independent Agencies */}
-                            {independentAgencies.length > 0 && (
-                                <SelectGroup>
-                                    <SelectLabel className="bg-muted/50">Independent Agencies & SUCs</SelectLabel>
-                                    {independentAgencies.map((agency) => (
-                                        <SelectItem key={agency.id} value={agency.id}>
-                                            {agency.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            )}
-                        </SelectContent>
-                    </Select>
+                        onValueChange={(value) => handleEntityChange(value)}
+                        placeholder="Select your Entity"
+                        searchPlaceholder="Search entities"
+                        emptyText="No entities found."
+                    />
                     {state?.fieldErrors?.entity_id && (
                         <p className="text-red-500 text-sm italic">{state.fieldErrors.entity_id[0]}</p>
                     )}

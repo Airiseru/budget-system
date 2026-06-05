@@ -8,10 +8,6 @@ import {
 
 export interface StaffingTable {
     id: Generated<string>
-    // Link to the base 'form' table (the envelope)
-    form_id: string 
-    fiscal_year: number
-    digital_signature: string
     submission_date: Generated<Date>
     created_at: Generated<Date>
     updated_at: ColumnType<Date, never, Date>
@@ -30,7 +26,10 @@ export interface PositionTable {
     staff_type: string
     organizational_unit: string
     position_title: string
-    salary_grade: string
+    salary_schedule_id: string
+    salary_grade: number
+    step: number
+    monthly_base_salary: number
     num_positions: number
     months_employed: number
     total_salary: number
@@ -40,6 +39,24 @@ export type Position = Selectable<PositionTable>
 export type NewPosition = Insertable<PositionTable>
 export type PositionUpdate = Updateable<PositionTable>
 
+export interface CompensationTable {
+    id: Generated<string>
+    staff_id: string
+    compensation_rule_id: string
+    name: string
+    amount: number
+}
+
+export type Compensation = Selectable<CompensationTable>
+export type NewCompensation = Insertable<CompensationTable>
+export type CompensationUpdate = Updateable<CompensationTable>
+
+export interface PositionWithCompensations extends Position {
+    compensations: Compensation[];
+}
+
 export interface StaffingSummaryWithPositions extends StaffingSummary {
-    positions: Position[];
+    fiscal_year: number;
+    positions: PositionWithCompensations[];
+    auth_status: string | null;
 }

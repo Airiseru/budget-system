@@ -1,0 +1,759 @@
+'use client'
+
+import { useActionState, useState } from 'react'
+import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import BackButton from '@/components/ui/BackButton'
+import BudgetPrepClosedBanner from '@/components/ui/BudgetPrepClosedBanner'
+import PaginationControls from '@/components/ui/PaginationControls'
+import { Button } from '@/components/ui/button'
+import SearchableComboboxField, { type SearchableComboboxOption } from '@/components/ui/dbm/SearchableComboboxField'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
+import { createTierOneAllocationAction, updateTierOneAllocationAction } from '@/src/actions/budgetAllocations'
+import type { BUDGET_PREP_WORKFLOW_STAGES_TYPE } from '@/src/lib/constants'
+import { BUDGET_PHASE_LABELS } from '@/src/lib/constants'
+import type { BudgetCycle } from '@/src/types/budget_settings'
+import type { ItemCatalogScope } from '@/src/types/line_items'
+import type { AllocationWorkflowLogEntry, BudgetAllocationListItem } from '@/src/db/postgres/repositories/budgetAllocationRepository'
+import { ChevronDown, Pencil } from 'lucide-react'
+import CollapsibleRemarksSection from '@/components/ui/remarks/CollapsibleRemarksSection'
+
+type EntityOption = {
+    id: string
+    name: string
+    entity_type: string
+    uacs_code?: string | null
+    department_id?: string | null
+    agency_id?: string | null
+    parent_ou_id?: string | null
+}
+
+type PapOption = {
+    id: string
+    title: string
+    entity_id: string | null
+    entity_name: string | null
+    project_status: string
+    full_pap_code?: string | null
+}
+
+type ItemOption = {
+    id: string
+    name: string
+    scope: ItemCatalogScope
+    entity_id: string | null
+    pap_code: string | null
+    expense_class: string
+}
+
+type FundingSourceOption = {
+    code: string
+    description: string
+}
+
+const REMARK_STAGE_OPTIONS: { value: BUDGET_PREP_WORKFLOW_STAGES_TYPE; label: string }[] = [
+    { value: 'entity_proposal', label: 'Entity' },
+    { value: 'dbm_review', label: 'DBM Review' },
+    { value: 'dbm_appeal', label: 'DBM Appeal' },
+]
+
+const SELECT_TRIGGER_CLASSNAME =
+    "border px-3 py-5 w-full rounded border-border text-base bg-background mb-0 min-h-12 max-w-full overflow-hidden *:data-[slot=select-value]:min-w-0 *:data-[slot=select-value]:truncate"
+
+const SELECT_CONTENT_CLASSNAME =
+    "min-w-[var(--anchor-width)] w-max max-w-[min(90vw,36rem)] h-auto"
+
+function buildHierarchicalEntityOptions(
+    departments: EntityOption[],
+    agencies: EntityOption[],
+    operatingUnits: EntityOption[]
+): SearchableComboboxOption[] {
+    const ordered: SearchableComboboxOption[] = []
+    const getEntitySearchText = (entity: EntityOption, ancestors: EntityOption[] = []) =>
+        [...ancestors, entity]
+            .flatMap((item) => [item.name, item.uacs_code ?? ''])
+            .filter(Boolean)
+            .join(' ')
+
+    const pushOperatingUnits = (
+        agencyId: string,
+        parentOuId: string | null = null,
+        ancestors: EntityOption[] = []
+    ) => {
+        const matches = operatingUnits.filter(
+            (entity) => entity.agency_id === agencyId && (entity.parent_ou_id ?? null) === parentOuId
+        )
+
+        for (const entity of matches) {
+            ordered.push({
+                value: entity.id,
+                label: `${entity.uacs_code ?? '—'} • ${entity.name}`,
+                searchText: getEntitySearchText(entity, ancestors),
+                indentLevel: Math.max(ancestors.length, 1),
+            })
+            pushOperatingUnits(agencyId, entity.id, [...ancestors, entity])
+        }
+    }
+
+    for (const department of departments) {
+        ordered.push({
+            value: department.id,
+            label: `${department.uacs_code ?? '—'} • ${department.name}`,
+            searchText: getEntitySearchText(department),
+            indentLevel: 0,
+        })
+
+        const departmentAgencies = agencies.filter((agency) => agency.department_id === department.id)
+        for (const agency of departmentAgencies) {
+            ordered.push({
+                value: agency.id,
+                label: `${agency.uacs_code ?? '—'} • ${agency.name}`,
+                searchText: getEntitySearchText(agency, [department]),
+                indentLevel: 1,
+            })
+            pushOperatingUnits(agency.id, null, [department, agency])
+        }
+    }
+
+    const independentAgencies = agencies.filter((agency) => agency.department_id == null)
+    for (const agency of independentAgencies) {
+        ordered.push({
+            value: agency.id,
+            label: `${agency.uacs_code ?? '—'} • ${agency.name}`,
+            searchText: getEntitySearchText(agency),
+            indentLevel: 0,
+        })
+        pushOperatingUnits(agency.id, null, [agency])
+    }
+
+    return ordered
+}
+
+type Props = {
+    activeCycle: BudgetCycle | null
+    viewingYear: number | null
+    availableYears: number[]
+    isViewingOnly: boolean
+    page: number
+    totalPages: number
+    selectedEntityId: string
+    selectedEntityMode: 'exact' | 'hierarchical'
+    selectedPapCode: string
+    entities: EntityOption[]
+    paps: PapOption[]
+    items: ItemOption[]
+    fundingSources: FundingSourceOption[]
+    allocations: BudgetAllocationListItem[]
+    mode?: 'create' | 'edit'
+    initialValues?: Partial<BudgetAllocationListItem>
+    remarks?: AllocationWorkflowLogEntry[]
+}
+
+export function TierOneAllocationManager({
+    activeCycle,
+    viewingYear,
+    availableYears,
+    isViewingOnly,
+    page,
+    totalPages,
+    selectedEntityId,
+    selectedEntityMode,
+    selectedPapCode,
+    entities,
+    paps,
+    items,
+    fundingSources,
+    allocations,
+    mode = 'create',
+    initialValues,
+    remarks = [],
+}: Props) {
+    const router = useRouter()
+    const actionFn = mode === 'edit' ? updateTierOneAllocationAction : createTierOneAllocationAction
+    const [state, action, pending] = useActionState(actionFn, undefined)
+    const [entityId, setEntityId] = useState(state?.values?.entity_id ?? initialValues?.entity_id ?? '')
+    const [papCode, setPapCode] = useState(state?.values?.pap_code ?? initialValues?.pap_code ?? '')
+    const [itemCatalogId, setItemCatalogId] = useState(state?.values?.item_catalog_id ?? initialValues?.item_catalog_id ?? '')
+    const [fundCode, setFundCode] = useState(state?.values?.fund_code ?? initialValues?.fund_code ?? '')
+    const [workflowStage, setWorkflowStage] = useState<BUDGET_PREP_WORKFLOW_STAGES_TYPE>(
+        ((state?.values?.workflow_stage ?? 'dbm_review') as BUDGET_PREP_WORKFLOW_STAGES_TYPE)
+    )
+    const currentPhase = activeCycle?.current_phase ?? null
+    const canCreateAllocation = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditStructure = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditProposedAmount = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditDbmAmount = currentPhase === 'preparation' || currentPhase === 'dbm_review'
+    const canEditNepAmount = currentPhase === 'presidential_approval'
+    const canEditGaaAmount = currentPhase === 'legislative_deliberation'
+
+    const departments = entities
+        .filter((entity) => entity.entity_type === 'department')
+        .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
+    const agencies = entities
+        .filter((entity) => entity.entity_type === 'agency')
+        .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
+    const operatingUnits = entities
+        .filter((entity) => entity.entity_type === 'operating_unit')
+        .sort((a, b) => (a.uacs_code ?? '').localeCompare(b.uacs_code ?? ''))
+    const sortPapsByFullCode = (papList: PapOption[]) =>
+        [...papList].sort((a, b) => {
+            const codeComparison = (a.full_pap_code || '').localeCompare(b.full_pap_code || '')
+            return codeComparison || a.title.localeCompare(b.title)
+        })
+
+    const availablePaps = sortPapsByFullCode(
+        paps.filter((pap) => pap.entity_id == null || pap.entity_id === entityId)
+    )
+
+    const availableItems = items.filter((item) => {
+        if (item.scope === 'global') return true
+        if (item.scope === 'entity') return item.entity_id === entityId
+        return !!papCode && item.pap_code === papCode
+    })
+
+    const [selectedYear, setSelectedYear] = useState(viewingYear ? String(viewingYear) : '')
+    const [selectedFilterEntityId, setSelectedFilterEntityId] = useState(selectedEntityId || 'all')
+    const [selectedFilterMode, setSelectedFilterMode] = useState<'exact' | 'hierarchical'>(selectedEntityMode)
+    const [selectedFilterPapCode, setSelectedFilterPapCode] = useState(selectedPapCode || 'all')
+    const [filtersOpen, setFiltersOpen] = useState(true)
+    const readOnlyMode = mode === 'create' && isViewingOnly
+    const sortedPapFilters = sortPapsByFullCode(paps)
+
+    const entityOptions = buildHierarchicalEntityOptions(departments, agencies, operatingUnits)
+
+    const filterEntityOptions: SearchableComboboxOption[] = [
+        { value: 'all', label: 'All entities' },
+        ...entityOptions,
+    ]
+    const filteredPapOptions = (() => {
+        if (selectedFilterEntityId === 'all') return sortedPapFilters
+
+        if (selectedFilterMode === 'exact') {
+            return sortedPapFilters.filter(
+                (pap) => pap.entity_id === null || pap.entity_id === selectedFilterEntityId
+            )
+        }
+
+        const selectedEntity = entities.find((entity) => entity.id === selectedFilterEntityId)
+        if (!selectedEntity) return sortedPapFilters
+
+        if (selectedEntity.entity_type === 'department') {
+            const departmentAgencyIds = agencies
+                .filter((agency) => agency.department_id === selectedFilterEntityId)
+                .map((agency) => agency.id)
+            const departmentOperatingUnitIds = operatingUnits
+                .filter((operatingUnit) => departmentAgencyIds.includes(operatingUnit.agency_id ?? ''))
+                .map((operatingUnit) => operatingUnit.id)
+
+            return sortedPapFilters.filter((pap) =>
+                pap.entity_id === null ||
+                pap.entity_id === selectedFilterEntityId ||
+                departmentAgencyIds.includes(pap.entity_id ?? '') ||
+                departmentOperatingUnitIds.includes(pap.entity_id ?? '')
+            )
+        }
+
+        if (selectedEntity.entity_type === 'agency') {
+            const agencyOperatingUnitIds = operatingUnits
+                .filter((operatingUnit) => operatingUnit.agency_id === selectedFilterEntityId)
+                .map((operatingUnit) => operatingUnit.id)
+
+            return sortedPapFilters.filter((pap) =>
+                pap.entity_id === null ||
+                pap.entity_id === selectedFilterEntityId ||
+                agencyOperatingUnitIds.includes(pap.entity_id ?? '')
+            )
+        }
+
+        const descendantOperatingUnitIds = operatingUnits
+            .filter((operatingUnit) => operatingUnit.parent_ou_id === selectedFilterEntityId)
+            .map((operatingUnit) => operatingUnit.id)
+
+        return sortedPapFilters.filter((pap) =>
+            pap.entity_id === null ||
+            pap.entity_id === selectedFilterEntityId ||
+            descendantOperatingUnitIds.includes(pap.entity_id ?? '')
+        )
+    })()
+
+    const filteredPapComboboxOptions: SearchableComboboxOption[] = [
+        { value: 'all', label: 'All PAPs' },
+        ...filteredPapOptions.map((pap) => ({
+            value: pap.id,
+            label: `${pap.full_pap_code || 'Unassigned'} • ${pap.entity_name ? `${pap.title} • ${pap.entity_name}` : `${pap.title} • All entities`}`,
+        })),
+    ]
+
+    const availablePapOptions: SearchableComboboxOption[] = availablePaps.map((pap) => ({
+        value: pap.id,
+        label: `${pap.full_pap_code || 'Unassigned'} • ${pap.entity_id == null ? `${pap.title} (All entities)` : pap.title}`,
+    }))
+
+    const availableItemOptions: SearchableComboboxOption[] = availableItems.map((item) => ({
+        value: item.id,
+        label: `${item.name} (${item.expense_class})`,
+    }))
+
+    const fundingSourceOptions: SearchableComboboxOption[] = fundingSources.map((source) => ({
+        value: source.code,
+        label: `${source.code} • ${source.description}`,
+    }))
+
+    const getFilterLink = (overrides: {
+        year?: string
+        entityId?: string
+        entityMode?: string
+        papCode?: string
+        page?: string
+    } = {}) => {
+        const params = new URLSearchParams()
+        const nextYear = overrides.year ?? selectedYear
+        const nextEntityId = overrides.entityId ?? selectedFilterEntityId
+        const nextEntityMode = overrides.entityMode ?? selectedFilterMode
+        const nextPapCode = overrides.papCode ?? selectedFilterPapCode
+        const nextPage = overrides.page ?? String(page)
+
+        if (nextYear) params.set('year', nextYear)
+        if (nextEntityId && nextEntityId !== 'all') params.set('entityId', nextEntityId)
+        if (nextEntityId && nextEntityId !== 'all' && nextEntityMode !== 'exact') params.set('entityMode', nextEntityMode)
+        if (nextPapCode && nextPapCode !== 'all') params.set('papCode', nextPapCode)
+        if (nextPage && nextPage !== '1') params.set('page', nextPage)
+
+        return `/dbm/tier-one?${params.toString()}`
+    }
+
+    return (
+        <main className="min-h-screen bg-background">
+            <div className="max-w-7xl mx-auto px-6 py-10 space-y-8">
+                <div className="flex items-center justify-between">
+                    <BackButton url="/dbm" />
+                    <div className="text-center">
+                        <h1 className="text-3xl font-bold tracking-tight text-secondary-foreground">Tier One Allocations</h1>
+                        <p className="text-muted-foreground text-sm mt-1">
+                            {(!readOnlyMode) ? 'Create or adjust Tier One budget allocations based on the current cycle phase.' : 'View Tier One budget allocations for past fiscal years.'}
+                        </p>
+                    </div>
+                    <div className="w-[73px]" />
+                </div>
+
+                {readOnlyMode && (
+                    <BudgetPrepClosedBanner
+                        message={
+                            activeCycle
+                                ? `The current budget cycle is in the ${BUDGET_PHASE_LABELS[activeCycle.current_phase]} phase. Tier One allocations are view-only right now.`
+                                : 'There is no active budget cycle. Select a fiscal year below to view Tier One allocations.'
+                        }
+                    />
+                )}
+
+                {activeCycle && !readOnlyMode ? (
+                    <div className="rounded-lg border border-border bg-accent/30 px-4 py-3 text-sm text-secondary-foreground">
+                        Creating allocations for Fiscal Year <span className="font-bold">{activeCycle.fiscal_year}</span>.
+                        <div className="mt-1 text-xs text-muted-foreground">
+                            Current phase: <span className="font-semibold text-secondary-foreground">{BUDGET_PHASE_LABELS[activeCycle.current_phase]}</span>
+                        </div>
+                    </div>
+                ) : availableYears.length > 0 ? (
+                    <div className="rounded-lg border border-border bg-background overflow-hidden">
+                        <button
+                            type="button"
+                            onClick={() => setFiltersOpen((open) => !open)}
+                            className={`w-full px-4 py-4 flex items-center justify-between text-left ${filtersOpen ? 'border-b border-border' : ''}`}
+                        >
+                            <div>
+                                <h2 className="text-lg font-semibold text-secondary-foreground">Filters</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    Narrow the Tier One allocations shown in view-only mode.
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>{filtersOpen ? 'Hide' : 'Show'}</span>
+                                <ChevronDown className={`h-4 w-4 transition-transform ${filtersOpen ? 'rotate-180' : ''}`} />
+                            </div>
+                        </button>
+
+                        {filtersOpen && (
+                            <form
+                                onSubmit={(event) => {
+                                    event.preventDefault()
+                                    if (!selectedYear) return
+                                    router.push(getFilterLink({
+                                        year: selectedYear,
+                                        entityId: selectedFilterEntityId,
+                                        entityMode: selectedFilterMode,
+                                        papCode: selectedFilterPapCode,
+                                        page: '1',
+                                    }))
+                                }}
+                                className="px-4 py-4 flex flex-col gap-4"
+                            >
+                                <div className="flex flex-row gap-4 flex-wrap 2xl:flex-nowrap">
+                                    <div className="space-y-2 w-full sm:w-[220px] lg:flex-1 lg:min-w-[200px] lg:max-w-[260px]">
+                                        <p className="font-medium">Fiscal Year</p>
+                                        <Select value={selectedYear} onValueChange={(value) => setSelectedYear(value ?? '')}>
+                                            <SelectTrigger className={SELECT_TRIGGER_CLASSNAME}>
+                                                <SelectValue placeholder="Select fiscal year">
+                                                    {selectedYear ? `FY ${selectedYear}` : 'Select fiscal year'}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent className={SELECT_CONTENT_CLASSNAME}>
+                                                {availableYears.map((year) => (
+                                                    <SelectItem key={year} value={String(year)}>
+                                                        FY {year}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 w-full lg:flex-[1.4] lg:min-w-[280px] lg:max-w-[440px]">
+                                        <p className="font-medium">Entity</p>
+                                        <SearchableComboboxField
+                                            items={filterEntityOptions}
+                                            value={selectedFilterEntityId}
+                                            placeholder="All entities"
+                                            searchPlaceholder="Search entities"
+                                            emptyText="No entities found."
+                                            onValueChange={(value) => {
+                                                setSelectedFilterEntityId(value || 'all')
+                                                setSelectedFilterPapCode('all')
+                                            }}
+                                        />
+                                    </div>
+                                    <div className="space-y-2 w-full sm:w-[220px] lg:flex-1 lg:min-w-[200px] lg:max-w-[260px]">
+                                        <p className="font-medium">Match Type</p>
+                                        <Select
+                                            value={selectedFilterMode}
+                                            onValueChange={(value) => setSelectedFilterMode((value ?? 'exact') as 'exact' | 'hierarchical')}
+                                            disabled={selectedFilterEntityId === 'all'}
+                                        >
+                                            <SelectTrigger className={SELECT_TRIGGER_CLASSNAME}>
+                                                <SelectValue placeholder="Select match mode">
+                                                    {selectedFilterMode === 'hierarchical' ? 'Hierarchical' : 'Exact'}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent className={SELECT_CONTENT_CLASSNAME}>
+                                                <SelectItem value="exact">Exact</SelectItem>
+                                                <SelectItem value="hierarchical">Hierarchical</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2 w-full lg:flex-[1.2] lg:min-w-[260px] lg:max-w-[380px]">
+                                        <p className="font-medium">PAP</p>
+                                        <SearchableComboboxField
+                                            items={filteredPapComboboxOptions}
+                                            value={selectedFilterPapCode}
+                                            placeholder="All PAPs"
+                                            searchPlaceholder="Search PAPs"
+                                            emptyText="No PAPs found."
+                                            onValueChange={(value) => setSelectedFilterPapCode(value || 'all')}
+                                        />
+                                    </div>
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-4">
+                                    <Button type="submit" className="bg-accent-foreground text-white hover:bg-accent-foreground/90 w-full sm:w-auto sm:px-6">
+                                        Apply Filters
+                                    </Button>
+                                    {(selectedEntityId || selectedPapCode || selectedEntityMode !== 'exact') && (
+                                        <Link href={getFilterLink({ entityId: 'all', entityMode: 'exact', papCode: 'all', page: '1' })} className="text-sm text-muted-foreground hover:text-secondary-foreground underline underline-offset-2 h-[38px] flex items-center">
+                                            Clear
+                                        </Link>
+                                    )}
+                                </div>
+                            </form>
+                        )}
+                    </div>
+                ) : (
+                    <div className="rounded-lg border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
+                        No budget cycles are available yet.
+                    </div>
+                )}
+
+                <div className={`grid gap-8 ${readOnlyMode ? '' : 'xl:grid-cols-[420px_1fr]'}`}>
+                    {!readOnlyMode && (
+                    <form action={action} className="space-y-5 rounded-xl border border-border bg-background p-6">
+                        {mode === 'edit' && (
+                            <input type="hidden" name="id" value={initialValues?.id ?? ''} />
+                        )}
+                        <div>
+                            <h2 className="text-lg font-semibold text-secondary-foreground">
+                                {mode === 'edit' ? 'Edit Allocation' : 'New Allocation'}
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                Select the entity, PAP, item catalog, and funding source for this Tier One allocation.
+                            </p>
+                        </div>
+
+                        {state?.formErrors?.[0] && (
+                            <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                {state.formErrors[0]}
+                            </div>
+                        )}
+
+                        <input type="hidden" name="entity_id" value={entityId} />
+                        <input type="hidden" name="pap_code" value={papCode} />
+                        <input type="hidden" name="item_catalog_id" value={itemCatalogId} />
+                        <input type="hidden" name="fund_code" value={fundCode} />
+                        <input type="hidden" name="workflow_stage" value={workflowStage} />
+
+                        <div className="space-y-2">
+                            <label className="font-medium">Entity</label>
+                            <SearchableComboboxField
+                                items={entityOptions}
+                                value={entityId}
+                                placeholder="Select entity"
+                                searchPlaceholder="Search entities"
+                                emptyText="No entities found."
+                                disabled={!canEditStructure}
+                                onValueChange={(value) => {
+                                    setEntityId(value)
+                                    setPapCode('')
+                                    setItemCatalogId('')
+                                }}
+                            />
+                            {state?.fieldErrors?.entity_id?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.entity_id[0]}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium">PAP</label>
+                            <SearchableComboboxField
+                                items={availablePapOptions}
+                                value={papCode}
+                                placeholder="Select PAP"
+                                searchPlaceholder="Search PAPs"
+                                emptyText="No PAPs found."
+                                disabled={!canEditStructure}
+                                onValueChange={(value) => {
+                                    setPapCode(value)
+                                    setItemCatalogId('')
+                                }}
+                            />
+                            {state?.fieldErrors?.pap_code?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.pap_code[0]}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium">Item Catalog</label>
+                            <SearchableComboboxField
+                                items={availableItemOptions}
+                                value={itemCatalogId}
+                                placeholder="Select item catalog"
+                                searchPlaceholder="Search line items"
+                                emptyText="No items found."
+                                disabled={!canEditStructure}
+                                onValueChange={setItemCatalogId}
+                            />
+                            {state?.fieldErrors?.item_catalog_id?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.item_catalog_id[0]}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium">Fund Source</label>
+                            <SearchableComboboxField
+                                items={fundingSourceOptions}
+                                value={fundCode}
+                                placeholder="Select fund source"
+                                searchPlaceholder="Search fund sources"
+                                emptyText="No fund sources found."
+                                disabled={!canEditStructure}
+                                onValueChange={setFundCode}
+                            />
+                            {state?.fieldErrors?.fund_code?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.fund_code[0]}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium" htmlFor="specific_description">Specific Description</label>
+                            <textarea
+                                id="specific_description"
+                                name="specific_description"
+                                defaultValue={state?.values?.specific_description ?? initialValues?.specific_description ?? ''}
+                                className="min-h-24 w-full rounded border border-border bg-background px-3 py-2"
+                                placeholder="Optional context for this allocation."
+                                disabled={!canEditStructure}
+                            />
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium" htmlFor="currency">Currency</label>
+                            <input id="currency" name="currency" defaultValue={state?.values?.currency ?? initialValues?.currency ?? 'PHP'} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <label className="font-medium" htmlFor="proposed_amt">Proposed Amount</label>
+                                <input id="proposed_amt" name="proposed_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.proposed_amt ?? String(initialValues?.proposed_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditProposedAmount} />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="font-medium" htmlFor="dbm_rec_amt">DBM Amount</label>
+                                <input id="dbm_rec_amt" name="dbm_rec_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.dbm_rec_amt ?? String(initialValues?.dbm_rec_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditDbmAmount} />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="font-medium" htmlFor="nep_amt">NEP Amount</label>
+                                <input id="nep_amt" name="nep_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.nep_amt ?? String(initialValues?.nep_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditNepAmount} />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="font-medium" htmlFor="gaa_amt">GAA Amount</label>
+                                <input id="gaa_amt" name="gaa_amt" type="number" min="0" step="0.01" defaultValue={state?.values?.gaa_amt ?? String(initialValues?.gaa_amt ?? 0)} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditGaaAmount} />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium">Remarks For</label>
+                            <Select value={workflowStage} onValueChange={(value) => setWorkflowStage((value ?? 'dbm_review') as BUDGET_PREP_WORKFLOW_STAGES_TYPE)}>
+                                <SelectTrigger className={SELECT_TRIGGER_CLASSNAME}>
+                                    <SelectValue placeholder="Select remarks stage">
+                                        {workflowStage ? REMARK_STAGE_OPTIONS.find((option) => option.value === workflowStage)?.label : 'Select remarks stage'}
+                                    </SelectValue>
+                                </SelectTrigger>
+                                <SelectContent className={SELECT_CONTENT_CLASSNAME}>
+                                    {REMARK_STAGE_OPTIONS.map((option) => (
+                                        <SelectItem key={option.value} value={option.value}>
+                                            {option.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {state?.fieldErrors?.workflow_stage?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.workflow_stage[0]}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="font-medium" htmlFor="remarks">Remarks</label>
+                            <textarea
+                                id="remarks"
+                                name="remarks"
+                                defaultValue={state?.values?.remarks ?? ''}
+                                className="min-h-24 w-full rounded border border-border bg-background px-3 py-2"
+                                placeholder={mode === 'edit' ? 'Required remarks for this edit.' : 'Optional context for this allocation.'}
+                            />
+                            {state?.fieldErrors?.remarks?.[0] && <p className="text-sm text-red-500 italic">{state.fieldErrors.remarks[0]}</p>}
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <label className="font-medium" htmlFor="valid_from">Valid From</label>
+                                <input id="valid_from" name="valid_from" type="date" defaultValue={state?.values?.valid_from ?? (initialValues?.valid_from ? new Date(initialValues.valid_from).toISOString().split('T')[0] : '')} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="font-medium" htmlFor="valid_until">Valid Until</label>
+                                <input id="valid_until" name="valid_until" type="date" defaultValue={state?.values?.valid_until ?? (initialValues?.valid_until ? new Date(initialValues.valid_until).toISOString().split('T')[0] : '')} className="w-full rounded border border-border bg-background px-3 py-2" disabled={!canEditStructure} />
+                            </div>
+                        </div>
+
+                        <div className={`flex gap-3 ${mode === 'edit' ? '' : 'flex-col'}`}>
+                            <Button
+                                type="submit"
+                                disabled={!activeCycle || pending || (mode === 'create' && !canCreateAllocation)}
+                                className={`${mode === 'edit' ? 'w-1/2' : 'w-full'} bg-accent-foreground py-5 text-md text-white hover:bg-accent-foreground/90`}
+                                >
+                                {pending ? (mode === 'edit' ? 'Saving...' : 'Creating...') : (mode === 'edit' ? 'Save Allocation' : 'Create Tier One Allocation')}
+                            </Button>
+                            {mode === 'edit' && (
+                                <Link href="/dbm/tier-one" className="w-1/2">
+                                    <Button type="button" variant="outline" className="w-full py-5 text-md">
+                                        Cancel
+                                    </Button>
+                                </Link>
+                            )}
+                        </div>
+                    </form>
+                    )}
+
+                    <div className="rounded-xl border border-border bg-background max-h-full overflow-auto-y">
+                        <div className="border-b border-border px-6 py-4">
+                            <h2 className="text-lg font-semibold text-secondary-foreground">
+                                {viewingYear ? `FY ${viewingYear} Allocations` : 'Tier One Allocations'}
+                            </h2>
+                            <p className="text-sm text-muted-foreground">
+                                {viewingYear
+                                    ? `Tier One allocations for fiscal year ${viewingYear}.`
+                                    : 'Tier One allocations.'}
+                            </p>
+                        </div>
+
+                        {mode === 'edit' && initialValues?.id && (
+                            <div className="border-b border-border px-6 py-5 space-y-4">
+                                <CollapsibleRemarksSection
+                                    title="Previous Remarks"
+                                    description="Remarks submitted from the edit form are stored under the workflow stage selected above."
+                                    items={remarks}
+                                    maxHeightClassName="max-h-96 overflow-y-auto"
+                                    renderItem={(remark, index) => (
+                                        <div
+                                            key={remark.id}
+                                            className={`${index === remarks.length - 1 ? '' : 'border-b'} bg-accent/20 p-4`}
+                                        >
+                                            <div className="flex items-center justify-between gap-4">
+                                                <div className="text-sm font-semibold text-secondary-foreground">
+                                                    {remark.performed_by_name || remark.performed_by}
+                                                </div>
+                                                <div className="text-xs uppercase tracking-wide text-muted-foreground">
+                                                    {REMARK_STAGE_OPTIONS.find((option) => option.value === remark.workflow_stage)?.label}
+                                                </div>
+                                            </div>
+                                            <p className="mt-2 whitespace-pre-wrap text-sm text-secondary-foreground">{remark.remarks}</p>
+                                            <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted-foreground">
+                                                <span>{new Date(remark.created_at).toLocaleString()}</span>
+                                                <span>Before: {remark.amt_before == null ? '—' : Number(remark.amt_before).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                <span>After: {remark.amt_after == null ? '—' : Number(remark.amt_after).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            </div>
+                                        </div>
+                                    )}
+                                />
+                            </div>
+                        )}
+
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm text-left border-collapse">
+                                <thead className="bg-secondary/30 border-b border-border/30 text-sm uppercase text-muted-foreground font-bold tracking-wider">
+                                    <tr>
+                                        <th className="px-4 py-3">Entity</th>
+                                        <th className="px-4 py-3">PAP</th>
+                                        <th className="px-4 py-3">Item</th>
+                                        <th className="px-4 py-3">Fund</th>
+                                        <th className="px-4 py-3 text-right">DBM Rec</th>
+                                {!readOnlyMode && <th className="px-4 py-3 text-right">Action</th>}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/20">
+                                    {allocations.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={readOnlyMode ? 5 : 6} className="px-4 py-10 text-center text-muted-foreground">
+                                                {viewingYear
+                                                    ? `No Tier One allocations found for fiscal year ${viewingYear}.`
+                                                    : 'No Tier One allocations found.'}
+                                            </td>
+                                        </tr>
+                                    ) : allocations.map((allocation) => (
+                                        <tr key={allocation.id}>
+                                            <td className="px-4 py-3">{allocation.entity_name}</td>
+                                            <td className="px-4 py-3">{allocation.pap_title || 'No PAP'}</td>
+                                            <td className="px-4 py-3">{allocation.item_name}</td>
+                                            <td className="px-4 py-3">{allocation.fund_description || allocation.fund_code || 'No fund source'}</td>
+                                            <td className="px-4 py-3 text-right font-mono">{allocation.currency} {Number(allocation.dbm_rec_amt).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                            {!readOnlyMode && <td className="px-4 py-3 text-right">
+                                                <Link
+                                                    href={`/dbm/tier-one/${allocation.id}/edit`}
+                                                    className="inline-flex items-center justify-center gap-1 rounded-md border border-border/50 bg-accent px-3 py-1.5 text-sm font-semibold text-secondary-foreground transition-all hover:bg-secondary"
+                                                >
+                                                    Edit <Pencil size={14} />
+                                                </Link>
+                                            </td>}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                        <PaginationControls
+                            page={page}
+                            totalPages={totalPages}
+                            getPageHref={(targetPage) => getFilterLink({ page: String(targetPage) })}
+                        />
+                    </div>
+                </div>
+            </div>
+        </main>
+    )
+}

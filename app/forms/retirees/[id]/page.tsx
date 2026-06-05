@@ -1,0 +1,181 @@
+import {
+    createRetireeRepository,
+    createKeyRepository,
+    createFormRepository,
+    createAuditRepository,
+    createAdministrativeOverrideRepository,
+    createEntityRepository,
+} from "@/src/db/factory";
+import { sessionWithEntity } from "@/src/actions/auth";
+import { redirect, notFound } from "next/navigation";
+import {
+    getCurrentSignatoryRole,
+    getNextStatus,
+    canSign,
+    roleInWorkflow,
+} from "@/src/lib/workflows";
+import { submitForm } from "@/src/actions/form";
+import { RETIREE_WORKFLOW } from "@/src/lib/workflows/retiree-flow";
+import { revalidatePath } from "next/cache";
+import RetireeView from "@/components/ui/retiree/RetireeView";
+import { getActiveBudgetPrepCycle, isBudgetPrepActiveForYear } from "@/src/lib/budget-cycle";
+import { canViewFormIntegrity } from "@/src/lib/user-status";
+
+const RetireeRepo = createRetireeRepository(
+    process.env.DATABASE_TYPE || "postgres",
+);
+const KeyRepo = createKeyRepository(process.env.DATABASE_TYPE || "postgres");
+const FormRepo = createFormRepository(process.env.DATABASE_TYPE || "postgres");
+const AuditRepo = createAuditRepository(
+    process.env.DATABASE_TYPE || "postgres",
+);
+const AdministrativeOverrideRepo = createAdministrativeOverrideRepository(
+    process.env.DATABASE_TYPE || "postgres",
+);
+const EntityRepo = createEntityRepository(process.env.DATABASE_TYPE || "postgres");
+
+async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
+    const activeCycle = await getActiveBudgetPrepCycle();
+    return (
+        activeCycle?.fiscal_year === fiscalYear &&
+        (activeCycle.current_phase === "preparation" ||
+            activeCycle.current_phase === "dbm_review")
+    );
+}
+
+export default async function RetireeDetailsPage({
+    params,
+}: {
+    params: Promise<{ id: string }>;
+}) {
+    const { id } = await params;
+    const session = await sessionWithEntity();
+    if (!session) redirect("/login");
+
+    const versionFamily = await FormRepo.getFormVersionFamily(id).catch(
+        () => null,
+    );
+    if (!versionFamily) return notFound();
+
+    const data = await RetireeRepo.getRetireesFormById(id);
+    if (!data) return notFound();
+
+    // Workflow Logic
+    const workflow = RETIREE_WORKFLOW;
+    const currentStatus = data.auth_status ?? "draft";
+
+    const currentSignatoryRole = getCurrentSignatoryRole(
+        currentStatus,
+        workflow,
+    )
+
+    const userCanSign = currentSignatoryRole
+        ? canSign(
+              currentStatus,
+              session.user.access_level,
+              session.user.workflow_role ?? "",
+              currentSignatoryRole,
+              workflow,
+          )
+        : false
+
+    const userInWorkflow = roleInWorkflow(session.user.workflow_role ?? "", workflow)
+
+    const nextStatus =
+        getNextStatus(currentStatus, workflow, "submit") || "approved";
+
+    const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(
+        data.id ?? "",
+        session.user.id,
+    );
+    const allSignatures = await KeyRepo.getSignatoriesByFormId(data.id ?? "");
+    const pastSignatures = await KeyRepo.getPastSignatoriesByFormId(
+        data.id ?? "",
+    );
+    const latestRejection = await AuditRepo.getLatestFormRejection(
+        "retirees_list",
+        data.id ?? "",
+    );
+    const overrideHistory =
+        await AdministrativeOverrideRepo.listAdministrativeOverridesByTargets(
+            "retirees_list",
+            versionFamily.forms.map((form) => form.id),
+        );
+    const ownerEntityName = await EntityRepo.getFullEntityNameById(data.entity_id);
+
+    // Determine the correct back path based on the user's role
+    const isOwnAgencyForm = session.user.entity_id === data.entity_id;
+
+    // Check if the user is acting as an evaluator
+    const isActingAsEvaluator = session.user.workflow_role === "dbm";
+
+    let backUrl = "/forms/retirees";
+
+    if (session.user.role === "dbm") {
+        if (!isOwnAgencyForm) {
+            backUrl = "/dbm/forms";
+        } else if (isActingAsEvaluator && data.auth_status === "pending_dbm") {
+            backUrl = "/dbm/forms";
+        }
+    }
+
+    const allowClosedCycleActions =
+        session.user.role === "dbm" &&
+        isActingAsEvaluator &&
+        backUrl === "/dbm/forms" &&
+        await canDbmActOnFormForFiscalYear(data.fiscal_year);
+    const isBudgetPrepOpenForYear = await isBudgetPrepActiveForYear(
+        data.fiscal_year,
+    );
+    const entityActionsLockedByBudgetCycle =
+        !isBudgetPrepOpenForYear && !allowClosedCycleActions;
+    const canVerifyIntegrity = canViewFormIntegrity(session.user);
+
+    // Server Actions
+    const updateAuthStatus = async () => {
+        "use server";
+        if (data.auth_status !== "draft") return;
+        if (entityActionsLockedByBudgetCycle) return;
+        await submitForm(
+            data.id ?? "",
+            data,
+            session.user.id,
+            data.entity_id,
+            "retirees_list",
+            nextStatus,
+        );
+        revalidatePath(`/forms/retirees/${id}`);
+    };
+
+    const deleteFormAction = async (formId: string) => {
+        "use server";
+        if (data.auth_status !== "draft") return;
+        await RetireeRepo.deleteRetireeForm(formId);
+        redirect("/forms/retirees");
+    };
+
+    return (
+        <RetireeView
+            data={data}
+            session={session}
+            backUrl={backUrl}
+            versionTabs={versionFamily.forms}
+            originalFormId={versionFamily.originalFormId}
+            isDbmEvaluator={isActingAsEvaluator}
+            budgetPrepClosedForEntityActions={entityActionsLockedByBudgetCycle}
+            allowClosedCycleActions={allowClosedCycleActions}
+            userInWorkflow={userInWorkflow}
+            userCanSign={entityActionsLockedByBudgetCycle ? false : userCanSign}
+            currentSignatoryRole={currentSignatoryRole}
+            existingSignature={existingSignature}
+            allSignatures={allSignatures}
+            pastSignatures={pastSignatures}
+            latestRejection={latestRejection}
+            ownerEntityName={ownerEntityName || "Unknown Agency"}
+            overrideHistory={overrideHistory}
+            updateAuthStatus={updateAuthStatus}
+            deleteFormAction={deleteFormAction}
+            canVerifyIntegrity={canVerifyIntegrity}
+        />
+    );
+}
