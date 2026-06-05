@@ -30,21 +30,16 @@ export default async function EditProposalPage({
     const { id } = await params;
     const session = await sessionWithEntity();
 
-    // 1. Auth Guard
     if (!session || !session.user?.entity_id) {
         redirect("/login");
     }
 
-    // 2. Fetch the existing proposal
     const project = await ProposalRepo.getProjectProposalById(id);
-
-    console.log(project);
 
     if (!project) {
         redirect("/forms/proposals?error=not-found");
     }
 
-    // This will now pass type checking and logic
     const isDbmOverwrite =
         session.user.role === "dbm" && project.auth_status === "pending_dbm";
 
@@ -80,8 +75,8 @@ export default async function EditProposalPage({
 
     return (
         <ProposalClientWrapper
-            project={project} // Pass the fetched data here
-            type={project.type} // "202" or "203"
+            project={project} 
+            type={project.type} 
             userId={session.user.id}
             entityName={ownerEntityName || "Unknown Agency"}
             entityId={project.entity_id}

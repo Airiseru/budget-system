@@ -146,7 +146,6 @@ export default async function RetireesPage({
             </>
         )
     } catch (error) {
-        console.error(error)
         return (
             <div className="m-4">
                 <h1 className="text-xl font-bold text-red-500">System Error</h1>

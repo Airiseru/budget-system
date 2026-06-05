@@ -18,7 +18,6 @@ export default async function EditPapPage({ params }: { params: { id: string } }
         redirect("/login");
     }
 
-    // 3. Pass all required props to PapForm
     return (
         <PapForm 
             pap={pap} 

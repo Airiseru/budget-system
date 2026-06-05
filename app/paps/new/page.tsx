@@ -5,7 +5,6 @@ import { redirect } from "next/navigation";
 export default async function NewPapPage() {
     const session = await sessionWithEntity();
 
-    // Guard: Ensure user is logged in and has an entity assigned
     if (!session || !session.user?.entity_id) {
         redirect("/login");
     }

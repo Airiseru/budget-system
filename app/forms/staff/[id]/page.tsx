@@ -59,10 +59,8 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
     )
     const ownerEntityName = await EntityRepo.getFullEntityNameById(summary.entity_id)
 
-    // Determine the correct back path based on the user's role
     const isOwnAgencyForm = session.user.entity_id === summary.entity_id;
 
-    // Check if the user is acting as an evaluator
     const isActingAsEvaluator = session.user.workflow_role === 'dbm';
 
     let backUrl = '/forms/staff'
@@ -85,7 +83,6 @@ export default async function StaffingFormPage({ params }: { params: Promise<{ i
         !isBudgetPrepOpenForYear && !allowClosedCycleActions
     const canVerifyIntegrity = canViewFormIntegrity(session.user)
 
-    // Server Actions
     const updateAuthStatus = async () => {
         "use server"
         if (summary.auth_status !== 'draft') return

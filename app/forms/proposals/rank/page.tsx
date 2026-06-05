@@ -50,8 +50,6 @@ export default async function NewProposalPage({
         viewingYear,
     );
 
-    // For department users, enrich each proposal with its entity's display name.
-    // We deduplicate entity_ids first to avoid redundant DB calls.
     let proposals: ((typeof data)[number] & { entity_name?: string | null })[] =
         data;
 

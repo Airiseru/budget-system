@@ -71,7 +71,6 @@ export default async function EditRetireePage({
         redirect(`/forms/retirees/${formId}?error=budget-cycle-closed`);
     }
 
-    // This will now pass type checking and logic
     if (
         retireeData.auth_status !== "draft" &&
         !(isDbmEvaluator && isPendingDbm)

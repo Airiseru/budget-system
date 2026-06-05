@@ -16,7 +16,6 @@ export default async function DBMFormRouter({ params }: { params: Promise<{ form
     
     if (!form) return notFound()
 
-    // Retrieve correct path
     if (form.type === 'nep' || form.type === 'gaa') {
         redirect(`/dbm/allocations?year=${form.fiscal_year}`)
     }
@@ -24,7 +23,6 @@ export default async function DBMFormRouter({ params }: { params: Promise<{ form
     const basePath = FORM_ROUTE_MAP[form.type]
     
     if (!basePath) {
-        // Fallback for unknown form types
         return (
             <div className="p-8 text-center text-red-600">
                 <BackButton />
@@ -34,6 +32,5 @@ export default async function DBMFormRouter({ params }: { params: Promise<{ form
         )
     }
 
-    // Redirect user to the correct view
     redirect(`${basePath}/${form_id}`)
 }

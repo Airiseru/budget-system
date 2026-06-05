@@ -21,17 +21,14 @@ async function canDbmActOnFormForFiscalYear(fiscalYear: number) {
 }
 
 export default async function EditStaffPage({ params }: { params: Promise<{ id: string }> }) {
-    // 1. Resolve params
     const { id } = await params
     let formId = id
-    
-    // 2. Auth Check
+
     const session = await sessionWithEntity();
     if (!session || !session.user?.entity_id) {
         redirect("/login");
     }
 
-    // 3. Fetch Staff Record
     const form = await FormRepository.findFormsByParentId(id)
 
     if (form) {
@@ -61,12 +58,10 @@ export default async function EditStaffPage({ params }: { params: Promise<{ id: 
         redirect(`/forms/staff/${formId}?error=budget-cycle-closed`)
     }
 
-    // This will now pass type checking and logic
     if (staff.auth_status !== 'draft' && !(isDbmEvaluator && isPendingDbm)) {
         redirect(`/forms/staff/${formId}?error=locked`);
     }
 
-    // 5. Authorization Check (Role based)
     if (session.user.access_level !== 'encode' && !isDbmEvaluator) {
         redirect('/forms/staff?error=unauthorized');
     }

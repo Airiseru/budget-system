@@ -10,7 +10,6 @@ import { getActiveBudgetPrepCycle } from "@/src/lib/budget-cycle";
 export default async function NewStaffingPage() {
     const session = await sessionWithEntity();
 
-    // 1. AUTH GUARD: If no session OR no entity_id, redirect to login
     if (!session || !session.user?.entity_id) {
         redirect("/login");
     }

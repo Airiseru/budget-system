@@ -51,7 +51,6 @@ export default async function ProposalDetailsPage({
     const session = await sessionWithEntity()
     if (!session) redirect("/login")
 
-    // 1. Fetch Version Family (Crucial for DBM Overwrites)
     const versionFamily = await FormRepo.getFormVersionFamily(id).catch(
         () => null,
     )
@@ -60,7 +59,6 @@ export default async function ProposalDetailsPage({
     const data = await ProposalRepo.getProjectProposalById(id)
     if (!data) return notFound()
 
-    // 2. Workflow Logic
     const workflow = PROPOSAL_WORKFLOW
     const currentStatus = data.auth_status ?? "draft"
 
@@ -79,11 +77,9 @@ export default async function ProposalDetailsPage({
           )
         : false
 
-    // Determine the next status for the "Submit" action
     const nextStatus =
         getNextStatus(currentStatus, workflow, "submit") || "approved"
 
-    // 3. Signature & Audit Data
     const existingSignature = await KeyRepo.getSignatoryByFormIdAndUserId(
         data.id ?? "",
         session.user.id,
@@ -100,7 +96,6 @@ export default async function ProposalDetailsPage({
         data.id ?? "",
     )
 
-    // 4. Back Navigation Logic
     const isActingAsEvaluator = session.user.workflow_role === "dbm"
 
     let backUrl = "/forms/proposals"
@@ -118,13 +113,11 @@ export default async function ProposalDetailsPage({
         !isBudgetPrepOpenForProposalYear && !allowClosedCycleActions;
     const canVerifyIntegrity = canViewFormIntegrity(session.user);
 
-    // 5. Server Actions
     const updateAuthStatus = async () => {
         "use server"
         if (data.auth_status !== "draft") return
         if (entityActionsLockedByBudgetCycle) return
         await FormRepo.updateFormAuthStatus(data.id ?? "", "pending_budget")
-        // Logic check: only allow submission if in draft or in DBM-edit mode
         if (data.auth_status !== "draft" && data.auth_status !== "pending_dbm")
             return
 

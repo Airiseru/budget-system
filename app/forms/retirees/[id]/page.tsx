@@ -60,7 +60,6 @@ export default async function RetireeDetailsPage({
     const data = await RetireeRepo.getRetireesFormById(id);
     if (!data) return notFound();
 
-    // Workflow Logic
     const workflow = RETIREE_WORKFLOW;
     const currentStatus = data.auth_status ?? "draft";
 
@@ -103,10 +102,8 @@ export default async function RetireeDetailsPage({
         );
     const ownerEntityName = await EntityRepo.getFullEntityNameById(data.entity_id);
 
-    // Determine the correct back path based on the user's role
     const isOwnAgencyForm = session.user.entity_id === data.entity_id;
 
-    // Check if the user is acting as an evaluator
     const isActingAsEvaluator = session.user.workflow_role === "dbm";
 
     let backUrl = "/forms/retirees";
@@ -131,7 +128,6 @@ export default async function RetireeDetailsPage({
         !isBudgetPrepOpenForYear && !allowClosedCycleActions;
     const canVerifyIntegrity = canViewFormIntegrity(session.user);
 
-    // Server Actions
     const updateAuthStatus = async () => {
         "use server";
         if (data.auth_status !== "draft") return;

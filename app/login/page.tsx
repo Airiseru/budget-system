@@ -38,14 +38,13 @@ export default function LoginPage() {
             return
         }
 
-        // Log user login
         if (data?.user?.id && data?.user?.entity_id) {
             const auditLog = await logUserLogin(data.user.id, data.user.entity_id)
 
             if (!auditLog?.success) {
                 setError("Login succeeded, but the security audit log failed. Please contact IT.");
                 setIsLoading(false);
-                return; // Block entry if the black box is broken
+                return; 
             }
         }
 
@@ -53,7 +52,6 @@ export default function LoginPage() {
             queueWelcomeStatus(data.user.name)
         }
 
-        // Route the user based on the role
         if (data?.user?.is_admin) {
             router.push('/admin')
         } else if (data?.user?.status === 'unverified') {
