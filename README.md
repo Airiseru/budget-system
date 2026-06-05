@@ -16,15 +16,15 @@ This project serves as the main application to house the interaction between gov
 - Migration files containing data schemas for various forms and other necessary tables (`/db/postgres/migrations`)
 - Generalized operations through the use of repositories to ensure consistent database operations even if different database management systems are used (`/db/postgres/repositories`)
 
-## Universal Approval Workflow
+### Universal Approval Workflow
 - General types and functions to structure all workflows (`src/lib/workflows/index.ts`)
 - Separate files to specify a docuemnts' approval workflow (e.g., `src/lib/workflows/proposal-flow.ts`)
 
-## Traceability
+### Traceability
 - Hashed Audit Chains to maintain traceability within the system
 - Strict inputs for audit logs depending on event type (`src/actions/audit.ts`)
 
-## Database Rollback Detection
+### Database Rollback Detection
 - Publicized Merkle Roots to keep track of the legitimacy of all the logs within the system
 - Automated cron job to automatically create and upload Merkle Roots into appropriate location (`cron.Dockerfile` and `app/api/cron/seal-audit/route.ts`)
 
