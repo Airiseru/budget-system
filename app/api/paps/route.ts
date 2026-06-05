@@ -24,9 +24,7 @@ function normalizePapProjectType<T extends NewPap>(pap: T): T {
 }
 
 export async function GET() {
-    // TODO: get all relevant pap information (join)
     const paps = await PapRepository.getAllPaps()
-    console.log(`GET PAPS RESULT: ${JSON.stringify(paps)}`)
     return new Response(JSON.stringify(paps))
 }
 
@@ -36,7 +34,6 @@ export async function POST(
     try {
         const pap: NewPap = await request.json()
         const result = await PapRepository.createPap(normalizePapProjectType(pap))
-        console.log(`CREATE PAP RESULT: ${JSON.stringify(result)}`)
         return Response.json(result)
     } catch (error) {
         return Response.json(

@@ -25,7 +25,6 @@ export async function GET(
 ) {
     const { id } = await params
     
-    // This should return the summary AND its positions
     const staffing = await StaffingRepository.getStaffingWithFormById(id)
 
     if (!staffing) {
@@ -62,10 +61,6 @@ export async function PUT(
         )
     }
 
-    console.log(`PUT BODY: ${JSON.stringify(body)}`)
-    console.log(`isDbm: ${isDbm}`)
-
-    // Check current status in DB before updating
     const existing = await StaffingRepository.getStaffingWithFormById(id)
     
     if (!existing) {
@@ -104,7 +99,7 @@ export async function PUT(
     if (!canEditDraft && !canEditPendingDbm) {
         return NextResponse.json(
             { error: "Only drafts can be modified." }, 
-            { status: 403 } // 403 Forbidden
+            { status: 403 } 
         )
     }
 
@@ -183,7 +178,6 @@ export async function PUT(
     if (body.auth_status === 'pending_personnel') {
         const result = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
 
-        // Log form update
         const submitResult = await logSubmitForm(
             body.userId,
             existing.entity_id,
@@ -228,12 +222,9 @@ export async function DELETE(
     const { id } = await params
     
     try {
-        // This should delete the entry in 'forms', which cascades 
-        // to 'staffing_summary' and 'position'
         await StaffingRepository.deleteStaffingForm(id)
         return new NextResponse(null, { status: 204 })
     } catch (error) {
-        console.error("DELETE ERROR:", error)
         return NextResponse.json({ error: "Delete failed" }, { status: 500 })
     }
 }

@@ -189,7 +189,6 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {
-        console.error("MOVE ERROR:", error);
 
         if (
             error instanceof Error &&

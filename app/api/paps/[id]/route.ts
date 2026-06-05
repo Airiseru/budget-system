@@ -50,7 +50,6 @@ export async function GET(
         return new Response('Pap not found', { status: 404 })
     }
 
-    console.log(`GET PAP RESULT: ${JSON.stringify(pap)}`)
     return new Response(JSON.stringify(pap))
 }
 

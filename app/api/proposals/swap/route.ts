@@ -63,7 +63,6 @@ async function logRankChangesSequentially(
 
 export async function POST(req: Request) {
     try {
-        // const session = await auth.api.getSession({ headers: await headers() })
         const session = await sessionWithEntity();
 
         if (!session?.user?.id || !session.user.entity_id) {
@@ -326,7 +325,6 @@ export async function POST(req: Request) {
 
         return NextResponse.json({ success: true });
     } catch (error: unknown) {
-        console.error("SWAP ERROR:", error);
         if (
             error instanceof Error &&
             (error.message === "submitted_rank_change" ||

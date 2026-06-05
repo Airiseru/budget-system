@@ -19,7 +19,6 @@ export async function POST(req: Request) {
         headers: await headers(),
     });
 
-    // 1. Authorization Gate
     if (!session || session.user.access_level !== "encode") {
         return NextResponse.json(
             {
@@ -42,15 +41,15 @@ export async function POST(req: Request) {
 
         const result = await repo.createProjectProposal(
             entityId,
-            payload, // Keep this if your repo needs the raw arrays for child tables
+            payload,
             auth_status ?? "draft",
-            payload.proposal_year, // this is practically the fiscal year
+            payload.proposal_year,
             undefined,
             undefined,
             existingPapId,
         );
 
-        // 3. Audit Logging (Creation)
+
         const logResult = await logNewForm(
             userId,
             entityId,
@@ -63,8 +62,6 @@ export async function POST(req: Request) {
         if (!logResult.success)
             throw new Error("Failed to log project creation");
 
-        // 4. Audit Logging (Submission)
-        // If the user clicked "Submit" immediately instead of just "Save Draft"
         if (auth_status && auth_status !== "draft") {
             const submitResult = await logSubmitForm(
                 userId,
@@ -80,10 +77,8 @@ export async function POST(req: Request) {
 
         return NextResponse.json(result);
     } catch (error: unknown) {
-        console.error("POST PROJECT ERROR:", error);
         const pgError = error as PgError;
 
-        // If it's a unique constraint violation, send a specific response
         if (
             pgError.code === "23505" &&
             pgError.constraint === "idx_paps_unique_assigned_full_prexc_uacs_code"
@@ -110,7 +105,7 @@ export async function POST(req: Request) {
                     message: "Duplicate priority rank detected.",
                     detail: pgError.detail,
                 },
-                { status: 409 }, // Conflict
+                { status: 409 }, 
             );
         }
 
@@ -165,11 +160,9 @@ export async function GET(req: Request) {
             fiscalYear,
         );
 
-        // No filtering here — the frontend's visibleProposals already
-        // filters by priority_rank vs dept_priority_rank based on activeScope
+
         return NextResponse.json(data);
     } catch (error) {
-        console.error("Fetch error:", error);
         return NextResponse.json(
             { error: "Internal Server Error" },
             { status: 500 },

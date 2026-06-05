@@ -1,5 +1,4 @@
 import { NextResponse } from 'next/server';
-// Import the specific read function alongside your update functions
 import { 
     createDbmRetireeOverwrite,
     getRetireesFormById,
@@ -35,7 +34,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         const overrideRemarks =
             typeof body.overrideRemarks === 'string' ? body.overrideRemarks.trim() : ''
 
-        // 1. THE LOCK CHECK: Verify status before doing anything else
         const current = await getRetireesFormById(id);
         
         if (!current) {
@@ -79,7 +77,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
             );
         }
 
-        // 2. VALIDATION
         const validation = BP205Schema.safeParse(body);
         
         if (!validation.success) {
@@ -187,7 +184,6 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         if (body.auth_status === 'pending_personnel') {
             const result = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
 
-            // Log form submission
             const submitResult = await logSubmitForm(
                 body.userId,
                 current.entity_id,
@@ -225,7 +221,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
         return NextResponse.json({ formId: targetFormId });
 
     } catch (error: unknown) {
-        console.error("API_RETIREES_PUT_ERROR:", error);
+
         return NextResponse.json(
             { error: error instanceof Error ? error.message : "Failed to update form" },
             { status: 500 }

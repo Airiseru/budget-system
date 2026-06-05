@@ -1,4 +1,3 @@
-// app/api/retirees/route.ts
 import { NextResponse } from 'next/server';
 import { createRetireeRepository } from '@/src/db/factory';
 import { auth } from "@/src/lib/auth"; 
@@ -46,9 +45,7 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "Create failed" }, { status: 500 });
         }
 
-        console.log(`New retirees form created: ${JSON.stringify(newRetirees)}`)
 
-        // Log form creation
         const logResult = await logNewForm(
             session.user.id,
             entityId,
@@ -83,7 +80,6 @@ export async function POST(req: Request) {
 
         return NextResponse.json(result, { status: 201 });
     } catch (error: unknown) {
-        console.error(error);
         const message = error instanceof Error ? error.message : (error as ErrorWithMessage).message
         return NextResponse.json({ error: message ?? "Failed to save" }, { status: 500 });
     }

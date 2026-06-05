@@ -32,7 +32,6 @@ export async function PUT(
     { params }: { params: Promise<{ id: string }> },
 ) {
     const { id } = await params;
-    console.log("!!! PUT REQUEST RECEIVED FOR ID:", id);
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session)
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -44,7 +43,6 @@ export async function PUT(
             typeof body.overrideRemarks === "string" ? body.overrideRemarks.trim() : ""
         const existing = await repo.getProjectProposalById(id);
 
-        console.log("Existing proposal:", existing);
 
         if (!existing)
             return NextResponse.json(
@@ -100,7 +98,6 @@ export async function PUT(
             );
         }
 
-        console.log("Updating proposal with payload:", body);
         const previousAuditPayload = normalizeProposalPayload(withSchemaPapId(existing))
         const result = isDbmOverwrite
             ? await repo.createDbmProjectProposalOverwrite(id, body)
@@ -148,8 +145,6 @@ export async function PUT(
         if (body.auth_status === 'pending_budget') {
             const formUpdate = await FormRepository.updateFormAuthStatus(targetFormId, body.auth_status)
 
-            // Log form update
-
             const submitResult = await logSubmitForm(
                 body.userId,
                 existing.entity_id,
@@ -183,7 +178,6 @@ export async function PUT(
 
         return NextResponse.json({ ...result, formId: targetFormId });
     } catch (error) {
-        console.error("PUT PROJECT ERROR:", error);
         if (error instanceof Error && error.message === "unique_entity_rank") {
             return NextResponse.json(
                 {
